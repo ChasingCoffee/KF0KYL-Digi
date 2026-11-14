@@ -183,6 +183,15 @@ and rename it to `KF0KYL Digi.ini`. Copy `wsjtx_log.adi` and `qrz_uploaded.txt` 
 
 ---
 
+## ☕ Buy me a coffee
+
+KF0KYL Digi is free and always will be. If it's made your time on the air more fun
+and you'd like to say thanks, you can buy me a coffee here:
+
+**Venmo:** [@Carson-Coordes](https://venmo.com/u/Carson-Coordes)
+
+73, Carson KFØKYL
+
 ## Building from source
 
 Every push to this repository is built automatically by GitHub Actions for Windows, Linux
