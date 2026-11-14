@@ -173,6 +173,12 @@
 #include <QDebug>
 #include <QDateTimeEdit>
 #include <QJsonObject>
+#include <QColorDialog>
+#include <QBoxLayout>
+#include <QGroupBox>
+#include <QGridLayout>
+#include <QPushButton>
+#include <QLabel>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QSerialPortInfo>
@@ -859,6 +865,14 @@ private:
   QString qrzApiKey_;
   QString qrzXmlUser_;
   QString qrzXmlPassword_;
+
+  // dial frequency and clock colours: text, background, text, background
+  QColor display_colors_[4];
+  QColor next_display_colors_[4];
+  QPushButton * display_color_buttons_[4] {};
+  QLabel * display_previews_[2] {};
+  void setup_display_colors ();
+  void update_display_color_widgets ();
   QString voicesPath_;
   bool send_to_eqsl_;
   QString eqsl_username_;
@@ -1073,6 +1087,10 @@ bool Configuration::qrz_logbook_enabled () const {return m_->bQrzLogbook_ && !m_
 QString Configuration::qrz_api_key () const {return m_->qrzApiKey_.trimmed ();}
 QString Configuration::qrz_xml_username () const {return m_->qrzXmlUser_.trimmed ();}
 QString Configuration::qrz_xml_password () const {return m_->qrzXmlPassword_;}
+QColor Configuration::dial_text_color () const {return m_->display_colors_[0];}
+QColor Configuration::dial_background_color () const {return m_->display_colors_[1];}
+QColor Configuration::clock_text_color () const {return m_->display_colors_[2];}
+QColor Configuration::clock_background_color () const {return m_->display_colors_[3];}
 bool Configuration::prompt_to_log () const {return m_->prompt_to_log_;}
 bool Configuration::autoLog() const {return m_->autoLog_;}
 bool Configuration::contestingOnly() const {return m_->contestingOnly_;}
@@ -1826,6 +1844,7 @@ Configuration::impl::impl (Configuration * self, QNetworkAccessManager * network
   , default_audio_output_device_selected_ {false}
 {
   ui_->setupUi (this);
+  setup_display_colors ();
 
   {
     // Make sure the default save directory exists
@@ -2246,6 +2265,8 @@ void Configuration::impl::initialize_models ()
   ui_->leQrzUser->setText (qrzXmlUser_);
   ui_->leQrzPassword->setText (qrzXmlPassword_);
   ui_->labQrzLoginStatus->clear ();
+  for (int i = 0; i < 4; ++i) next_display_colors_[i] = display_colors_[i];
+  update_display_color_widgets ();
   ui_->sbCloudlogStationID->setValue (cloudLogStationID_);
   ui_->special_op_activity_button_group->button (SelectedActivity_)->setChecked (true);
   ui_->cbx2ToneSpacing->setChecked(x2ToneSpacing_);
@@ -2691,6 +2712,15 @@ void Configuration::impl::read_settings ()
   qrzApiKey_ = settings_->value ("QrzLogbookApiKey", QString {}).toString ();
   qrzXmlUser_ = settings_->value ("QrzXmlUsername", QString {}).toString ();
   qrzXmlPassword_ = settings_->value ("QrzXmlPassword", QString {}).toString ();
+  {
+    char const * keys[] = {"DialTextColor", "DialBackgroundColor", "ClockTextColor", "ClockBackgroundColor"};
+    QColor const defaults[] = {QColor {"#ffff00"}, QColor {"#000000"}, QColor {"#ffff00"}, QColor {"#000000"}};
+    for (int i = 0; i < 4; ++i)
+      {
+        QColor c {settings_->value (keys[i], defaults[i].name ()).toString ()};
+        display_colors_[i] = c.isValid () ? c : defaults[i];
+      }
+  }
   cloudLogStationID_ = settings_->value("CloudLogStationID",1).toInt ();
   SelectedActivity_ = settings_->value("SelectedActivity",1).toInt ();
   x2ToneSpacing_ = settings_->value("x2ToneSpacing",false).toBool ();
@@ -2968,6 +2998,10 @@ void Configuration::impl::write_settings ()
   settings_->setValue ("QrzLogbookApiKey", qrzApiKey_);
   settings_->setValue ("QrzXmlUsername", qrzXmlUser_);
   settings_->setValue ("QrzXmlPassword", qrzXmlPassword_);
+  settings_->setValue ("DialTextColor", display_colors_[0].name ());
+  settings_->setValue ("DialBackgroundColor", display_colors_[1].name ());
+  settings_->setValue ("ClockTextColor", display_colors_[2].name ());
+  settings_->setValue ("ClockBackgroundColor", display_colors_[3].name ());
   settings_->setValue ("CloudLogStationID", cloudLogStationID_);
   settings_->setValue ("x2ToneSpacing", x2ToneSpacing_);
   settings_->setValue ("x4ToneSpacing", x4ToneSpacing_);
@@ -3561,6 +3595,7 @@ void Configuration::impl::accept ()
   qrzApiKey_ = ui_->leQrzApiKey->text ().trimmed ();
   qrzXmlUser_ = ui_->leQrzUser->text ().trimmed ();
   qrzXmlPassword_ = ui_->leQrzPassword->text ();
+  for (int i = 0; i < 4; ++i) display_colors_[i] = next_display_colors_[i];
   cloudLogStationID_ = ui_->sbCloudlogStationID->value ();
   SelectedActivity_ = ui_->special_op_activity_button_group->checkedId();
   x2ToneSpacing_ = ui_->cbx2ToneSpacing->isChecked ();
@@ -5861,3 +5896,91 @@ ENUM_QDATASTREAM_OPS_IMPL (Configuration, Type2MsgGen);
 
 ENUM_CONVERSION_OPS_IMPL (Configuration, DataMode);
 ENUM_CONVERSION_OPS_IMPL (Configuration, Type2MsgGen);
+
+void Configuration::impl::setup_display_colors ()
+{
+  // Settings > Colors: pick the text and background colours of the big
+  // dial frequency and date/time read-outs in the main window
+  auto * group = new QGroupBox {tr ("Frequency and Clock Display"), ui_->colors_tab};
+  group->setObjectName ("gbDisplayColors");
+  auto * grid = new QGridLayout {group};
+
+  for (int i = 0; i < 2; ++i)
+    {
+      auto * preview = new QLabel {i ? QString {"2026 Nov 14\n23:50:21"} : QString {"14.074 000"}, group};
+      preview->setAlignment (Qt::AlignCenter);
+      preview->setMinimumSize (200, 56);
+      display_previews_[i] = preview;
+      grid->addWidget (preview, 0, i * 2, 1, 2);
+    }
+  char const * labels[] = {QT_TR_NOOP ("Frequency text"), QT_TR_NOOP ("Frequency background"),
+                           QT_TR_NOOP ("Clock text"), QT_TR_NOOP ("Clock background")};
+  for (int i = 0; i < 4; ++i)
+    {
+      auto * button = new QPushButton {group};
+      button->setFixedSize (56, 24);
+      button->setToolTip (tr ("Choose the %1 colour").arg (tr (labels[i]).toLower ()));
+      display_color_buttons_[i] = button;
+      int const row = 1 + i % 2;
+      int const col = (i / 2) * 2;
+      grid->addWidget (new QLabel {tr (labels[i]), group}, row, col);
+      grid->addWidget (button, row, col + 1);
+      connect (button, &QPushButton::clicked, [this, i, labels] {
+          auto c = QColorDialog::getColor (next_display_colors_[i], this, tr (labels[i]));
+          if (c.isValid ())
+            {
+              next_display_colors_[i] = c;
+              update_display_color_widgets ();
+            }
+        });
+    }
+
+  struct Preset {char const * name; char const * text; char const * background;};
+  static Preset const presets[] = {
+    {QT_TR_NOOP ("Classic (yellow on black)"), "#ffff00", "#000000"},
+    {QT_TR_NOOP ("Logo green"), "#8cff1a", "#000000"},
+    {QT_TR_NOOP ("LCD"), "#1b2a1b", "#a4c3a0"},
+    {QT_TR_NOOP ("Blue"), "#60cdff", "#0b1a2a"},
+    {QT_TR_NOOP ("White on dark"), "#ffffff", "#1f1f1f"},
+    {QT_TR_NOOP ("Light"), "#1a1a1a", "#f3f3f3"},
+  };
+  auto * preset_box = new QComboBox {group};
+  preset_box->addItem (tr ("Choose a color scheme..."));
+  for (auto const& p : presets) preset_box->addItem (tr (p.name));
+  connect (preset_box, static_cast<void (QComboBox::*) (int)> (&QComboBox::activated), [this, preset_box] (int index) {
+      if (index <= 0) return;
+      auto const& p = presets[index - 1];
+      next_display_colors_[0] = next_display_colors_[2] = QColor {p.text};
+      next_display_colors_[1] = next_display_colors_[3] = QColor {p.background};
+      update_display_color_widgets ();
+      preset_box->setCurrentIndex (0);
+    });
+  grid->addWidget (preset_box, 3, 0, 1, 2);
+  auto * reset = new QPushButton {tr ("Reset to Default"), group};
+  connect (reset, &QPushButton::clicked, [this] {
+      next_display_colors_[0] = next_display_colors_[2] = QColor {"#ffff00"};
+      next_display_colors_[1] = next_display_colors_[3] = QColor {"#000000"};
+      update_display_color_widgets ();
+    });
+  grid->addWidget (reset, 3, 2, 1, 2);
+
+  if (auto * box = qobject_cast<QBoxLayout *> (ui_->colors_tab->layout ()))
+    {
+      box->insertWidget (1, group);
+    }
+}
+
+void Configuration::impl::update_display_color_widgets ()
+{
+  for (int i = 0; i < 4; ++i)
+    {
+      if (!display_color_buttons_[i]) return;
+      display_color_buttons_[i]->setStyleSheet (QString {"QPushButton {background-color: %1; border: 1px solid #808080; border-radius: 4px;}"}
+                                                .arg (next_display_colors_[i].name ()));
+    }
+  for (int i = 0; i < 2; ++i)
+    {
+      display_previews_[i]->setStyleSheet (QString {"QLabel {font-size: 14pt; color: %1; background-color: %2; border-radius: 4px;}"}
+                                           .arg (next_display_colors_[i * 2].name ()).arg (next_display_colors_[i * 2 + 1].name ()));
+    }
+}

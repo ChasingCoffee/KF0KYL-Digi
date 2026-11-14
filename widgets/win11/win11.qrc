@@ -12,5 +12,13 @@
   <file>up_light@2x.png</file>
   <file>down_light.png</file>
   <file>down_light@2x.png</file>
+  <file>grip_h_dark.png</file>
+  <file>grip_h_dark@2x.png</file>
+  <file>grip_v_dark.png</file>
+  <file>grip_v_dark@2x.png</file>
+  <file>grip_h_light.png</file>
+  <file>grip_h_light@2x.png</file>
+  <file>grip_v_light.png</file>
+  <file>grip_v_light@2x.png</file>
 </qresource>
 </RCC>

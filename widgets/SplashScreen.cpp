@@ -28,14 +28,15 @@ SplashScreen::SplashScreen ()
   : QSplashScreen {QPixmap {":/splash.png"}, Qt::WindowStaysOnTopHint}
 {
   setLayout (&m_->main_layout_);
+  // the logo fills the top of the splash image; the words go underneath
   showMessage ("<h2>" + QString {QCoreApplication::applicationName () + " v" +
         QCoreApplication::applicationVersion() + " " +
         revision ()}.simplified () + "</h2>"
-    "by Carson Coordes, KF0KYL &mdash; based on WSJT-X " WSJTX_BASE_VERSION " by K1JT and the WSJT Development Team.<br />"
-    "This modified version is not supported by the WSJT-X team: please don't send<br />"
-    "its issue reports to the WSJT-X groups.<br /><br />"
-    "<img src=\":/icon_128x128.png\" />"
-    "<img src=\":/gpl-v3-logo.svg\" height=\"80\" />", Qt::AlignCenter);
+    "by Carson Coordes, KF0KYL<br />"
+    "Based on WSJT-X " WSJTX_BASE_VERSION " by K1JT and the WSJT Development Team.<br />"
+    "This modified version is not supported by the WSJT-X team: please<br />"
+    "don't send its issue reports to the WSJT-X groups. Licensed under GPL v3.<br /><br /><br />"
+    , Qt::AlignBottom | Qt::AlignHCenter, Qt::white);
   connect (&m_->checkbox_, &QCheckBox::stateChanged, [this] (int s) {
       if (Qt::Checked == s) Q_EMIT disabled ();
     });

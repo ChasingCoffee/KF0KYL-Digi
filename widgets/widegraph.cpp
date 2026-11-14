@@ -5,6 +5,13 @@
 #include <QSettings>
 #include <QDateTime>
 #include <QKeyEvent>
+#include <QScrollArea>
+#include <QScrollBar>
+#include <QCheckBox>
+#include <QTimer>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <cmath>
 #include <math.h>
 #include "ui_widegraph.h"
 #include "commons.h"
@@ -35,6 +42,46 @@ WideGraph::WideGraph(QSettings * settings, QWidget *parent) :
   ui->widePlot->setCurrent(false);
   ui->cbControls->setCursor(Qt::ArrowCursor);
   ui->cbBars->setCursor(Qt::ArrowCursor);
+
+  // The controls under the plot are wider than a narrow waterfall box;
+  // let them scroll sideways instead of stopping the box from shrinking.
+  if (auto * box = qobject_cast<QVBoxLayout *> (layout ()))
+    {
+      int const index = box->indexOf (ui->controls_widget);
+      m_controlsScroll = new QScrollArea {this};
+      m_controlsScroll->setObjectName ("controls_scroll");
+      m_controlsScroll->setFrameShape (QFrame::NoFrame);
+      m_controlsScroll->setWidgetResizable (true);
+      m_controlsScroll->setVerticalScrollBarPolicy (Qt::ScrollBarAlwaysOff);
+      m_controlsScroll->setHorizontalScrollBarPolicy (Qt::ScrollBarAsNeeded);
+      m_controlsScroll->setSizePolicy (QSizePolicy::Ignored, QSizePolicy::Fixed);
+      box->removeWidget (ui->controls_widget);
+      m_controlsScroll->setWidget (ui->controls_widget);
+      box->insertWidget (index < 0 ? box->count () : index, m_controlsScroll);
+    }
+
+  // "Fit" keeps the whole band visible however narrow the waterfall gets
+  m_fitBand = new QCheckBox {tr ("Fit"), ui->controls_widget};
+  m_fitBand->setObjectName ("cbFitBand");
+  m_fitBand->setToolTip (tr ("Squeeze the waterfall so the whole band always fits its width"));
+  {
+    int const index = ui->verticalLayout_3->indexOf (ui->bppSpinBox);
+    ui->verticalLayout_3->removeWidget (ui->bppSpinBox);
+    auto * row = new QHBoxLayout;
+    row->setSpacing (6);
+    ui->bppSpinBox->setMinimumWidth (ui->bppSpinBox->sizeHint ().width ());
+    row->addWidget (ui->bppSpinBox, 1);
+    row->addWidget (m_fitBand);
+    ui->verticalLayout_3->insertLayout (index < 0 ? 0 : index, row);
+  }
+  m_fitTimer = new QTimer {this};
+  m_fitTimer->setSingleShot (true);
+  m_fitTimer->setInterval (150);
+  connect (m_fitTimer, &QTimer::timeout, this, &WideGraph::fit_band);
+  connect (m_fitBand, &QCheckBox::toggled, this, [this] (bool on) {
+      ui->bppSpinBox->setEnabled (!on);
+      if (on) fit_band ();
+    });
 
   connect(ui->widePlot, SIGNAL(freezeDecode1(int)),this,
           SLOT(wideFreezeDecode(int)));
@@ -99,7 +146,9 @@ WideGraph::WideGraph(QSettings * settings, QWidget *parent) :
     m_userPalette = WFPalette {m_settings->value("UserPalette").value<WFPalette::Colours> ()};
     m_fMinPerBand = m_settings->value ("FminPerBand").toHash ();
     setRxRange ();
-    ui->controls_widget->setVisible(!m_settings->value("HideControls",false).toBool());
+    m_controlsScroll->setVisible(!m_settings->value("HideControls",false).toBool());
+    m_fitBand->setChecked (m_settings->value ("FitBand", true).toBool ());
+    ui->bppSpinBox->setEnabled (!m_fitBand->isChecked ());
     ui->cbControls->setChecked(!m_settings->value("HideControls",false).toBool());
   }
 
@@ -154,7 +203,8 @@ void WideGraph::saveSettings()                                           //saveS
   m_settings->setValue ("UserPalette", QVariant::fromValue (m_userPalette.colours ()));
   m_settings->setValue("Flatten",m_bFlatten);
   m_settings->setValue("UseRef",m_bRef);
-  m_settings->setValue ("HideControls", ui->controls_widget->isHidden ());
+  m_settings->setValue ("HideControls", m_controlsScroll->isHidden ());
+  m_settings->setValue ("FitBand", m_fitBand->isChecked ());
   m_settings->setValue ("Timestamp",m_timestamp);
   m_settings->setValue ("Bars", m_bars);
   m_settings->setValue ("Freq", m_freq);
@@ -323,6 +373,7 @@ void WideGraph::setPeriod(double trperiod, int nsps)                  //SetPerio
   m_TRperiod=trperiod;
   m_nsps=nsps;
   ui->widePlot->setNsps(trperiod, nsps);
+  if (m_fitBand && m_fitBand->isChecked ()) m_fitTimer->start ();
 }
 
 void WideGraph::setTxFreq(int n)                                   //setTxFreq
@@ -472,7 +523,7 @@ void WideGraph::on_cbRef_toggled(bool b)
 
 void WideGraph::on_cbControls_toggled(bool b)
 {
-  ui->controls_widget->setVisible(b);
+  m_controlsScroll->setVisible(b);
 }
 
 void WideGraph::on_timestampComboBox_currentIndexChanged(int n)
@@ -647,4 +698,33 @@ void WideGraph::setDarkStyle(bool b)
 void WideGraph::restartTotalPower()
 {
   ui->widePlot->restartTotalPower();
+}
+
+void WideGraph::resizeEvent (QResizeEvent * e)
+{
+  QDialog::resizeEvent (e);
+  if (m_controlsScroll)
+    {
+      // tall enough for the controls, plus the scroll bar when it shows
+      int h = ui->controls_widget->minimumSizeHint ().height ();
+      if (ui->controls_widget->minimumSizeHint ().width () > m_controlsScroll->width ())
+        {
+          h += m_controlsScroll->horizontalScrollBar ()->sizeHint ().height ();
+        }
+      m_controlsScroll->setFixedHeight (h);
+    }
+  if (m_fitBand && m_fitBand->isChecked ()) m_fitTimer->start ();
+}
+
+void WideGraph::fit_band ()
+{
+  if (!m_fitBand || !m_fitBand->isChecked ()) return;
+  // FT8 and FT4 signals sit between 200 and about 3500 Hz above the dial
+  double const span = 3500.0;
+  int const w = ui->widePlot->width ();
+  double const bin = ui->widePlot->fftBinWidth ();
+  if (w < 50 || bin <= 0.) return;
+  int n = static_cast<int> (std::ceil (span / (w * bin)));
+  n = qBound (ui->bppSpinBox->minimum (), n, ui->bppSpinBox->maximum ());
+  if (n != ui->bppSpinBox->value ()) ui->bppSpinBox->setValue (n);
 }

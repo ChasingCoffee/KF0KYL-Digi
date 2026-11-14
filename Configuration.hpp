@@ -2,6 +2,7 @@
 #define CONFIGURATION_HPP_
 
 #include <QObject>
+#include <QColor>
 #include <QFont>
 #include <QString>
 
@@ -185,6 +186,12 @@ public:
   QString qrz_xml_username () const;
   QString qrz_xml_password () const;
   QString qrz_api_key () const;
+
+  // colours of the dial frequency and the date/time displays
+  QColor dial_text_color () const;
+  QColor dial_background_color () const;
+  QColor clock_text_color () const;
+  QColor clock_background_color () const;
   bool prompt_to_log () const;
   bool autoLog() const;
   bool contestingOnly() const;

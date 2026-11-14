@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="docs/images/logo.png" width="96" alt="KF0KYL Digi icon">
+  <img src="docs/images/banner.png" width="520" alt="KF0KYL Digi logo">
 </p>
 
 <h1 align="center">KF0KYL Digi</h1>
 
 <p align="center">
   <b>FT8, FT4 and weak-signal digital modes with a modern look, built on WSJT-X.</b><br>
-  Dark mode · waterfall in the main window · automatic QRZ Logbook upload · see who you're working
+  Dark mode · waterfall in the main window · layouts you can resize · automatic QRZ Logbook upload · see who you're working
 </p>
 
 <p align="center">
@@ -40,6 +40,36 @@ The waterfall sits right above the decode panes, so there's one window to manage
 of two. Drag the divider to give it more or less room. Want it in its own window again,
 say on a second monitor? Untick **View → Waterfall in Main Window** and it pops back out;
 tick it to bring it home. Your layout is remembered.
+
+### 🧩 Layouts you can arrange
+Pick an arrangement from **View → Layout** and drag the dividers (the little dotted grips)
+to size each section the way you like. Every layout remembers its own sizes, and
+**View → Layout → Reset Layout** puts the current one back the way it started.
+
+- **Classic:** waterfall on top, Band Activity and Rx Frequency side by side, controls
+  along the bottom. Drag up and down for a taller waterfall or taller decode boxes, and
+  sideways to widen either box.
+- **Big Band Activity:** a tall Band Activity on the left; waterfall, Rx Frequency and the
+  callsign info on the right.
+
+  ![Big Band Activity layout](docs/images/layout-big-band.png)
+
+- **Wide Screen:** for wide monitors. Band Activity runs from top to bottom, and the
+  frequency, messages and buttons sit under the right-hand side. Switch back to another
+  layout any time.
+
+  ![Wide Screen layout](docs/images/layout-wide.png)
+
+The waterfall **squeezes to fit its box** (the **Fit** box next to Bins/Pixel), so you
+always see the whole band no matter how narrow you make it. Untick **Fit** to set
+Bins/Pixel by hand as before.
+
+### 🎨 Frequency and clock colours
+Choose the text and background colours of the big frequency and date/time displays in
+**File → Settings → Colors**, or pick a ready-made scheme (classic yellow, logo green,
+LCD, blue and more).
+
+![Frequency and clock colour settings](docs/images/display-colors.png)
 
 ### ☁️ Automatic upload to your QRZ Logbook
 Every contact you log is sent to your [QRZ.com Logbook](https://logbook.qrz.com) the moment

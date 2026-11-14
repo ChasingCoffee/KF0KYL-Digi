@@ -82,6 +82,7 @@ class QSplashScreen;
 class QSplitter;
 class CallsignInfo;
 class QAction;
+class QActionGroup;
 class QSettings;
 class QLineEdit;
 class QFont;
@@ -984,10 +985,21 @@ private:
   bool m_block_udp_status_updates;
   bool m_useDarkStyle;
 
-  // Windows 11 layout: waterfall embedded above the decode panes
-  QSplitter * m_mainSplitter {nullptr};
+  // Windows 11 layout: waterfall embedded in the main window, and a
+  // choice of arrangements (View > Layout) with resizable sections
+  enum class PanelLayout {Classic = 0, BigBand = 1, Wide = 2};
+  PanelLayout m_panelLayout {PanelLayout::Classic};
+  QWidget * m_layoutContent {nullptr};    // rebuilt by rebuild_layout ()
+  QWidget * m_layoutStash {nullptr};      // holds sections while rebuilding
+  QList<QSplitter *> m_layoutSplitters;
   QAction * m_embedWaterfallAction {nullptr};
+  QActionGroup * m_layoutActions {nullptr};
   void setup_main_splitter ();
+  void rebuild_layout (bool restore_sizes = true);
+  void save_layout_sizes ();
+  void set_panel_layout (PanelLayout);
+  void reset_layout ();
+  void apply_display_colors ();   // dial frequency and clock colours from Settings > Colors
 
   // callsign info strip: who is the current DX station
   CallsignInfo * m_callInfo {nullptr};

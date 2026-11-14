@@ -61,7 +61,7 @@ if (POLICY CMP0075)
 endif ()
 
 project (wsjtx
-  VERSION 1.0.2.0
+  VERSION 1.1.0.0
   LANGUAGES C CXX Fortran
   )
 # KF0KYL Digi is a modified version of WSJT-X. Per the WSJT trademark policy
@@ -893,6 +893,7 @@ set (TOP_LEVEL_RESOURCES
   icons/Darwin/wsjtx.iconset/icon_128x128.png
   contrib/gpl-v3-logo.svg
   artwork/splash.png
+  artwork/kf0kyl_logo.png
   )
 
 set (PALETTE_FILES

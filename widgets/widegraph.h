@@ -18,6 +18,11 @@ namespace Ui {
 class QSettings;
 class Configuration;
 
+class QScrollArea;
+class QCheckBox;
+class QTimer;
+class QResizeEvent;
+
 class WideGraph : public QDialog
 {
   Q_OBJECT
@@ -72,6 +77,7 @@ public slots:
 
 protected:
   void keyPressEvent (QKeyEvent *e) override;
+  void resizeEvent (QResizeEvent *) override;
   void closeEvent (QCloseEvent *) override;
 
 private slots:
@@ -97,10 +103,14 @@ private slots:
 
 private:
   void readPalette ();
+  void fit_band ();             // pick Bins/Pixel so the whole band fits the width
   void setRxRange ();
   void replot();
 
   QScopedPointer<Ui::WideGraph> ui;
+  QScrollArea * m_controlsScroll {nullptr};
+  QCheckBox * m_fitBand {nullptr};
+  QTimer * m_fitTimer {nullptr};
 
   QSettings * m_settings;
   QDir m_palettes_path;

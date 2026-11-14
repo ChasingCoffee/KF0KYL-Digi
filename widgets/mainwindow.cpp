@@ -569,6 +569,7 @@ MainWindow::MainWindow(QDir const& temp_directory, bool multiple,
   add_child_to_event_filter (this);
   setup_main_splitter ();
   setup_callsign_info ();
+  apply_display_colors ();
 
   // QRZ Logbook auto-upload: un-sent QSOs survive restarts in qrz_pending.adi
   connect (&m_qrzLogbook, &QrzLogbook::status, this, [this] (QString const& message, bool error) {
@@ -1451,6 +1452,26 @@ MainWindow::~MainWindow()
 }
 
 //-------------------------------------------------------- writeSettings()
+
+namespace
+{
+  // key prefix under which each layout keeps its own divider positions
+  QString layout_key (int layout) {return QString {"Layout%1/"}.arg (layout);}
+
+  // layout sizes live in the "Common" settings group; this opens it when
+  // called outside readSettings ()/writeSettings ()
+  struct CommonGroup
+  {
+    explicit CommonGroup (QSettings * s) : s_ {s}, opened_ {s->group ().isEmpty ()}
+    {
+      if (opened_) s_->beginGroup ("Common");
+    }
+    ~CommonGroup () {if (opened_) s_->endGroup ();}
+    QSettings * s_;
+    bool opened_;
+  };
+}
+
 void MainWindow::writeSettings()
 {
   m_settings->beginGroup("MainWindow");
@@ -1584,7 +1605,8 @@ void MainWindow::writeSettings()
   m_settings->setValue ("AutoClearAvg", ui->actionAuto_Clear_Avg->isChecked ());
   m_settings->setValue ("DisableClicksOnWaterfall", ui->actionDisable_clicks_on_waterfall->isChecked ());
   m_settings->setValue("SplitterState",ui->decodes_splitter->saveState());
-  m_settings->setValue("MainSplitterState",m_mainSplitter->saveState());
+  save_layout_sizes ();
+  m_settings->setValue("PanelLayout",static_cast<int> (m_panelLayout));
   m_settings->setValue("WaterfallEmbedded",m_embedWaterfallAction->isChecked());
   m_settings->setValue("CallsignInfoVisible",m_callInfoAction->isChecked());
   m_settings->setValue("Blanker",ui->sbNB->value());
@@ -2024,18 +2046,25 @@ void MainWindow::readSettings()
       QSignalBlocker blocker {m_embedWaterfallAction};
       m_embedWaterfallAction->setChecked (embed);
     }
-    embed_waterfall (embed);
-    m_callInfoAction->setChecked (m_settings->value ("CallsignInfoVisible", true).toBool ());
-    auto const state = m_settings->value ("MainSplitterState").toByteArray ();
-    if (state.size ())
+    int const layout = qBound (0, m_settings->value ("PanelLayout", 0).toInt (), 2);
+    m_panelLayout = static_cast<PanelLayout> (layout);
+    // carry the 1.0 waterfall divider over to the Classic layout
+    if (!m_settings->contains (layout_key (0) + "wf_split") && m_settings->contains ("MainSplitterState"))
       {
-        m_mainSplitter->restoreState (state);
+        m_settings->setValue (layout_key (0) + "wf_split", m_settings->value ("MainSplitterState"));
       }
-    else
+    bool const first_run = !m_settings->contains (layout_key (layout) + "wf_split");
+    if (!embed && !m_wideGraph->isWindow ())
       {
-        // first run of this layout, make room for the waterfall
-        m_mainSplitter->setSizes ({300, 340});
-        if (embed) resize (qMax (width (), 1100), height () + 300);
+        m_wideGraph->setParent (nullptr, Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint
+                                | Qt::WindowCloseButtonHint | Qt::WindowMinimizeButtonHint);
+      }
+    rebuild_layout ();
+    m_callInfoAction->setChecked (m_settings->value ("CallsignInfoVisible", true).toBool ());
+    if (first_run && embed && PanelLayout::Classic == m_panelLayout)
+      {
+        // first run, make room for the waterfall
+        resize (qMax (width (), 1100), height () + 300);
       }
   }
   ui->sbNB->setValue(m_settings->value("Blanker",0).toInt());
@@ -3598,6 +3627,7 @@ void MainWindow::on_actionSettings_triggered()           // Setup Dialog (Settin
     checkMSK144ContestType();
     m_qrzLogbook.setApiKey (m_config.qrz_logbook_enabled () ? m_config.qrz_api_key () : QString {});
     m_callLookup.setQrzLogin (m_config.qrz_xml_username (), m_config.qrz_xml_password ());
+    apply_display_colors ();
     update_callsign_info ();
     if (m_config.my_callsign () != callsign) {
       m_baseCall = Radio::base_callsign (m_config.my_callsign ());
@@ -4692,12 +4722,7 @@ void MainWindow::setup_callsign_info ()
   // strip between the decode panes and the controls showing who the
   // DX station is; follows the DX Call box however it gets filled in
   // (double-click, typing, or auto-sequencing answering a caller)
-  m_callInfo = new CallsignInfo {ui->centralWidget};
-  if (auto * layout = qobject_cast<QBoxLayout *> (ui->centralWidget->layout ()))
-    {
-      int const index = layout->indexOf (ui->lower_panel_widget);
-      layout->insertWidget (index < 0 ? layout->count () : index, m_callInfo);
-    }
+  m_callInfo = new CallsignInfo {m_layoutStash};   // rebuild_layout () places it
 
   m_callInfoAction = new QAction {tr ("Callsign Info"), this};
   m_callInfoAction->setObjectName ("actionCallsign_Info");
@@ -4737,29 +4762,260 @@ void MainWindow::update_callsign_info ()
 
 void MainWindow::setup_main_splitter ()
 {
-  // Put a vertical splitter where the decode panes were so the waterfall
-  // can sit above them, like a single-window Windows 11 app.
-  auto * layout = qobject_cast<QBoxLayout *> (ui->centralWidget->layout ());
-  if (!layout) return;
-  int const index = layout->indexOf (ui->decodes_splitter);
-  layout->removeWidget (ui->decodes_splitter);
-  m_mainSplitter = new QSplitter {Qt::Vertical, ui->centralWidget};
-  m_mainSplitter->setObjectName ("main_splitter");
-  m_mainSplitter->setChildrenCollapsible (false);
-  m_mainSplitter->setHandleWidth (8);
-  m_mainSplitter->addWidget (ui->decodes_splitter);
-  layout->insertWidget (index < 0 ? 0 : index, m_mainSplitter, 1);
+  // Everything in the main window apart from the menus and the status bar
+  // is one of five sections: waterfall, Band Activity, Rx Frequency, the
+  // callsign info strip and the controls. rebuild_layout () arranges them
+  // with splitters according to the layout chosen in View > Layout.
+  m_layoutStash = new QWidget {ui->centralWidget};
+  m_layoutStash->setObjectName ("layout_stash");
+  m_layoutStash->hide ();
 
   m_embedWaterfallAction = new QAction {tr ("Waterfall in Main Window"), this};
   m_embedWaterfallAction->setObjectName ("actionEmbed_Waterfall");
   m_embedWaterfallAction->setCheckable (true);
   m_embedWaterfallAction->setChecked (true);
-  m_embedWaterfallAction->setToolTip (tr ("Show the waterfall above the decode panes instead of in a separate window"));
+  m_embedWaterfallAction->setToolTip (tr ("Show the waterfall in the main window instead of in a separate window"));
   auto const actions = ui->menuView->actions ();
   int const pos = actions.indexOf (ui->actionWide_Waterfall);
-  ui->menuView->insertAction (pos >= 0 && pos + 1 < actions.size () ? actions[pos + 1] : nullptr,
-                              m_embedWaterfallAction);
+  QAction * before = pos >= 0 && pos + 1 < actions.size () ? actions[pos + 1] : nullptr;
+  ui->menuView->insertAction (before, m_embedWaterfallAction);
   connect (m_embedWaterfallAction, &QAction::toggled, this, &MainWindow::embed_waterfall);
+
+  auto * layout_menu = new QMenu {tr ("Layout"), this};
+  layout_menu->setObjectName ("menuLayout");
+  m_layoutActions = new QActionGroup {this};
+  m_layoutActions->setExclusive (true);
+  struct {PanelLayout id; char const * name; char const * tip;} const presets[] = {
+    {PanelLayout::Classic, QT_TR_NOOP ("Classic"),
+     QT_TR_NOOP ("Waterfall on top, Band Activity and Rx Frequency side by side, controls along the bottom")},
+    {PanelLayout::BigBand, QT_TR_NOOP ("Big Band Activity"),
+     QT_TR_NOOP ("Tall Band Activity on the left; waterfall and Rx Frequency on the right; controls along the bottom")},
+    {PanelLayout::Wide, QT_TR_NOOP ("Wide Screen"),
+     QT_TR_NOOP ("Band Activity runs the full height on the left; the controls sit under the right-hand side")},
+  };
+  for (auto const& preset : presets)
+    {
+      auto * action = layout_menu->addAction (tr (preset.name));
+      action->setCheckable (true);
+      action->setData (static_cast<int> (preset.id));
+      action->setToolTip (tr (preset.tip));
+      action->setStatusTip (tr (preset.tip));
+      m_layoutActions->addAction (action);
+      connect (action, &QAction::triggered, this, [this, preset] {set_panel_layout (preset.id);});
+    }
+  layout_menu->setToolTipsVisible (true);
+  layout_menu->addSeparator ();
+  auto * reset = layout_menu->addAction (tr ("Reset Layout"));
+  reset->setObjectName ("actionReset_Layout");
+  reset->setToolTip (tr ("Put every divider in this layout back where it started"));
+  connect (reset, &QAction::triggered, this, &MainWindow::reset_layout);
+  ui->menuView->insertMenu (m_embedWaterfallAction, layout_menu);
+}
+
+namespace
+{
+  QSplitter * make_splitter (Qt::Orientation orientation, QString const& name, QWidget * parent)
+  {
+    auto * splitter = new QSplitter {orientation, parent};
+    splitter->setObjectName (name);
+    splitter->setChildrenCollapsible (false);
+    splitter->setHandleWidth (8);
+    return splitter;
+  }
+}
+
+void MainWindow::save_layout_sizes ()
+{
+  CommonGroup group {m_settings};
+  if (!m_layoutContent) return;
+  auto const prefix = layout_key (static_cast<int> (m_panelLayout));
+  for (auto * splitter : m_layoutSplitters)
+    {
+      // the waterfall divider only means something while the waterfall is in
+      if (splitter->objectName () == "wf_split" && !m_embedWaterfallAction->isChecked ()) continue;
+      m_settings->setValue (prefix + splitter->objectName (), splitter->saveState ());
+    }
+}
+
+void MainWindow::rebuild_layout (bool restore_sizes)
+{
+  CommonGroup group {m_settings};
+  auto * root = qobject_cast<QBoxLayout *> (ui->centralWidget->layout ());
+  if (!root) return;
+  setUpdatesEnabled (false);
+
+  auto * wg = m_wideGraph.data ();
+  bool const embed = m_embedWaterfallAction->isChecked ();
+  QWidget * const band = ui->layoutWidget;        // Band Activity
+  QWidget * const rx = ui->rh_decodes_widget;     // Rx Frequency
+  QWidget * const info = m_callInfo;
+  QWidget * const controls = ui->lower_panel_widget;
+
+  // remember what the user had hidden (SWL view hides the controls, the
+  // info strip hides itself when there's no DX call)
+  QList<QWidget *> sections {band, rx, info, controls};
+  if (embed || wg->parentWidget () == m_layoutStash) sections << wg;
+  QHash<QWidget *, bool> hidden;
+  for (auto * w : sections)
+    {
+      hidden[w] = w->isHidden () && w->testAttribute (Qt::WA_WState_ExplicitShowHide);
+    }
+  if (embed && wg->isWindow ())
+    {
+      wg->saveSettings ();     // remember the floating geometry for later
+    }
+
+  // park every section, then throw the old arrangement away
+  int index = root->indexOf (m_layoutContent ? m_layoutContent : ui->decodes_splitter);
+  for (auto * w : sections) w->setParent (m_layoutStash);
+  ui->decodes_splitter->setParent (m_layoutStash);
+  if (m_layoutContent)
+    {
+      root->removeWidget (m_layoutContent);
+      delete m_layoutContent;
+    }
+  m_layoutSplitters.clear ();
+  root->removeWidget (controls);
+
+  m_layoutContent = new QWidget {ui->centralWidget};
+  m_layoutContent->setObjectName ("layout_content");
+  auto * column = new QVBoxLayout {m_layoutContent};
+  column->setContentsMargins (0, 0, 0, 0);
+  column->setSpacing (4);
+
+  // waterfall above the decodes (Classic) or above Rx Frequency (others)
+  auto * wf_split = make_splitter (Qt::Vertical, "wf_split", nullptr);
+  if (embed)
+    {
+      wf_split->addWidget (wg);
+      wf_split->setStretchFactor (0, 0);
+    }
+  m_layoutSplitters << wf_split;
+
+  switch (m_panelLayout)
+    {
+    case PanelLayout::Classic:
+      {
+        ui->decodes_splitter->insertWidget (0, band);
+        ui->decodes_splitter->insertWidget (1, rx);
+        wf_split->addWidget (ui->decodes_splitter);
+        wf_split->setStretchFactor (wf_split->indexOf (ui->decodes_splitter), 1);
+        column->addWidget (wf_split, 1);
+        column->addWidget (info);
+        column->addWidget (controls);
+      }
+      break;
+
+    case PanelLayout::BigBand:
+    case PanelLayout::Wide:
+      {
+        auto * band_split = make_splitter (Qt::Horizontal, "band_split", nullptr);
+        m_layoutSplitters << band_split;
+        band_split->addWidget (band);
+        auto * right = new QWidget;
+        auto * right_column = new QVBoxLayout {right};
+        right_column->setContentsMargins (0, 0, 0, 0);
+        right_column->setSpacing (4);
+        wf_split->addWidget (rx);
+        wf_split->setStretchFactor (wf_split->indexOf (rx), 1);
+        right_column->addWidget (wf_split, 1);
+        right_column->addWidget (info);
+        if (PanelLayout::Wide == m_panelLayout) right_column->addWidget (controls);
+        band_split->addWidget (right);
+        band_split->setStretchFactor (0, 0);
+        band_split->setStretchFactor (1, 1);
+        column->addWidget (band_split, 1);
+        if (PanelLayout::BigBand == m_panelLayout) column->addWidget (controls);
+      }
+      break;
+    }
+  root->insertWidget (index < 0 ? 0 : index, m_layoutContent, 1);
+  for (auto * w : sections) if (hidden.value (w)) w->hide (); else w->show ();
+  ui->decodes_splitter->setVisible (PanelLayout::Classic == m_panelLayout);
+
+  // divider positions: this layout's saved ones, or sensible defaults
+  auto const prefix = layout_key (static_cast<int> (m_panelLayout));
+  for (auto * splitter : m_layoutSplitters)
+    {
+      auto const state = m_settings->value (prefix + splitter->objectName ()).toByteArray ();
+      if (restore_sizes && state.size ())
+        {
+          splitter->restoreState (state);
+        }
+      else if (splitter->objectName () == "wf_split")
+        {
+          splitter->setSizes (PanelLayout::Classic == m_panelLayout ? QList<int> {240, 400} : QList<int> {280, 400});
+        }
+      else if (splitter->objectName () == "band_split")
+        {
+          int const total = qMax (m_layoutContent->width (), width ());
+          int const left = PanelLayout::Wide == m_panelLayout ? 560 : 540;
+          splitter->setSizes ({left, qMax (total - left, 600)});
+        }
+    }
+  if (PanelLayout::Classic == m_panelLayout && !restore_sizes)
+    {
+      int const w = ui->decodes_splitter->width ();
+      ui->decodes_splitter->setSizes ({w / 2, w - w / 2});
+    }
+
+  for (auto * action : m_layoutActions->actions ())
+    {
+      action->setChecked (action->data ().toInt () == static_cast<int> (m_panelLayout));
+    }
+  setUpdatesEnabled (true);
+}
+
+void MainWindow::set_panel_layout (PanelLayout layout)
+{
+  CommonGroup group {m_settings};
+  if (layout == m_panelLayout && m_layoutContent) return;
+  save_layout_sizes ();
+  m_panelLayout = layout;
+  if (!isMaximized () && !isFullScreen ())
+    {
+      // the side-by-side layouts want a wider window; Wide Screen also
+      // wants room for Band Activity beside the controls
+      auto const avail = QApplication::desktop ()->availableGeometry (this);
+      int want = width ();
+      if (PanelLayout::Wide == layout) want = qMax (want, ui->lower_panel_widget->sizeHint ().width () + 590);
+      if (PanelLayout::BigBand == layout) want = qMax (want, 1200);
+      want = qMin (want, avail.width () - (frameGeometry ().width () - width ()));
+      if (want > width ())
+        {
+          int const x = qMax (avail.left (), qMin (frameGeometry ().left (), avail.right () - want - (frameGeometry ().width () - width ())));
+          move (x, frameGeometry ().top ());
+          resize (want, height ());
+        }
+    }
+  rebuild_layout ();
+}
+
+void MainWindow::reset_layout ()
+{
+  CommonGroup group {m_settings};
+  auto const prefix = layout_key (static_cast<int> (m_panelLayout));
+  m_settings->remove (prefix + "wf_split");
+  m_settings->remove (prefix + "band_split");
+  if (PanelLayout::Classic == m_panelLayout) m_settings->remove ("SplitterState");
+  rebuild_layout (false);
+}
+
+void MainWindow::apply_display_colors ()
+{
+  auto recolor = [] (QLabel * label, QColor const& text, QColor const& background) {
+    // keep the rest of the style (font, out-of-band red) and swap the colours
+    static QHash<QLabel *, QString> originals;
+    if (!originals.contains (label)) originals[label] = label->styleSheet ();
+    auto sheet = originals[label];
+    int const end = sheet.indexOf ('}');
+    auto first = sheet.left (end);
+    first.replace (QRegularExpression {R"((?<![-\w])color\s*:\s*[^;]+;)"}, QString {"color: %1;"}.arg (text.name ()));
+    first.replace (QRegularExpression {R"(background-color\s*:\s*[^;]+;)"}, QString {"background-color: %1;"}.arg (background.name ()));
+    label->setStyleSheet (first + sheet.mid (end));
+  };
+  recolor (ui->labDialFreq, m_config.dial_text_color (), m_config.dial_background_color ());
+  recolor (ui->labUTC, m_config.clock_text_color (), m_config.clock_background_color ());
 }
 
 void MainWindow::embed_waterfall (bool embed)
@@ -4768,8 +5024,7 @@ void MainWindow::embed_waterfall (bool embed)
   bool const was_visible = wg->isVisible ();
   if (embed)
     {
-      if (wg->parentWidget () == m_mainSplitter) return;
-      if (wg->isWindow ()) wg->saveSettings ();  // remember the floating geometry
+      if (!wg->isWindow () && m_layoutContent) return;   // already in
       int grow = isVisible () && !isMaximized () && !isFullScreen () ? qMin (wg->height (), 360) : 0;
       if (grow > 0)
         {
@@ -4777,17 +5032,18 @@ void MainWindow::embed_waterfall (bool embed)
           auto const avail = QApplication::desktop ()->availableGeometry (this);
           grow = qMax (0, qMin (grow, avail.bottom () - frameGeometry ().bottom ()));
         }
-      m_mainSplitter->insertWidget (0, wg);
-      m_mainSplitter->setStretchFactor (0, 0);
-      m_mainSplitter->setStretchFactor (1, 1);
-      if (grow > 0) resize (width (), height () + grow);
+      if (m_layoutContent) save_layout_sizes ();
+      rebuild_layout ();
+      if (grow > 0 && PanelLayout::Classic == m_panelLayout) resize (width (), height () + grow);
     }
   else
     {
       if (wg->isWindow ()) return;
+      save_layout_sizes ();
       wg->setParent (nullptr, Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint
                      | Qt::WindowCloseButtonHint | Qt::WindowMinimizeButtonHint);
       wg->restoreWindowGeometry ();
+      rebuild_layout ();
     }
   if (was_visible) wg->show ();
 }

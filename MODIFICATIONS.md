@@ -23,6 +23,7 @@ icon and version numbers.
 | 2026-11-13 | Version 1.0.0: renamed to KF0KYL Digi with its own icon; settings and log are copied from WSJT-X on first run |
 | 2026-11-13 | Version 1.0.1: first-run copy of WSJT-X settings now works on Windows |
 | 2026-11-14 | Version 1.0.2: shorter window title (WSJT-X credit stays in the About box and splash screen) |
+| 2026-11-14 | Version 1.1.0: View > Layout with Classic, Big Band Activity and Wide Screen arrangements, visible resize grips, Reset Layout; waterfall Fit option keeps the whole band visible; frequency and clock colour settings; new logo and program icon |
 
 The full history of every change is in the Git commit log.
 

@@ -52,6 +52,7 @@ public:
   void setDataFromDisk(bool b);
   void setRxRange(int fMin);
   void setBinsPerPixel(int n);
+  double fftBinWidth () const {return m_fftBinWidth;}
   int  binsPerPixel();
   void setWaterfallAvg(int n);
   void setRxFreq(int n);

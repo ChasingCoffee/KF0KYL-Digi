@@ -292,10 +292,11 @@ QProgressBar {
 QProgressBar::chunk { background-color: @accent; border-radius: 4px; }
 
 /* ---- splitters ---- */
-QSplitter::handle { background: transparent; }
-QSplitter::handle:vertical { height: 6px; }
-QSplitter::handle:horizontal { width: 6px; }
-QSplitter::handle:hover { background: @border_strong; border-radius: 3px; }
+QSplitter::handle { background: transparent; border-radius: 3px; }
+QSplitter::handle:vertical { height: 8px; image: url(:/win11/grip_h_@theme.png); }
+QSplitter::handle:horizontal { width: 8px; image: url(:/win11/grip_v_@theme.png); }
+QSplitter::handle:hover { background: @border_strong; }
+QSplitter::handle:pressed { background: @accent; }
 
 /* ---- status bar & tooltips ---- */
 QStatusBar { background: @layer; border-top: 1px solid @border; }

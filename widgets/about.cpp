@@ -37,7 +37,7 @@ CAboutDlg::CAboutDlg(QWidget *parent) :
     "WSJT-X and KF0KYL Digi are licensed under the terms of Version 3 <br />"
     "of the GNU General Public License (GPL) <br /><br />"
     "<a href=" TO_STRING__ (PROJECT_HOMEPAGE) ">"
-    "<img src=\":/icon_128x128.png\" /></a>"
+    "<img src=\":/kf0kyl_logo.png\" /></a><br />"
     "<a href=\"https://www.gnu.org/licenses/gpl-3.0.txt\">"
     "<img src=\":/gpl-v3-logo.svg\" height=\"80\" /><br />"
     "https://www.gnu.org/licenses/gpl-3.0.txt</a>");
