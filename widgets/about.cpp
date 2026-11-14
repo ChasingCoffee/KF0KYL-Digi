@@ -14,8 +14,7 @@ CAboutDlg::CAboutDlg(QWidget *parent) :
   ui->setupUi(this);
 
   ui->labelTxt->setText ("<h2>" + QString {QCoreApplication::applicationName () + " v"
-                                             + QCoreApplication::applicationVersion ()
-                                             + " " + display_revision ()}.simplified () + "<br />"
+                                             + QCoreApplication::applicationVersion ()}.simplified () + "<br />"
     "</h2>"
     "by Carson Coordes, KF0KYL<br /><br />"
     "<b>Based on WSJT-X " WSJTX_BASE_VERSION " by Joe Taylor, K1JT, and the<br />"

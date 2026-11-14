@@ -30,8 +30,7 @@ SplashScreen::SplashScreen ()
   setLayout (&m_->main_layout_);
   // the logo fills the top of the splash image; the words go underneath
   showMessage ("<h2>" + QString {QCoreApplication::applicationName () + " v" +
-        QCoreApplication::applicationVersion() + " " +
-        revision ()}.simplified () + "</h2>"
+        QCoreApplication::applicationVersion()}.simplified () + "</h2>"
     "by Carson Coordes, KF0KYL<br />"
     "Based on WSJT-X " WSJTX_BASE_VERSION " by K1JT and the WSJT Development Team.<br />"
     "This modified version is not supported by the WSJT-X team: please<br />"
