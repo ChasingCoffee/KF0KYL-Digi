@@ -1017,6 +1017,7 @@ private:
   // View > Conditions: space weather, band outlook and gray-line map
   ConditionsWindow * m_conditions {nullptr};
   void show_conditions ();
+  void update_conditions_colors ();
   QString m_repeatKey;
   int m_repeatCount {0};
   QString tx_repeat_key () const;   // dial frequency and clock colours from Settings > Colors

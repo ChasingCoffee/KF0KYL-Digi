@@ -496,6 +496,7 @@ void DisplayText::displayDecodedText(DecodedText const& decodedText, QString con
   muted=alertsMuted;
   QColor bg;
   QColor fg;
+  last_background_ = QColor {};   // the colour this decode is shown in, for the Conditions map
   bool CQcall = false;
   auto is_73 = decodedText.messageWords().filter (QRegularExpression {"^(73|RR73)$"}).size();
   if (decodedText.string ().contains (" CQ ")) {
@@ -693,6 +694,7 @@ void DisplayText::displayDecodedText(DecodedText const& decodedText, QString con
     }
   }
 
+  last_background_ = bg;
   insertText (message.trimmed (), bg, fg, decodedText.call (), dxCall);
 }
 

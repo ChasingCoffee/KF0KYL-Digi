@@ -3,6 +3,7 @@
 #include "Win11Theme.hpp"
 #include "CallsignInfo.hpp"
 #include "ConditionsWindow.hpp"
+#include "models/DecodeHighlightingModel.hpp"
 
 #include <QAudio>
 #include <QAudioOutput>
@@ -3648,6 +3649,7 @@ void MainWindow::on_actionSettings_triggered()           // Setup Dialog (Settin
     m_callLookup.setQrzLogin (m_config.qrz_xml_username (), m_config.qrz_xml_password ());
     apply_display_colors ();
     if (m_conditions) m_conditions->set_my_grid (m_config.my_grid ());
+    update_conditions_colors ();
     update_callsign_info ();
     if (m_config.my_callsign () != callsign) {
       m_baseCall = Radio::base_callsign (m_config.my_callsign ());
@@ -4765,6 +4767,7 @@ void MainWindow::setup_callsign_info ()
   // the Conditions window always opens on its own, never inside the main window
   m_conditions = new ConditionsWindow {m_settings};
   m_conditions->set_my_grid (m_config.my_grid ());
+  update_conditions_colors ();
   auto * conditions_action = new QAction {tr ("Conditions..."), this};
   conditions_action->setObjectName ("actionConditions");
   conditions_action->setToolTip (tr ("Space weather, band outlook and a gray-line map of the stations you hear"));
@@ -4787,9 +4790,27 @@ void MainWindow::setup_callsign_info ()
   m_callLookup.setQrzLogin (m_config.qrz_xml_username (), m_config.qrz_xml_password ());
 }
 
+void MainWindow::update_conditions_colors ()
+{
+  if (!m_conditions) return;
+  // the map uses the same colours as Band Activity (Settings > Colors)
+  QColor cq, my_call, tx;
+  for (auto const& item : m_config.decode_highlighting ().items ())
+    {
+      if (!item.enabled_) continue;
+      auto const c = item.background_.style () != Qt::NoBrush ? item.background_.color () : item.foreground_.color ();
+      using H = DecodeHighlightingModel::Highlight;
+      if (H::CQ == item.type_) cq = c;
+      else if (H::MyCall == item.type_) my_call = c;
+      else if (H::Tx == item.type_) tx = c;
+    }
+  m_conditions->set_highlight_colors (cq, my_call, tx);
+}
+
 void MainWindow::show_conditions ()
 {
   if (!m_conditions) return;
+  update_conditions_colors ();
   m_conditions->set_my_grid (m_config.my_grid ());
   m_conditions->set_dx (ui->dxCallEntry->text ().trimmed ().toUpper (), ui->dxGridEntry->text ().trimmed ());
   m_conditions->show ();
@@ -7509,7 +7530,8 @@ void MainWindow::readFromStdout()                             //readFromStdout
                   bool const to_me = decodedtext.call () == m_config.my_callsign ()
                     || Radio::base_callsign (decodedtext.call ()) == Radio::base_callsign (m_config.my_callsign ());
                   m_conditions->add_station (de_call, de_grid, decodedtext.snr (), decodedtext.CQersCall ().size () > 0,
-                                             to_me, country.latitude, -country.longtitude);
+                                             to_me, ui->decodedTextBrowser->last_background (),
+                                             country.latitude, -country.longtitude);
                 }
             }
         }
@@ -8784,6 +8806,11 @@ void MainWindow::guiUpdate()
         auto const key = tx_repeat_key ();
         if (key == m_repeatKey) ++m_repeatCount;
         else {m_repeatKey = key; m_repeatCount = 1;}
+        // the Conditions map shows who you've called
+        if (m_conditions && m_ntx >= 1 && m_ntx <= 5)
+          {
+            m_conditions->mark_called (ui->dxCallEntry->text ().trimmed ().toUpper ());
+          }
       }
     if(m_config.watchdog () && m_mode!="WSPR" && m_mode!="FST4W"
        && current_message != m_msgSent0) {

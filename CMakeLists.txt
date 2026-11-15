@@ -897,6 +897,8 @@ set (TOP_LEVEL_RESOURCES
   artwork/kf0kyl_logo.png
   artwork/map_land.png
   artwork/map_borders.png
+  artwork/map_day.jpg
+  artwork/map_night.jpg
   )
 
 set (PALETTE_FILES
