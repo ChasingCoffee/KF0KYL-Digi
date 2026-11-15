@@ -3842,6 +3842,7 @@ void MainWindow::on_autoButton_clicked (bool checked)
   m_config.transceiver_tune (false);  // reset rig tuning
   if (checked && ui->tuneButton->isChecked() && !(m_mode=="WSPR" || m_mode=="FST4W")) return; // not allowed while tuning
   stopWRTimer.stop();                                       // stop any Wait & Reply timeout
+  if (checked) {m_repeatKey.clear (); m_repeatCount = 0;}   // fresh count each time Tx is enabled
   if (!checked && ui->DX_Call_Button->isChecked()) {
       stopWCTimer.stop();                                   // stop any Wait & Call timeout
       ui->DX_Call_Button->click ();                         // disable Wait & Call
@@ -4719,6 +4720,10 @@ void MainWindow::on_actionWide_Waterfall_triggered()      //Display Waterfalls
 
 void MainWindow::setup_callsign_info ()
 {
+  // the callsign info strip has its own QRZ link, so the old Lookup
+  // button is no longer needed (Enter in the DX Call box still looks up
+  // the grid in CALL3.TXT)
+  ui->lookupButton->hide ();
   // strip between the decode panes and the controls showing who the
   // DX station is; follows the DX Call box however it gets filled in
   // (double-click, typing, or auto-sequencing answering a caller)
@@ -4999,6 +5004,22 @@ void MainWindow::reset_layout ()
   m_settings->remove (prefix + "band_split");
   if (PanelLayout::Classic == m_panelLayout) m_settings->remove ("SplitterState");
   rebuild_layout (false);
+}
+
+QString MainWindow::tx_repeat_key () const
+{
+  QString text;
+  switch (m_ntx)
+    {
+    case 1: text = ui->tx1->text (); break;
+    case 2: text = ui->tx2->text (); break;
+    case 3: text = ui->tx3->text (); break;
+    case 4: text = ui->tx4->text (); break;
+    case 5: text = ui->tx5->currentText (); break;
+    case 6: text = ui->tx6->text (); break;
+    default: break;
+    }
+  return QString::number (m_ntx) + ':' + text.simplified ();
 }
 
 void MainWindow::apply_display_colors ()
@@ -8203,6 +8224,29 @@ void MainWindow::guiUpdate()
     int msgLength=txMsg.trimmed().length();
     if(msgLength==0 and !m_tune) on_stopTxButton_clicked();
 
+    // Give up after sending the same CQ, call or report too many times in
+    // a row with no answer (Settings > General > Behavior). Checked before
+    // the transmitter is keyed, so it never starts an extra transmission.
+    if (g_iptt == 0 && m_bTxTime && m_auto && !m_tune && msgLength > 0
+        && SpecOp::FOX != m_specOp
+        && m_ntx >= 1 && m_ntx <= 6 && m_ntx != 5
+        && tx_repeat_key () == m_repeatKey)
+      {
+        bool const cq = 6 == m_ntx;
+        int const limit = cq ? m_config.cq_repeat_limit () : m_config.reply_repeat_limit ();
+        if (limit > 0 && m_repeatCount >= limit)
+          {
+            m_bTxTime = false;
+            auto_tx_mode (false);
+            m_repeatKey.clear ();
+            m_repeatCount = 0;
+            auto const what = cq ? tr ("Stopped calling CQ after %n call(s) with no answer", "", limit)
+                                 : tr ("Stopped after %n tries with no reply", "", limit);
+            tx_status_label.setText (" " + what + " ");
+            statusBar ()->showMessage (what, 30000);
+          }
+      }
+
     if(g_iptt==0 and ((m_bTxTime and (fTR < 0.75) and (msgLength>0)) or m_tune)) {
       //### Allow late starts
       icw[0]=m_ncw;
@@ -8586,6 +8630,13 @@ void MainWindow::guiUpdate()
 
   if (g_iptt == 1 && m_iptt0 == 0) {
     auto const& current_message = QString::fromLatin1 (msgsent);
+    if (!m_tune)
+      {
+        // count transmissions of the same message in a row
+        auto const key = tx_repeat_key ();
+        if (key == m_repeatKey) ++m_repeatCount;
+        else {m_repeatKey = key; m_repeatCount = 1;}
+      }
     if(m_config.watchdog () && m_mode!="WSPR" && m_mode!="FST4W"
        && current_message != m_msgSent0) {
       tx_watchdog (false);  // in case we are auto sequencing

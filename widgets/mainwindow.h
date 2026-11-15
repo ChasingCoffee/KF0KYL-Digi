@@ -999,7 +999,11 @@ private:
   void save_layout_sizes ();
   void set_panel_layout (PanelLayout);
   void reset_layout ();
-  void apply_display_colors ();   // dial frequency and clock colours from Settings > Colors
+  void apply_display_colors ();
+  // Settings > General: stop after N unanswered CQs or replies
+  QString m_repeatKey;
+  int m_repeatCount {0};
+  QString tx_repeat_key () const;   // dial frequency and clock colours from Settings > Colors
 
   // callsign info strip: who is the current DX station
   CallsignInfo * m_callInfo {nullptr};

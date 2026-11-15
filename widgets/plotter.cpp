@@ -274,7 +274,9 @@ void CPlotter::draw(float swide[], bool bScroll, bool bRed)
          .toString (m_TRperiod < 60. ? "hh:mm:ss" : "hh:mm");
       t = QString {"%1    %2"}.arg (start).arg (m_rxBand);
     }
-    QRect rect{5, -2, m_w-10, painter1.fontMetrics().ascent()};
+    // whole line of text, not just the part above the baseline, so the
+    // tops of the digits aren't clipped
+    QRect rect{5, 0, m_w-10, painter1.fontMetrics().height()};
     QRect boundingRect;
     painter1.drawText(rect, m_timestamp==2?0x0082:0x0081,t, &boundingRect);
   }

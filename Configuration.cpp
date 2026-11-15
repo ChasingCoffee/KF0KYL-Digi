@@ -174,6 +174,11 @@
 #include <QDateTimeEdit>
 #include <QJsonObject>
 #include <QColorDialog>
+#include <QScrollArea>
+#include <QScrollBar>
+#include <QHBoxLayout>
+#include <QSpinBox>
+#include <QDesktopWidget>
 #include <QBoxLayout>
 #include <QGroupBox>
 #include <QGridLayout>
@@ -872,6 +877,24 @@ private:
   QPushButton * display_color_buttons_[4] {};
   QLabel * display_previews_[2] {};
   void setup_display_colors ();
+
+  // Settings > General: plain text-size boxes for low-vision operators
+  QSpinBox * font_size_spin_ {nullptr};
+  QSpinBox * decoded_font_size_spin_ {nullptr};
+  void setup_text_sizes ();
+  void update_text_size_boxes ();
+
+  // Settings > General: give up on calls and reports nobody answers
+  int cq_repeat_limit_ {0};
+  int reply_repeat_limit_ {0};
+  QSpinBox * cq_repeat_spin_ {nullptr};
+  QSpinBox * reply_repeat_spin_ {nullptr};
+  void setup_repeat_limits ();
+
+  // every Settings tab scrolls, so large text never pushes the window
+  // off the screen
+  void setup_scrolling_tabs ();
+  void fit_to_screen ();
   void update_display_color_widgets ();
   QString voicesPath_;
   bool send_to_eqsl_;
@@ -1087,6 +1110,8 @@ bool Configuration::qrz_logbook_enabled () const {return m_->bQrzLogbook_ && !m_
 QString Configuration::qrz_api_key () const {return m_->qrzApiKey_.trimmed ();}
 QString Configuration::qrz_xml_username () const {return m_->qrzXmlUser_.trimmed ();}
 QString Configuration::qrz_xml_password () const {return m_->qrzXmlPassword_;}
+int Configuration::cq_repeat_limit () const {return m_->cq_repeat_limit_;}
+int Configuration::reply_repeat_limit () const {return m_->reply_repeat_limit_;}
 QColor Configuration::dial_text_color () const {return m_->display_colors_[0];}
 QColor Configuration::dial_background_color () const {return m_->display_colors_[1];}
 QColor Configuration::clock_text_color () const {return m_->display_colors_[2];}
@@ -1845,6 +1870,9 @@ Configuration::impl::impl (Configuration * self, QNetworkAccessManager * network
 {
   ui_->setupUi (this);
   setup_display_colors ();
+  setup_text_sizes ();
+  setup_repeat_limits ();
+  setup_scrolling_tabs ();
 
   {
     // Make sure the default save directory exists
@@ -2267,6 +2295,11 @@ void Configuration::impl::initialize_models ()
   ui_->labQrzLoginStatus->clear ();
   for (int i = 0; i < 4; ++i) next_display_colors_[i] = display_colors_[i];
   update_display_color_widgets ();
+  next_font_ = font_;
+  next_decoded_text_font_ = decoded_text_font_;
+  update_text_size_boxes ();
+  cq_repeat_spin_->setValue (cq_repeat_limit_);
+  reply_repeat_spin_->setValue (reply_repeat_limit_);
   ui_->sbCloudlogStationID->setValue (cloudLogStationID_);
   ui_->special_op_activity_button_group->button (SelectedActivity_)->setChecked (true);
   ui_->cbx2ToneSpacing->setChecked(x2ToneSpacing_);
@@ -2712,6 +2745,8 @@ void Configuration::impl::read_settings ()
   qrzApiKey_ = settings_->value ("QrzLogbookApiKey", QString {}).toString ();
   qrzXmlUser_ = settings_->value ("QrzXmlUsername", QString {}).toString ();
   qrzXmlPassword_ = settings_->value ("QrzXmlPassword", QString {}).toString ();
+  cq_repeat_limit_ = qBound (0, settings_->value ("CQRepeatLimit", 0).toInt (), 99);
+  reply_repeat_limit_ = qBound (0, settings_->value ("ReplyRepeatLimit", 0).toInt (), 99);
   {
     char const * keys[] = {"DialTextColor", "DialBackgroundColor", "ClockTextColor", "ClockBackgroundColor"};
     QColor const defaults[] = {QColor {"#ffff00"}, QColor {"#000000"}, QColor {"#ffff00"}, QColor {"#000000"}};
@@ -2998,6 +3033,8 @@ void Configuration::impl::write_settings ()
   settings_->setValue ("QrzLogbookApiKey", qrzApiKey_);
   settings_->setValue ("QrzXmlUsername", qrzXmlUser_);
   settings_->setValue ("QrzXmlPassword", qrzXmlPassword_);
+  settings_->setValue ("CQRepeatLimit", cq_repeat_limit_);
+  settings_->setValue ("ReplyRepeatLimit", reply_repeat_limit_);
   settings_->setValue ("DialTextColor", display_colors_[0].name ());
   settings_->setValue ("DialBackgroundColor", display_colors_[1].name ());
   settings_->setValue ("ClockTextColor", display_colors_[2].name ());
@@ -3296,6 +3333,7 @@ int Configuration::impl::exec ()
   rig_changed_ = false;
 
   initialize_models ();
+  fit_to_screen ();
 
   return QDialog::exec();
 }
@@ -3596,6 +3634,8 @@ void Configuration::impl::accept ()
   qrzXmlUser_ = ui_->leQrzUser->text ().trimmed ();
   qrzXmlPassword_ = ui_->leQrzPassword->text ();
   for (int i = 0; i < 4; ++i) display_colors_[i] = next_display_colors_[i];
+  cq_repeat_limit_ = cq_repeat_spin_->value ();
+  reply_repeat_limit_ = reply_repeat_spin_->value ();
   cloudLogStationID_ = ui_->sbCloudlogStationID->value ();
   SelectedActivity_ = ui_->special_op_activity_button_group->checkedId();
   x2ToneSpacing_ = ui_->cbx2ToneSpacing->isChecked ();
@@ -3764,6 +3804,7 @@ void Configuration::impl::reject ()
 void Configuration::impl::on_font_push_button_clicked ()
 {
   next_font_ = QFontDialog::getFont (0, next_font_, this);
+  update_text_size_boxes ();
 }
 
 void Configuration::impl::on_reset_highlighting_to_defaults_push_button_clicked (bool /*checked*/)
@@ -3930,10 +3971,11 @@ void Configuration::impl::on_LotW_CSV_fetch_push_button_clicked (bool /*checked*
 
 void Configuration::impl::on_decoded_text_font_push_button_clicked ()
 {
-  next_decoded_text_font_ = QFontDialog::getFont (0, decoded_text_font_ , this
+  next_decoded_text_font_ = QFontDialog::getFont (0, next_decoded_text_font_ , this
                                                   , tr ("Decoded Text Font Chooser")
                                                   , QFontDialog::MonospacedFonts
                                                   );
+  update_text_size_boxes ();
 }
 
 void Configuration::impl::on_hamlib_download_button_clicked (bool /*clicked*/)
@@ -5983,4 +6025,137 @@ void Configuration::impl::update_display_color_widgets ()
       display_previews_[i]->setStyleSheet (QString {"QLabel {font-size: 14pt; color: %1; background-color: %2; border-radius: 4px;}"}
                                            .arg (next_display_colors_[i * 2].name ()).arg (next_display_colors_[i * 2 + 1].name ()));
     }
+}
+
+void Configuration::impl::setup_text_sizes ()
+{
+  // Settings > General > Display: two plain size boxes beside the Font...
+  // buttons, so making the text bigger doesn't need a font dialog
+  auto * row = new QWidget {ui_->display_group_box};
+  auto * h = new QHBoxLayout {row};
+  h->setContentsMargins (0, 4, 0, 0);
+  auto make_spin = [row] (QString const& tip) {
+    auto * spin = new QSpinBox {row};
+    spin->setRange (6, 48);
+    spin->setSuffix (" pt");
+    spin->setToolTip (tip);
+    return spin;
+  };
+  font_size_spin_ = make_spin (tr ("Size of the text in menus, buttons, labels and windows"));
+  decoded_font_size_spin_ = make_spin (tr ("Size of the decodes in Band Activity and Rx Frequency"));
+  auto * title = new QLabel {tr ("<b>Text size</b>"), row};
+  h->addWidget (title);
+  h->addSpacing (12);
+  h->addWidget (new QLabel {tr ("Program:"), row});
+  h->addWidget (font_size_spin_);
+  h->addSpacing (18);
+  h->addWidget (new QLabel {tr ("Band Activity and Rx Frequency:"), row});
+  h->addWidget (decoded_font_size_spin_);
+  h->addStretch ();
+  if (auto * grid = qobject_cast<QGridLayout *> (ui_->display_group_box->layout ()))
+    {
+      grid->addWidget (row, grid->rowCount (), 0, 1, grid->columnCount ());
+    }
+
+  connect (font_size_spin_, static_cast<void (QSpinBox::*) (int)> (&QSpinBox::valueChanged), [this] (int size) {
+      if (next_font_.pointSize () != size) next_font_.setPointSize (size);
+    });
+  connect (decoded_font_size_spin_, static_cast<void (QSpinBox::*) (int)> (&QSpinBox::valueChanged), [this] (int size) {
+      if (next_decoded_text_font_.pointSize () != size) next_decoded_text_font_.setPointSize (size);
+    });
+}
+
+void Configuration::impl::update_text_size_boxes ()
+{
+  if (!font_size_spin_) return;
+  auto size_of = [] (QFont const& f) {
+    if (f.pointSize () > 0) return f.pointSize ();
+    return qMax (6, qRound (f.pixelSize () * 72. / 96.));
+  };
+  font_size_spin_->setValue (size_of (next_font_));
+  decoded_font_size_spin_->setValue (size_of (next_decoded_text_font_));
+}
+
+void Configuration::impl::setup_repeat_limits ()
+{
+  // Settings > General > Behavior, under the Tx watchdog
+  auto * grid = qobject_cast<QGridLayout *> (ui_->tx_watchdog_spin_box->parentWidget ()->layout ());
+  auto * parent = ui_->tx_watchdog_spin_box->parentWidget ();
+  auto make_spin = [parent] (QString const& suffix, QString const& tip) {
+    auto * spin = new QSpinBox {parent};
+    spin->setRange (0, 99);
+    spin->setSpecialValueText (tr ("Never"));
+    spin->setSuffix (suffix);
+    spin->setToolTip (tip);
+    return spin;
+  };
+  cq_repeat_spin_ = make_spin (tr (" CQs"),
+      tr ("<p>When Enable Tx is on, stop after calling CQ this many times in a row "
+          "with no answer. Never keeps calling until the Tx watchdog runs out.</p>"));
+  reply_repeat_spin_ = make_spin (tr (" tries"),
+      tr ("<p>When Enable Tx is on, stop after sending the same call, report or RR73 "
+          "to a station this many times in a row with no reply. Never keeps "
+          "trying until the Tx watchdog runs out.</p>"));
+  auto * row = new QWidget {parent};
+  auto * h = new QHBoxLayout {row};
+  h->setContentsMargins (0, 0, 0, 0);
+  h->addWidget (new QLabel {tr ("Stop calling CQ after:"), row});
+  h->addWidget (cq_repeat_spin_);
+  h->addSpacing (18);
+  h->addWidget (new QLabel {tr ("Stop a reply or report after:"), row});
+  h->addWidget (reply_repeat_spin_);
+  h->addStretch ();
+  if (grid)
+    {
+      grid->addWidget (row, grid->rowCount (), 0, 1, grid->columnCount ());
+    }
+}
+
+void Configuration::impl::setup_scrolling_tabs ()
+{
+  auto * tabs = ui_->configuration_tabs;
+  for (int i = 0; i < tabs->count (); ++i)
+    {
+      auto * page = tabs->widget (i);
+      auto const text = tabs->tabText (i);
+      auto const icon = tabs->tabIcon (i);
+      auto const tip = tabs->tabToolTip (i);
+      tabs->removeTab (i);
+      auto * scroll = new QScrollArea;
+      scroll->setObjectName (page->objectName () + "_scroll");
+      scroll->setFrameShape (QFrame::NoFrame);
+      scroll->setWidgetResizable (true);
+      scroll->setWidget (page);
+      tabs->insertTab (i, scroll, icon, text);
+      tabs->setTabToolTip (i, tip);
+    }
+}
+
+void Configuration::impl::fit_to_screen ()
+{
+  // Big text makes every tab bigger. Let each tab ask for the room it
+  // needs, but never more than the screen has; anything bigger scrolls.
+  auto const avail = QApplication::desktop ()->availableGeometry (parentWidget () ? parentWidget () : this);
+  auto const chrome = QSize {60, 150};      // tab bar, OK/Cancel and frame
+  auto const limit = avail.size () - chrome;
+  auto * tabs = ui_->configuration_tabs;
+  for (int i = 0; i < tabs->count (); ++i)
+    {
+      if (auto * scroll = qobject_cast<QScrollArea *> (tabs->widget (i)))
+        {
+          auto want = scroll->widget ()->sizeHint ();
+          want.rwidth () += scroll->verticalScrollBar ()->sizeHint ().width ();
+          scroll->setMinimumSize (want.boundedTo (limit));
+        }
+    }
+  setMaximumSize (avail.size ());
+  auto g = geometry ();
+  auto const min = minimumSizeHint ().boundedTo (avail.size ());
+  g.setSize (g.size ().expandedTo (min).boundedTo (avail.size ()));
+  // keep it on the screen
+  if (g.right () > avail.right ()) g.moveRight (avail.right ());
+  if (g.bottom () > avail.bottom ()) g.moveBottom (avail.bottom ());
+  if (g.left () < avail.left ()) g.moveLeft (avail.left ());
+  if (g.top () < avail.top ()) g.moveTop (avail.top ());
+  setGeometry (g);
 }
