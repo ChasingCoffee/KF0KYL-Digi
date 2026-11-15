@@ -50,6 +50,7 @@
 #include <QTimer>
 #include <QDesktopWidget>
 #include <QBoxLayout>
+#include <QSpinBox>
 #include <QSignalBlocker>
 #include <QButtonGroup>
 #include <QActionGroup>
@@ -569,6 +570,7 @@ MainWindow::MainWindow(QDir const& temp_directory, bool multiple,
   add_child_to_event_filter (this);
   setup_main_splitter ();
   setup_callsign_info ();
+  setup_tx_limits ();
   apply_display_colors ();
 
   // QRZ Logbook auto-upload: un-sent QSOs survive restarts in qrz_pending.adi
@@ -1607,6 +1609,7 @@ void MainWindow::writeSettings()
   m_settings->setValue("SplitterState",ui->decodes_splitter->saveState());
   save_layout_sizes ();
   m_settings->setValue("PanelLayout",static_cast<int> (m_panelLayout));
+  for (int n : {1, 2, 3, 4, 6}) m_settings->setValue (QString {"TxRepeatLimit%1"}.arg (n), m_txLimit[n]->value ());
   m_settings->setValue("WaterfallEmbedded",m_embedWaterfallAction->isChecked());
   m_settings->setValue("CallsignInfoVisible",m_callInfoAction->isChecked());
   m_settings->setValue("Blanker",ui->sbNB->value());
@@ -2046,6 +2049,7 @@ void MainWindow::readSettings()
       QSignalBlocker blocker {m_embedWaterfallAction};
       m_embedWaterfallAction->setChecked (embed);
     }
+    for (int n : {1, 2, 3, 4, 6}) m_txLimit[n]->setValue (m_settings->value (QString {"TxRepeatLimit%1"}.arg (n), 0).toInt ());
     int const layout = qBound (0, m_settings->value ("PanelLayout", 0).toInt (), 2);
     m_panelLayout = static_cast<PanelLayout> (layout);
     // carry the 1.0 waterfall divider over to the Classic layout
@@ -5004,6 +5008,33 @@ void MainWindow::reset_layout ()
   m_settings->remove (prefix + "band_split");
   if (PanelLayout::Classic == m_panelLayout) m_settings->remove ("SplitterState");
   rebuild_layout (false);
+}
+
+void MainWindow::setup_tx_limits ()
+{
+  // a narrow "Max" column beside Tx1-Tx4 and Tx6 (Tx5 is free text/73)
+  auto * grid = ui->gridLayout_6;
+  auto * header = new QLabel {tr ("Max"), ui->tx6->parentWidget ()};
+  header->setAlignment (Qt::AlignCenter);
+  header->setToolTip (tr ("Stop after sending a message this many times in a row with no reply"));
+  grid->addWidget (header, 0, 3);
+  for (int n : {1, 2, 3, 4, 6})
+    {
+      auto * spin = new QSpinBox {ui->tx6->parentWidget ()};
+      spin->setObjectName (QString {"txLimit%1"}.arg (n));
+      spin->setRange (0, 99);
+      spin->setSpecialValueText (QString {QChar {0x221E}});     // infinity: no limit
+      spin->setAlignment (Qt::AlignCenter);
+      spin->setFocusPolicy (Qt::ClickFocus);
+      spin->setMaximumWidth (fontMetrics ().horizontalAdvance ("888") + 34);
+      spin->setToolTip (6 == n
+          ? tr ("<p>Stop calling CQ after this many calls in a row with no answer.</p>"
+                "<p>∞ = keep calling until the Tx watchdog runs out.</p>")
+          : tr ("<p>Stop sending Tx%1 after this many tries in a row with no reply.</p>"
+                "<p>∞ = keep trying until the Tx watchdog runs out.</p>").arg (n));
+      m_txLimit[n] = spin;
+      grid->addWidget (spin, 6 == n ? 6 : n, 3);
+    }
 }
 
 QString MainWindow::tx_repeat_key () const
@@ -8224,26 +8255,25 @@ void MainWindow::guiUpdate()
     int msgLength=txMsg.trimmed().length();
     if(msgLength==0 and !m_tune) on_stopTxButton_clicked();
 
-    // Give up after sending the same CQ, call or report too many times in
-    // a row with no answer (Settings > General > Behavior). Checked before
-    // the transmitter is keyed, so it never starts an extra transmission.
+    // Give up after sending the same message too many times in a row with
+    // no answer (the Max boxes beside the Tx messages). Checked before the
+    // transmitter is keyed, so it never starts an extra transmission.
     if (g_iptt == 0 && m_bTxTime && m_auto && !m_tune && msgLength > 0
-        && SpecOp::FOX != m_specOp
-        && m_ntx >= 1 && m_ntx <= 6 && m_ntx != 5
+        && SpecOp::FOX != m_specOp && m_ntx >= 1 && m_ntx <= 6 && m_txLimit[m_ntx]
         && tx_repeat_key () == m_repeatKey)
       {
-        bool const cq = 6 == m_ntx;
-        int const limit = cq ? m_config.cq_repeat_limit () : m_config.reply_repeat_limit ();
+        int const limit = m_txLimit[m_ntx]->value ();
         if (limit > 0 && m_repeatCount >= limit)
           {
             m_bTxTime = false;
             auto_tx_mode (false);
             m_repeatKey.clear ();
             m_repeatCount = 0;
-            auto const what = cq ? tr ("Stopped calling CQ after %n call(s) with no answer", "", limit)
-                                 : tr ("Stopped after %n tries with no reply", "", limit);
-            tx_status_label.setText (" " + what + " ");
-            statusBar ()->showMessage (what, 30000);
+            auto const what = 6 == m_ntx
+              ? tr ("Stopped calling CQ after %n call(s) with no answer", "", limit)
+              : tr ("Stopped sending Tx%1 after %n tries with no reply", "", limit).arg (m_ntx);
+            statusBar ()->showMessage (what, 60000);
+            QApplication::alert (this);
           }
       }
 

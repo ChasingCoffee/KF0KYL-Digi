@@ -83,6 +83,7 @@ class QSplitter;
 class CallsignInfo;
 class QAction;
 class QActionGroup;
+class QSpinBox;
 class QSettings;
 class QLineEdit;
 class QFont;
@@ -1000,7 +1001,10 @@ private:
   void set_panel_layout (PanelLayout);
   void reset_layout ();
   void apply_display_colors ();
-  // Settings > General: stop after N unanswered CQs or replies
+  // "Max" column beside Tx1-Tx4 and Tx6: stop after sending that message
+  // N times in a row with no reply (0 = no limit)
+  QSpinBox * m_txLimit[7] {};
+  void setup_tx_limits ();
   QString m_repeatKey;
   int m_repeatCount {0};
   QString tx_repeat_key () const;   // dial frequency and clock colours from Settings > Colors

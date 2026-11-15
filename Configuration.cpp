@@ -884,13 +884,6 @@ private:
   void setup_text_sizes ();
   void update_text_size_boxes ();
 
-  // Settings > General: give up on calls and reports nobody answers
-  int cq_repeat_limit_ {0};
-  int reply_repeat_limit_ {0};
-  QSpinBox * cq_repeat_spin_ {nullptr};
-  QSpinBox * reply_repeat_spin_ {nullptr};
-  void setup_repeat_limits ();
-
   // every Settings tab scrolls, so large text never pushes the window
   // off the screen
   void setup_scrolling_tabs ();
@@ -1110,8 +1103,6 @@ bool Configuration::qrz_logbook_enabled () const {return m_->bQrzLogbook_ && !m_
 QString Configuration::qrz_api_key () const {return m_->qrzApiKey_.trimmed ();}
 QString Configuration::qrz_xml_username () const {return m_->qrzXmlUser_.trimmed ();}
 QString Configuration::qrz_xml_password () const {return m_->qrzXmlPassword_;}
-int Configuration::cq_repeat_limit () const {return m_->cq_repeat_limit_;}
-int Configuration::reply_repeat_limit () const {return m_->reply_repeat_limit_;}
 QColor Configuration::dial_text_color () const {return m_->display_colors_[0];}
 QColor Configuration::dial_background_color () const {return m_->display_colors_[1];}
 QColor Configuration::clock_text_color () const {return m_->display_colors_[2];}
@@ -1871,7 +1862,6 @@ Configuration::impl::impl (Configuration * self, QNetworkAccessManager * network
   ui_->setupUi (this);
   setup_display_colors ();
   setup_text_sizes ();
-  setup_repeat_limits ();
   setup_scrolling_tabs ();
 
   {
@@ -2298,8 +2288,6 @@ void Configuration::impl::initialize_models ()
   next_font_ = font_;
   next_decoded_text_font_ = decoded_text_font_;
   update_text_size_boxes ();
-  cq_repeat_spin_->setValue (cq_repeat_limit_);
-  reply_repeat_spin_->setValue (reply_repeat_limit_);
   ui_->sbCloudlogStationID->setValue (cloudLogStationID_);
   ui_->special_op_activity_button_group->button (SelectedActivity_)->setChecked (true);
   ui_->cbx2ToneSpacing->setChecked(x2ToneSpacing_);
@@ -2745,8 +2733,6 @@ void Configuration::impl::read_settings ()
   qrzApiKey_ = settings_->value ("QrzLogbookApiKey", QString {}).toString ();
   qrzXmlUser_ = settings_->value ("QrzXmlUsername", QString {}).toString ();
   qrzXmlPassword_ = settings_->value ("QrzXmlPassword", QString {}).toString ();
-  cq_repeat_limit_ = qBound (0, settings_->value ("CQRepeatLimit", 0).toInt (), 99);
-  reply_repeat_limit_ = qBound (0, settings_->value ("ReplyRepeatLimit", 0).toInt (), 99);
   {
     char const * keys[] = {"DialTextColor", "DialBackgroundColor", "ClockTextColor", "ClockBackgroundColor"};
     QColor const defaults[] = {QColor {"#ffff00"}, QColor {"#000000"}, QColor {"#ffff00"}, QColor {"#000000"}};
@@ -3033,8 +3019,6 @@ void Configuration::impl::write_settings ()
   settings_->setValue ("QrzLogbookApiKey", qrzApiKey_);
   settings_->setValue ("QrzXmlUsername", qrzXmlUser_);
   settings_->setValue ("QrzXmlPassword", qrzXmlPassword_);
-  settings_->setValue ("CQRepeatLimit", cq_repeat_limit_);
-  settings_->setValue ("ReplyRepeatLimit", reply_repeat_limit_);
   settings_->setValue ("DialTextColor", display_colors_[0].name ());
   settings_->setValue ("DialBackgroundColor", display_colors_[1].name ());
   settings_->setValue ("ClockTextColor", display_colors_[2].name ());
@@ -3634,8 +3618,6 @@ void Configuration::impl::accept ()
   qrzXmlUser_ = ui_->leQrzUser->text ().trimmed ();
   qrzXmlPassword_ = ui_->leQrzPassword->text ();
   for (int i = 0; i < 4; ++i) display_colors_[i] = next_display_colors_[i];
-  cq_repeat_limit_ = cq_repeat_spin_->value ();
-  reply_repeat_limit_ = reply_repeat_spin_->value ();
   cloudLogStationID_ = ui_->sbCloudlogStationID->value ();
   SelectedActivity_ = ui_->special_op_activity_button_group->checkedId();
   x2ToneSpacing_ = ui_->cbx2ToneSpacing->isChecked ();
@@ -6074,41 +6056,6 @@ void Configuration::impl::update_text_size_boxes ()
   };
   font_size_spin_->setValue (size_of (next_font_));
   decoded_font_size_spin_->setValue (size_of (next_decoded_text_font_));
-}
-
-void Configuration::impl::setup_repeat_limits ()
-{
-  // Settings > General > Behavior, under the Tx watchdog
-  auto * grid = qobject_cast<QGridLayout *> (ui_->tx_watchdog_spin_box->parentWidget ()->layout ());
-  auto * parent = ui_->tx_watchdog_spin_box->parentWidget ();
-  auto make_spin = [parent] (QString const& suffix, QString const& tip) {
-    auto * spin = new QSpinBox {parent};
-    spin->setRange (0, 99);
-    spin->setSpecialValueText (tr ("Never"));
-    spin->setSuffix (suffix);
-    spin->setToolTip (tip);
-    return spin;
-  };
-  cq_repeat_spin_ = make_spin (tr (" CQs"),
-      tr ("<p>When Enable Tx is on, stop after calling CQ this many times in a row "
-          "with no answer. Never keeps calling until the Tx watchdog runs out.</p>"));
-  reply_repeat_spin_ = make_spin (tr (" tries"),
-      tr ("<p>When Enable Tx is on, stop after sending the same call, report or RR73 "
-          "to a station this many times in a row with no reply. Never keeps "
-          "trying until the Tx watchdog runs out.</p>"));
-  auto * row = new QWidget {parent};
-  auto * h = new QHBoxLayout {row};
-  h->setContentsMargins (0, 0, 0, 0);
-  h->addWidget (new QLabel {tr ("Stop calling CQ after:"), row});
-  h->addWidget (cq_repeat_spin_);
-  h->addSpacing (18);
-  h->addWidget (new QLabel {tr ("Stop a reply or report after:"), row});
-  h->addWidget (reply_repeat_spin_);
-  h->addStretch ();
-  if (grid)
-    {
-      grid->addWidget (row, grid->rowCount (), 0, 1, grid->columnCount ());
-    }
 }
 
 void Configuration::impl::setup_scrolling_tabs ()

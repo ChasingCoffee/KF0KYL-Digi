@@ -188,10 +188,6 @@ public:
   QString qrz_api_key () const;
 
   // colours of the dial frequency and the date/time displays
-  // stop auto-sequenced transmissions that get no reply (0 = never)
-  int cq_repeat_limit () const;
-  int reply_repeat_limit () const;
-
   QColor dial_text_color () const;
   QColor dial_background_color () const;
   QColor clock_text_color () const;
