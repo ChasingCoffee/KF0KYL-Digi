@@ -10,6 +10,7 @@
 #include <QString>
 #include <QColor>
 #include <QtNumeric>
+#include <functional>
 
 class QNetworkAccessManager;
 class QNetworkReply;
@@ -53,6 +54,9 @@ public:
   // the main window's highlight colours (Settings > Colors), so the map
   // uses the same colours as Band Activity
   void set_highlight_colors (QColor const& cq, QColor const& my_call, QColor const& tx);
+
+  // double-clicking a dot on the map
+  Q_SIGNAL void station_double_clicked (QString const& call, Qt::KeyboardModifiers);
 
   // Maidenhead locator to latitude/longitude (centre of the square)
   static bool grid_to_latlon (QString const& grid, double& lat, double& lon);

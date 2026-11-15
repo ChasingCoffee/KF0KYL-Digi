@@ -4766,6 +4766,7 @@ void MainWindow::setup_callsign_info ()
 
   // the Conditions window always opens on its own, never inside the main window
   m_conditions = new ConditionsWindow {m_settings};
+  connect (m_conditions, &ConditionsWindow::station_double_clicked, this, &MainWindow::double_click_station);
   m_conditions->set_my_grid (m_config.my_grid ());
   update_conditions_colors ();
   auto * conditions_action = new QAction {tr ("Conditions..."), this};
@@ -7526,6 +7527,7 @@ void MainWindow::readFromStdout()                             //readFromStdout
               de_call = de_call.remove ('<').remove ('>');
               if (de_call.size () > 2)
                 {
+                  m_mapDecodes[de_call] = decodedtext.string ();
                   auto const country = m_logBook.countries ()->lookup (de_call);
                   bool const to_me = decodedtext.call () == m_config.my_callsign ()
                     || Radio::base_callsign (decodedtext.call ()) == Radio::base_callsign (m_config.my_callsign ());
@@ -9503,6 +9505,26 @@ void MainWindow::doubleClickOnCall(Qt::KeyboardModifiers modifiers)
     }
     return;
   }
+  double_click_message (message, modifiers);
+}
+
+void MainWindow::double_click_station (QString const& call, Qt::KeyboardModifiers modifiers)
+{
+  // a dot double-clicked on the Conditions map: act as if the station's
+  // latest decode had been double-clicked in Band Activity
+  auto const line = m_mapDecodes.value (call);
+  if (line.isEmpty ()) return;
+  if (m_mode == "FST4W" || SpecOp::FOX == m_specOp) return;
+  m_bMyCallStd = stdCall (m_config.my_callsign ());
+  m_bHisCallStd = stdCall (m_hisCall);
+  set_dateTimeQSO (-1);       // reset our QSO start time
+  DecodedText message {line.trimmed ().left (61).remove ("TU; ")};
+  if (SpecOp::HOUND == m_specOp && (message.string ().mid (4, 2).contains ("15") || message.string ().mid (4, 2).contains ("45"))) return;
+  double_click_message (message, modifiers);
+}
+
+void MainWindow::double_click_message (DecodedText const& message, Qt::KeyboardModifiers modifiers)
+{
   int nmod = fmod(double(message.timeInSeconds()),2.0*m_TRperiod);
   if(ui->txFirstCheckBox->isVisible() && !ui->txFirstCheckBox->isEnabled() && (
         (nmod!=0 && !ui->txFirstCheckBox->isChecked()) or

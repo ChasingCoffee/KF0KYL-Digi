@@ -27,6 +27,7 @@
 #include <QRegularExpression>
 #include <QToolTip>
 #include <QHelpEvent>
+#include <QMouseEvent>
 #include <QComboBox>
 #include <QCheckBox>
 #include <QIcon>
@@ -460,30 +461,69 @@ protected:
     p.drawRect (QRectF {r}.adjusted (0.5, 0.5, -0.5, -0.5));
   }
 
+public:
+  std::function<void (QString const&, Qt::KeyboardModifiers)> on_double_click;
+
+protected:
+
+  // the visible station nearest a point, within a few pixels
+  QString station_at (QPointF const& pos) const
+  {
+    auto const now = QDateTime::currentDateTimeUtc ();
+    QString best;
+    double best_d = 100.;     // 10 pixels
+    for (auto it = stations.cbegin (); it != stations.cend (); ++it)
+      {
+        if (it->heard.secsTo (now) > 1800 || !shown (it.key (), it.value ())) continue;
+        auto const pt = to_point (it->lat, it->lon);
+        double const d = std::pow (pt.x () - pos.x (), 2) + std::pow (pt.y () - pos.y (), 2);
+        if (d < best_d) {best_d = d; best = it.key ();}
+      }
+    return best;
+  }
+
+  bool shown (QString const& call, Station const& s) const
+  {
+    if (s.to_me) return show_me;
+    if (called.contains (call)) return show_called;
+    if (s.cq) return show_cq;
+    return show_others;
+  }
+
+  void mouseDoubleClickEvent (QMouseEvent * e) override
+  {
+    auto const call = station_at (e->pos ());
+    if (call.size () && on_double_click) on_double_click (call, e->modifiers ());
+  }
+
+  void mouseMoveEvent (QMouseEvent * e) override
+  {
+    setCursor (station_at (e->pos ()).size () ? Qt::PointingHandCursor : Qt::ArrowCursor);
+    QWidget::mouseMoveEvent (e);
+  }
+
   bool event (QEvent * e) override
   {
     if (e->type () == QEvent::ToolTip)
       {
         auto * help = static_cast<QHelpEvent *> (e);
-        QString best;
-        double best_d = 64.;
-        for (auto it = stations.cbegin (); it != stations.cend (); ++it)
+        auto const call = station_at (help->pos ());
+        if (call.size ())
           {
-            auto const pt = to_point (it->lat, it->lon);
-            double const d = std::pow (pt.x () - help->pos ().x (), 2) + std::pow (pt.y () - help->pos ().y (), 2);
-            if (d < best_d)
-              {
-                best_d = d;
-                QString what;
-                if (it->to_me) what = QObject::tr ("calling you");
-                else if (called.contains (it.key ())) what = QObject::tr ("you called");
-                else if (it->cq) what = QObject::tr ("calling CQ");
-                best = QString {"%1  %2 dB  %3 UTC  %4"}.arg (it.key ()).arg (it->snr)
-                  .arg (it->heard.toString ("hh:mm")).arg (what);
-              }
+            auto const& s = stations[call];
+            QString what;
+            if (s.to_me) what = QObject::tr ("calling you");
+            else if (called.contains (call)) what = QObject::tr ("you called");
+            else if (s.cq) what = QObject::tr ("calling CQ");
+            QToolTip::showText (help->globalPos (),
+                                QString {"<b>%1</b> &nbsp;%2 dB &nbsp;%3 UTC &nbsp;%4<br/>%5"}
+                                .arg (call).arg (s.snr).arg (s.heard.toString ("hh:mm")).arg (what)
+                                .arg (QObject::tr ("Double-click to call")), this);
           }
-        if (best.size ()) QToolTip::showText (help->globalPos (), best.trimmed (), this);
-        else QToolTip::hideText ();
+        else
+          {
+            QToolTip::hideText ();
+          }
         return true;
       }
     return QWidget::event (e);
@@ -729,6 +769,9 @@ void ConditionsWindow::build_ui ()
   auto * middle = new QHBoxLayout;
   middle->setSpacing (10);
   map_ = new ConditionsMap {this};
+  map_->on_double_click = [this] (QString const& call, Qt::KeyboardModifiers modifiers) {
+    Q_EMIT station_double_clicked (call, modifiers);
+  };
   auto * map_column = new QVBoxLayout;
   map_column->setSpacing (4);
   map_column->addWidget (build_map_bar ());
