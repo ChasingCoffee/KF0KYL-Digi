@@ -205,6 +205,7 @@ public:
   bool GridMapAll() const;
   bool ppfx() const;
   bool miles () const;
+  bool open_conditions_at_start () const;
   bool quick_call () const;
   bool disable_TX_on_73 () const;
   bool force_call_1st() const;

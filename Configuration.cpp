@@ -175,6 +175,7 @@
 #include <QJsonObject>
 #include <QColorDialog>
 #include <QScrollArea>
+#include <QCheckBox>
 #include <QScrollBar>
 #include <QHBoxLayout>
 #include <QSpinBox>
@@ -937,6 +938,8 @@ private:
   bool gridMapAll_;
   bool ppfx_;
   bool miles_;
+  bool open_conditions_ {false};
+  QCheckBox * open_conditions_check_box_ {nullptr};
   bool quick_call_;
   bool disable_TX_on_73_;
   bool force_call_1st_;
@@ -1120,6 +1123,7 @@ bool Configuration::GridMap() const { return m_->gridMap_;}
 bool Configuration::GridMapAll() const { return m_->gridMapAll_;}
 bool Configuration::ppfx() const {return m_->ppfx_;}
 bool Configuration::miles () const {return m_->miles_;}
+bool Configuration::open_conditions_at_start () const {return m_->open_conditions_;}
 bool Configuration::quick_call () const {return m_->quick_call_;}
 bool Configuration::disable_TX_on_73 () const {return m_->disable_TX_on_73_;}
 bool Configuration::force_call_1st() const {return m_->force_call_1st_;}
@@ -1862,6 +1866,16 @@ Configuration::impl::impl (Configuration * self, QNetworkAccessManager * network
   ui_->setupUi (this);
   setup_display_colors ();
   setup_text_sizes ();
+  {
+    // Settings > General > Display, next to the miles option
+    open_conditions_check_box_ = new QCheckBox {tr ("Open the Conditions window at start-up"), ui_->display_group_box};
+    open_conditions_check_box_->setToolTip (tr ("Open the Conditions window (space weather, band outlook and map) "
+                                                "every time the program starts"));
+    if (auto * grid = qobject_cast<QGridLayout *> (ui_->display_group_box->layout ()))
+      {
+        grid->addWidget (open_conditions_check_box_, grid->rowCount (), 0, 1, grid->columnCount ());
+      }
+  }
   setup_scrolling_tabs ();
 
   {
@@ -2241,6 +2255,7 @@ void Configuration::impl::initialize_models ()
   ui_->Map_Grid_to_State->setChecked(gridMap_);
   ui_->Map_All_Messages->setChecked(gridMapAll_);
   ui_->miles_check_box->setChecked (miles_);
+  open_conditions_check_box_->setChecked (open_conditions_);
   ui_->quick_call_check_box->setChecked (quick_call_);
   ui_->disable_TX_on_73_check_box->setChecked (disable_TX_on_73_);
   ui_->force_call_1st_check_box->setChecked (force_call_1st_);
@@ -2694,6 +2709,7 @@ void Configuration::impl::read_settings ()
   gridMapAll_ = settings_->value("MapGridAllEntity", true).toBool();
   ppfx_ = settings_->value ("PrincipalPrefix", false).toBool ();
   miles_ = settings_->value ("Miles", false).toBool ();
+  open_conditions_ = settings_->value ("OpenConditionsAtStart", false).toBool ();
   quick_call_ = settings_->value ("QuickCall", true).toBool ();
   disable_TX_on_73_ = settings_->value ("73TxDisable", true).toBool ();
   force_call_1st_ = settings_->value ("ForceCallFirst", false).toBool ();
@@ -2972,6 +2988,7 @@ void Configuration::impl::write_settings ()
   settings_->setValue ("MapGridAllEntity", gridMapAll_);
   settings_->setValue ("PrincipalPrefix", ppfx_);
   settings_->setValue ("Miles", miles_);
+  settings_->setValue ("OpenConditionsAtStart", open_conditions_);
   settings_->setValue ("QuickCall", quick_call_);
   settings_->setValue ("73TxDisable", disable_TX_on_73_);
   settings_->setValue ("ForceCallFirst", force_call_1st_);
@@ -3573,6 +3590,7 @@ void Configuration::impl::accept ()
   gridMapAll_ = ui_->Map_All_Messages->isChecked();
   ppfx_ = ui_->ppfx_check_box->isChecked ();
   miles_ = ui_->miles_check_box->isChecked ();
+  open_conditions_ = open_conditions_check_box_->isChecked ();
   quick_call_ = ui_->quick_call_check_box->isChecked ();
   disable_TX_on_73_ = ui_->disable_TX_on_73_check_box->isChecked ();
   force_call_1st_ = ui_->force_call_1st_check_box->isChecked ();

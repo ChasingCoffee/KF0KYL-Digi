@@ -28,6 +28,7 @@
 #include <QToolTip>
 #include <QHelpEvent>
 #include <QMouseEvent>
+#include <QLocale>
 #include <QComboBox>
 #include <QCheckBox>
 #include <QIcon>
@@ -1322,7 +1323,23 @@ void ConditionsWindow::update_sun_times ()
     return text + " UTC";
   };
   my_sun_->setText (describe (tr ("You"), my_grid_));
-  dx_sun_->setText (dx_call_.size () ? describe (dx_call_, dx_grid_) : QString {});
+  auto dx_text = dx_call_.size () ? describe (dx_call_, dx_grid_) : QString {};
+  // distance and beam heading from you, in km or miles as Settings says
+  double lat1, lon1, lat2, lon2;
+  if (dx_text.size () && grid_to_latlon (my_grid_, lat1, lon1) && grid_to_latlon (dx_grid_, lat2, lon2))
+    {
+      double const p1 = rad (lat1), p2 = rad (lat2), dl = rad (lon2 - lon1);
+      double const c = std::sin (p1) * std::sin (p2) + std::cos (p1) * std::cos (p2) * std::cos (dl);
+      double const km = 6371. * std::acos (qBound (-1., c, 1.));
+      double bearing = deg (std::atan2 (std::sin (dl) * std::cos (p2),
+                                        std::cos (p1) * std::sin (p2) - std::sin (p1) * std::cos (p2) * std::cos (dl)));
+      if (bearing < 0) bearing += 360.;
+      dx_text += "<br/>" + tr ("%1 %2, beam heading %3%4")
+        .arg (QLocale {}.toString (qRound (miles_ ? km * 0.621371 : km)))
+        .arg (miles_ ? tr ("miles") : tr ("km"))
+        .arg (qRound (bearing)).arg (QChar {0x00B0});
+    }
+  dx_sun_->setText (dx_text);
 }
 
 void ConditionsWindow::set_my_grid (QString const& grid)
@@ -1330,6 +1347,12 @@ void ConditionsWindow::set_my_grid (QString const& grid)
   my_grid_ = grid;
   double lat, lon;
   if (grid_to_latlon (grid, lat, lon)) map_->set_my (lat, lon);
+  update_sun_times ();
+}
+
+void ConditionsWindow::set_miles (bool miles)
+{
+  miles_ = miles;
   update_sun_times ();
 }
 

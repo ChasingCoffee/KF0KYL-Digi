@@ -3648,7 +3648,11 @@ void MainWindow::on_actionSettings_triggered()           // Setup Dialog (Settin
     m_qrzLogbook.setApiKey (m_config.qrz_logbook_enabled () ? m_config.qrz_api_key () : QString {});
     m_callLookup.setQrzLogin (m_config.qrz_xml_username (), m_config.qrz_xml_password ());
     apply_display_colors ();
-    if (m_conditions) m_conditions->set_my_grid (m_config.my_grid ());
+    if (m_conditions)
+      {
+        m_conditions->set_my_grid (m_config.my_grid ());
+        m_conditions->set_miles (m_config.miles ());
+      }
     update_conditions_colors ();
     update_callsign_info ();
     if (m_config.my_callsign () != callsign) {
@@ -4584,11 +4588,7 @@ void MainWindow::closeEvent(QCloseEvent * e)
 {
   m_valid = false;              // suppresses subprocess errors
   m_config.transceiver_offline ();
-  if (m_conditions)
-    {
-      m_settings->setValue ("Conditions/open", m_conditions->isVisible ());
-      m_conditions->close ();
-    }
+  if (m_conditions) m_conditions->close ();     // saves its size and place
   writeSettings ();
   if(m_astroWidget) m_astroWidget.reset ();
   if(m_QSYMessageCreatorWidget) {
@@ -4768,13 +4768,14 @@ void MainWindow::setup_callsign_info ()
   m_conditions = new ConditionsWindow {m_settings};
   connect (m_conditions, &ConditionsWindow::station_double_clicked, this, &MainWindow::double_click_station);
   m_conditions->set_my_grid (m_config.my_grid ());
+  m_conditions->set_miles (m_config.miles ());
   update_conditions_colors ();
   auto * conditions_action = new QAction {tr ("Conditions..."), this};
   conditions_action->setObjectName ("actionConditions");
   conditions_action->setToolTip (tr ("Space weather, band outlook and a gray-line map of the stations you hear"));
   ui->menuView->insertAction (m_embedWaterfallAction, conditions_action);
   connect (conditions_action, &QAction::triggered, this, &MainWindow::show_conditions);
-  if (m_settings->value ("Conditions/open", false).toBool ())
+  if (m_config.open_conditions_at_start ())
     {
       QTimer::singleShot (500, this, &MainWindow::show_conditions);
     }

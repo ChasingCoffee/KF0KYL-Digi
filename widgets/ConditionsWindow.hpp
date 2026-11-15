@@ -42,6 +42,7 @@ public:
 
   void set_my_grid (QString const& grid);
   void set_dx (QString const& call, QString const& grid);
+  void set_miles (bool miles);         // Settings > General > Display distance in miles
   // a decoded station; grid may be empty, then lat/lon come from the
   // callsign's country (approx = true)
   // highlight is the colour the decode is shown in in Band Activity
@@ -128,6 +129,7 @@ private:
   int pending_ {0};
   int failed_ {0};
 
+  bool miles_ {false};
   QString my_grid_;
   QString dx_call_;
   QString dx_grid_;
