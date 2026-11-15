@@ -352,6 +352,7 @@ set (wsjtx_CXXSRCS
   widgets/mainwindow.cpp
   widgets/Win11Theme.cpp
   widgets/CallsignInfo.cpp
+  widgets/ConditionsWindow.cpp
   Configuration.cpp
   main.cpp
   Network/wsprnet.cpp
@@ -894,6 +895,8 @@ set (TOP_LEVEL_RESOURCES
   contrib/gpl-v3-logo.svg
   artwork/splash.png
   artwork/kf0kyl_logo.png
+  artwork/map_land.png
+  artwork/map_borders.png
   )
 
 set (PALETTE_FILES

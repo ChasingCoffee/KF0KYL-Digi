@@ -85,6 +85,7 @@ class QAction;
 class QActionGroup;
 class QSpinBox;
 class QScrollArea;
+class ConditionsWindow;
 class QSettings;
 class QLineEdit;
 class QFont;
@@ -1009,6 +1010,13 @@ private:
   // keep the main window on the screen; anything that doesn't fit scrolls
   QScrollArea * m_centralScroll {nullptr};
   void fit_window_to_screen ();
+  // View > Color Scheme (Win11Theme schemes)
+  int m_colorScheme {0};
+  QActionGroup * m_schemeActions {nullptr};
+  void set_color_scheme (int);
+  // View > Conditions: space weather, band outlook and gray-line map
+  ConditionsWindow * m_conditions {nullptr};
+  void show_conditions ();
   QString m_repeatKey;
   int m_repeatCount {0};
   QString tx_repeat_key () const;   // dial frequency and clock colours from Settings > Colors

@@ -58,6 +58,78 @@ namespace
     "#FFFFFF", "#9A9A9A", "#CDE4F7"
   };
 
+  // more colour schemes, same token order as above
+  Tokens const midnight_tokens {
+    "#0F1626", "#0B111E", "#16203A", "#1B2742", "#24335A", "#18223B",
+    "#2A3A5E", "#3B4F7A", "#E8EEFF", "#A9B6D6", "#5B6A8C",
+    "#4FC3F7", "#47B0DE", "#3E9CC4", "#000000",
+    "#121B30", "#3E5078", "#1E4E7A"
+  };
+
+  // for low vision: pure black, white text, bright yellow accents
+  Tokens const contrast_tokens {
+    "#000000", "#000000", "#0A0A0A", "#000000", "#262626", "#3A3A3A",
+    "#FFFFFF", "#FFFFFF", "#FFFFFF", "#FFFF00", "#A0A0A0",
+    "#FFFF00", "#FFEA00", "#E6D200", "#000000",
+    "#000000", "#FFFFFF", "#0000C8"
+  };
+
+  // dark red on black keeps your eyes adjusted for night operating
+  Tokens const night_red_tokens {
+    "#120404", "#0E0303", "#1C0707", "#220909", "#2E0C0C", "#1A0606",
+    "#3A1010", "#5A1A1A", "#FF6B6B", "#C04848", "#6A2626",
+    "#FF3B3B", "#E63535", "#CC2F2F", "#000000",
+    "#160505", "#5A1A1A", "#5A1414"
+  };
+
+  // the green of the KF0KYL Digi logo
+  Tokens const green_tokens {
+    "#0B0F0B", "#080B08", "#121912", "#152015", "#1E2E1E", "#101810",
+    "#243524", "#355235", "#EAF7E6", "#A8C6A0", "#5D7358",
+    "#7CDB3A", "#6FC734", "#62B12E", "#000000",
+    "#0E140E", "#3D5C3A", "#2E5A1E"
+  };
+
+  // a soft paper-coloured light scheme, easier on the eyes than white
+  Tokens const paper_tokens {
+    "#F4ECD8", "#EDE3CB", "#FBF6EA", "#F7F0DF", "#EFE5CE", "#E6DABE",
+    "#D9CBA8", "#BBA77A", "#3B2F1E", "#6B5A40", "#A8977A",
+    "#9A5B13", "#A86A22", "#B37A33", "#FFFFFF",
+    "#FFFBF2", "#BBA77A", "#EBD9AE"
+  };
+
+  struct SchemeInfo {char const * name; Tokens const * tokens; bool dark;};
+  SchemeInfo const schemes[] = {
+    {QT_TRANSLATE_NOOP ("Win11Theme", "Light"), &light_tokens, false},
+    {QT_TRANSLATE_NOOP ("Win11Theme", "Dark"), &dark_tokens, true},
+    {QT_TRANSLATE_NOOP ("Win11Theme", "Midnight Blue"), &midnight_tokens, true},
+    {QT_TRANSLATE_NOOP ("Win11Theme", "High Contrast"), &contrast_tokens, true},
+    {QT_TRANSLATE_NOOP ("Win11Theme", "Night Red"), &night_red_tokens, true},
+    {QT_TRANSLATE_NOOP ("Win11Theme", "Digi Green"), &green_tokens, true},
+    {QT_TRANSLATE_NOOP ("Win11Theme", "Paper"), &paper_tokens, false},
+  };
+  int const scheme_count = sizeof schemes / sizeof schemes[0];
+
+  int current_scheme {0};
+  Tokens const& current_tokens () {return *schemes[current_scheme].tokens;}
+
+  // Parts of the main window set their own colours with fixed values
+  // written for the plain Light and Dark schemes. In the other schemes
+  // those values are swapped for the scheme's own as they are applied.
+  QString remap_sheet (QString sheet)
+  {
+    if (current_scheme <= 1) return sheet;
+    auto const& t = current_tokens ();
+    QList<QPair<QString, QString>> const map {
+      {"#3A3A3A", t.ctrl}, {"#4D4D4D", t.border_strong}, {"#F0F0F0", t.text},
+      {"#1F1F1F", t.input}, {"#2D2D2D", t.ctrl}, {"#373737", t.ctrl_hover},
+      {"#202020", t.bg}, {"#2B2B2B", t.card},
+      {"#e1e1e1", t.ctrl}, {"#adadad", t.border_strong},
+    };
+    for (auto const& p : map) sheet.replace (p.first, p.second, Qt::CaseInsensitive);
+    return sheet;
+  }
+
   // %1 style tokens are replaced by name, see fill() below
   char const * const qss_template = R"QSS(
 QWidget {
@@ -408,15 +480,42 @@ void Win11Theme::install (QApplication * app)
 
 QString Win11Theme::styleSheet (bool dark)
 {
-  return fill (dark ? dark_tokens : light_tokens, dark ? "dark" : "light");
+  Q_UNUSED (dark);
+  return fill (current_tokens (), dark_ ? "dark" : "light");
 }
+
+int Win11Theme::schemeCount () {return scheme_count;}
+QString Win11Theme::schemeName (int i)
+{
+  return i >= 0 && i < scheme_count ? tr (schemes[i].name) : QString {};
+}
+int Win11Theme::scheme () {return current_scheme;}
+bool Win11Theme::schemeIsDark (int i) {return i >= 0 && i < scheme_count && schemes[i].dark;}
 
 void Win11Theme::apply (bool dark, QFont const& font, QString const& extra)
 {
-  dark_ = dark;
-  qApp->setPalette (make_palette (dark ? dark_tokens : light_tokens));
+  // the old two-way switch: Light or Dark
+  applyScheme (dark ? 1 : 0, font, extra);
+}
+
+void Win11Theme::applyScheme (int scheme, QFont const& font, QString const& extra)
+{
+  current_scheme = qBound (0, scheme, scheme_count - 1);
+  dark_ = schemes[current_scheme].dark;
+  qApp->setPalette (make_palette (current_tokens ()));
   qApp->setFont (font);
-  qApp->setStyleSheet (styleSheet (dark) + extra + "* {" + font_as_stylesheet (font) + '}');
+  qApp->setStyleSheet (styleSheet (dark_) + extra + "* {" + font_as_stylesheet (font) + '}');
+  // re-colour widgets that set their own colours
+  for (auto * w : qApp->allWidgets ())
+    {
+      auto const original = w->property ("w11_original").toString ();
+      if (!original.isEmpty ())
+        {
+          auto const mapped = remap_sheet (original);
+          w->setProperty ("w11_applied", mapped);
+          w->setStyleSheet (mapped);
+        }
+    }
   for (auto * w : qApp->topLevelWidgets ())
     {
       updateTitleBar (w);
@@ -450,21 +549,48 @@ void Win11Theme::updateTitleBar (QWidget * w)
 
 QString Win11Theme::controlBackground ()
 {
-  return dark_ ? dark_tokens.ctrl : light_tokens.ctrl;
+  return current_tokens ().ctrl;
 }
 
 QString Win11Theme::controlBorder ()
 {
-  return dark_ ? dark_tokens.border_strong : light_tokens.border_strong;
+  return current_tokens ().border_strong;
 }
 
 QString Win11Theme::inputBackground ()
 {
-  return dark_ ? dark_tokens.input : light_tokens.input;
+  return current_tokens ().input;
 }
 
 bool Win11Theme::eventFilter (QObject * obj, QEvent * e)
 {
+  if (e->type () == QEvent::StyleChange && current_scheme > 1)
+    {
+      if (auto * w = qobject_cast<QWidget *> (obj))
+        {
+          auto const sheet = w->styleSheet ();
+          if (!sheet.isEmpty () && sheet != w->property ("w11_applied").toString ())
+            {
+              // a new sheet from the program: keep the original, apply the remapped one
+              w->setProperty ("w11_original", sheet);
+              auto const mapped = remap_sheet (sheet);
+              w->setProperty ("w11_applied", mapped);
+              if (mapped != sheet) w->setStyleSheet (mapped);
+            }
+        }
+    }
+  else if (e->type () == QEvent::StyleChange)
+    {
+      if (auto * w = qobject_cast<QWidget *> (obj))
+        {
+          auto const sheet = w->styleSheet ();
+          if (!sheet.isEmpty () && sheet != w->property ("w11_applied").toString ())
+            {
+              w->setProperty ("w11_original", sheet);
+              w->setProperty ("w11_applied", sheet);
+            }
+        }
+    }
 #ifdef Q_OS_WIN
   if (e->type () == QEvent::Show || e->type () == QEvent::WinIdChange)
     {
@@ -473,9 +599,6 @@ bool Win11Theme::eventFilter (QObject * obj, QEvent * e)
           if (w->isWindow ()) updateTitleBar (w);
         }
     }
-#else
-  Q_UNUSED (obj);
-  Q_UNUSED (e);
 #endif
   return false;
 }

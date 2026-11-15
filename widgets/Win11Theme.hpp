@@ -31,6 +31,14 @@ public:
 
   static bool isDark () {return dark_;}
 
+  // colour schemes: 0 Light, 1 Dark, then Midnight Blue, High Contrast,
+  // Night Red, Digi Green and Paper
+  static int schemeCount ();
+  static QString schemeName (int);
+  static bool schemeIsDark (int);
+  static int scheme ();
+  static void applyScheme (int scheme, QFont const& font, QString const& extra = QString {});
+
   // re-apply title bar attributes to one window
   static void updateTitleBar (QWidget *);
 

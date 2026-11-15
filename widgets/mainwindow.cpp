@@ -2,6 +2,7 @@
 #include "mainwindow.h"
 #include "Win11Theme.hpp"
 #include "CallsignInfo.hpp"
+#include "ConditionsWindow.hpp"
 
 #include <QAudio>
 #include <QAudioOutput>
@@ -1442,6 +1443,7 @@ void MainWindow::on_the_minute ()
 //--------------------------------------------------- MainWindow destructor
 MainWindow::~MainWindow()
 {
+  delete m_conditions;
   if(m_astroWidget) m_astroWidget.reset ();
   if(m_QSYMessageCreatorWidget) m_QSYMessageCreatorWidget.reset ();
   if(m_QSYMessageWidget) m_QSYMessageWidget.reset ();
@@ -1673,6 +1675,7 @@ void MainWindow::writeSettings()
   m_settings->setValue ("disableWritingOfAllTxt", ui->actionDisable_writing_of_ALL_TXT->isChecked() );
   m_settings->setValue ("DisableEventLogging", ui->actionDisable_event_logging->isChecked() );
   m_settings->setValue ("DarkStyle", ui->actionUse_Dark_Style->isChecked() );
+  m_settings->setValue ("ColorScheme", m_colorScheme);
   m_settings->setValue ("BandButtons", ui->actionBand_Buttons->isChecked() );
   m_settings->setValue ("VHFUHFButtons", ui->actionVHF_UHF_Buttons->isChecked() );
   m_settings->setValue ("tx1State", ui->tx1->isEnabled() );
@@ -1880,6 +1883,10 @@ void MainWindow::readSettings()
   ui->actionDisable_writing_of_ALL_TXT->setChecked(m_settings->value("disableWritingOfAllTxt", false).toBool());
   ui->actionDisable_event_logging->setChecked(m_settings->value("DisableEventLogging", false).toBool());
   ui->actionUse_Dark_Style->setChecked(m_settings->value("DarkStyle", false).toBool());
+  m_colorScheme = qBound (0, m_settings->value ("ColorScheme", ui->actionUse_Dark_Style->isChecked () ? 1 : 0).toInt (),
+                          Win11Theme::schemeCount () - 1);
+  ui->actionUse_Dark_Style->setChecked (Win11Theme::schemeIsDark (m_colorScheme));
+  for (auto * action : m_schemeActions->actions ()) action->setChecked (action->data ().toInt () == m_colorScheme);
   ui->actionBand_Buttons->setChecked(m_settings->value("BandButtons", true).toBool());
   ui->actionVHF_UHF_Buttons->setChecked(m_settings->value("VHFUHFButtons", false).toBool());
   ui->tx1->setEnabled(m_settings->value("tx1State", true).toBool());
@@ -2161,7 +2168,8 @@ void MainWindow::set_application_font (QFont const& font)
 {
   // Windows 11 themed light / dark appearance (see Win11Theme)
   m_useDarkStyle = ui->actionUse_Dark_Style->isChecked();
-  Win11Theme::apply (m_useDarkStyle, font, m_useDarkStyle ? QString {} : user_style_sheet ());
+  Win11Theme::applyScheme (m_colorScheme, font, 0 == m_colorScheme ? user_style_sheet () : QString {});
+  if (m_conditions) m_conditions->scheme_changed ();
   m_wideGraph->setDarkStyle(m_useDarkStyle);
   QTimer::singleShot (0, this, &MainWindow::fit_window_to_screen);
   check_button_color();
@@ -3639,6 +3647,7 @@ void MainWindow::on_actionSettings_triggered()           // Setup Dialog (Settin
     m_qrzLogbook.setApiKey (m_config.qrz_logbook_enabled () ? m_config.qrz_api_key () : QString {});
     m_callLookup.setQrzLogin (m_config.qrz_xml_username (), m_config.qrz_xml_password ());
     apply_display_colors ();
+    if (m_conditions) m_conditions->set_my_grid (m_config.my_grid ());
     update_callsign_info ();
     if (m_config.my_callsign () != callsign) {
       m_baseCall = Radio::base_callsign (m_config.my_callsign ());
@@ -4573,6 +4582,11 @@ void MainWindow::closeEvent(QCloseEvent * e)
 {
   m_valid = false;              // suppresses subprocess errors
   m_config.transceiver_offline ();
+  if (m_conditions)
+    {
+      m_settings->setValue ("Conditions/open", m_conditions->isVisible ());
+      m_conditions->close ();
+    }
   writeSettings ();
   if(m_astroWidget) m_astroWidget.reset ();
   if(m_QSYMessageCreatorWidget) {
@@ -4748,6 +4762,19 @@ void MainWindow::setup_callsign_info ()
   ui->menuView->insertAction (m_embedWaterfallAction, m_callInfoAction);
   connect (m_callInfoAction, &QAction::toggled, this, [this] (bool) {update_callsign_info ();});
 
+  // the Conditions window always opens on its own, never inside the main window
+  m_conditions = new ConditionsWindow {m_settings};
+  m_conditions->set_my_grid (m_config.my_grid ());
+  auto * conditions_action = new QAction {tr ("Conditions..."), this};
+  conditions_action->setObjectName ("actionConditions");
+  conditions_action->setToolTip (tr ("Space weather, band outlook and a gray-line map of the stations you hear"));
+  ui->menuView->insertAction (m_embedWaterfallAction, conditions_action);
+  connect (conditions_action, &QAction::triggered, this, &MainWindow::show_conditions);
+  if (m_settings->value ("Conditions/open", false).toBool ())
+    {
+      QTimer::singleShot (500, this, &MainWindow::show_conditions);
+    }
+
   m_callInfoTimer = new QTimer {this};
   m_callInfoTimer->setSingleShot (true);
   m_callInfoTimer->setInterval (600);   // wait for typing to settle
@@ -4760,8 +4787,22 @@ void MainWindow::setup_callsign_info ()
   m_callLookup.setQrzLogin (m_config.qrz_xml_username (), m_config.qrz_xml_password ());
 }
 
+void MainWindow::show_conditions ()
+{
+  if (!m_conditions) return;
+  m_conditions->set_my_grid (m_config.my_grid ());
+  m_conditions->set_dx (ui->dxCallEntry->text ().trimmed ().toUpper (), ui->dxGridEntry->text ().trimmed ());
+  m_conditions->show ();
+  m_conditions->raise ();
+  m_conditions->activateWindow ();
+}
+
 void MainWindow::update_callsign_info ()
 {
+  if (m_conditions)
+    {
+      m_conditions->set_dx (ui->dxCallEntry->text ().trimmed ().toUpper (), ui->dxGridEntry->text ().trimmed ());
+    }
   if (!m_callInfo) return;
   auto const call = ui->dxCallEntry->text ().trimmed ().toUpper ();
   if (call.size () < 3 || !m_callInfoAction->isChecked ())
@@ -4808,6 +4849,22 @@ void MainWindow::setup_main_splitter ()
   QAction * before = pos >= 0 && pos + 1 < actions.size () ? actions[pos + 1] : nullptr;
   ui->menuView->insertAction (before, m_embedWaterfallAction);
   connect (m_embedWaterfallAction, &QAction::toggled, this, &MainWindow::embed_waterfall);
+
+  // View > Color Scheme replaces the old Use Dark Style switch
+  auto * scheme_menu = new QMenu {tr ("Color Scheme"), this};
+  scheme_menu->setObjectName ("menuColorScheme");
+  m_schemeActions = new QActionGroup {this};
+  m_schemeActions->setExclusive (true);
+  for (int i = 0; i < Win11Theme::schemeCount (); ++i)
+    {
+      auto * action = scheme_menu->addAction (Win11Theme::schemeName (i));
+      action->setCheckable (true);
+      action->setData (i);
+      m_schemeActions->addAction (action);
+      connect (action, &QAction::triggered, this, [this, i] {set_color_scheme (i);});
+    }
+  ui->menuView->insertMenu (ui->actionUse_Dark_Style, scheme_menu);
+  ui->actionUse_Dark_Style->setVisible (false);
 
   auto * layout_menu = new QMenu {tr ("Layout"), this};
   layout_menu->setObjectName ("menuLayout");
@@ -5027,6 +5084,14 @@ void MainWindow::reset_layout ()
   m_settings->remove (prefix + "band_split");
   if (PanelLayout::Classic == m_panelLayout) m_settings->remove ("SplitterState");
   rebuild_layout (false);
+}
+
+void MainWindow::set_color_scheme (int scheme)
+{
+  m_colorScheme = scheme;
+  bool const dark = Win11Theme::schemeIsDark (scheme);
+  ui->actionUse_Dark_Style->setChecked (dark);
+  on_actionUse_Dark_Style_triggered (dark);
 }
 
 void MainWindow::fit_window_to_screen ()
@@ -7432,6 +7497,21 @@ void MainWindow::readFromStdout()                             //readFromStdout
             }
           }
           if(m_position != 0) ui->decodedTextBrowser->horizontalScrollBar()->setValue(m_position);
+          if (m_conditions)
+            {
+              // put the station on the Conditions map
+              QString de_call, de_grid;
+              decodedtext.deCallAndGrid (de_call, de_grid);
+              de_call = de_call.remove ('<').remove ('>');
+              if (de_call.size () > 2)
+                {
+                  auto const country = m_logBook.countries ()->lookup (de_call);
+                  bool const to_me = decodedtext.call () == m_config.my_callsign ()
+                    || Radio::base_callsign (decodedtext.call ()) == Radio::base_callsign (m_config.my_callsign ());
+                  m_conditions->add_station (de_call, de_grid, decodedtext.snr (), decodedtext.CQersCall ().size () > 0,
+                                             to_me, country.latitude, -country.longtitude);
+                }
+            }
         }
         if (m_mode=="FT8" && ((m_multithreadFT8 && m_ft8DecoderStart<2) or m_freqNominal>45000000)) earlyDecodes.append(line_read); //ft8md
 
@@ -16673,8 +16753,15 @@ void MainWindow::on_actionDisable_event_logging_triggered()
 void MainWindow::on_actionUse_Dark_Style_triggered (bool checked)
 {
     QFont font = m_config.text_font();
+    // the old Light/Dark switch; the colour scheme menu calls this too
+    if (Win11Theme::schemeIsDark (m_colorScheme) != checked) m_colorScheme = checked ? 1 : 0;
     m_useDarkStyle = checked;
-    Win11Theme::apply (checked, font, checked ? QString {} : user_style_sheet ());
+    Win11Theme::applyScheme (m_colorScheme, font, 0 == m_colorScheme ? user_style_sheet () : QString {});
+    if (m_schemeActions)
+      {
+        for (auto * action : m_schemeActions->actions ()) action->setChecked (action->data ().toInt () == m_colorScheme);
+      }
+    if (m_conditions) m_conditions->scheme_changed ();
     m_wideGraph->setDarkStyle(m_useDarkStyle);
     check_button_color();
     ui->tabWidget->setTabShape(QTabWidget::Rounded);
