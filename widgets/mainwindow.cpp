@@ -51,6 +51,7 @@
 #include <QDesktopWidget>
 #include <QBoxLayout>
 #include <QSpinBox>
+#include <QScrollArea>
 #include <QSignalBlocker>
 #include <QButtonGroup>
 #include <QActionGroup>
@@ -2162,6 +2163,7 @@ void MainWindow::set_application_font (QFont const& font)
   m_useDarkStyle = ui->actionUse_Dark_Style->isChecked();
   Win11Theme::apply (m_useDarkStyle, font, m_useDarkStyle ? QString {} : user_style_sheet ());
   m_wideGraph->setDarkStyle(m_useDarkStyle);
+  QTimer::singleShot (0, this, &MainWindow::fit_window_to_screen);
   check_button_color();
   ui->tabWidget->setTabShape(QTabWidget::Rounded);
 
@@ -2216,6 +2218,11 @@ void MainWindow::set_application_font (QFont const& font)
 
 void MainWindow::setDecodedTextFont (QFont const& font)
 {
+  // keep at least a few decodes readable when big text crowds the window
+  int const lines = QFontMetrics {font}.lineSpacing () * 5 + 8;
+  ui->decodedTextBrowser->setMinimumHeight (lines);
+  ui->decodedTextBrowser2->setMinimumHeight (lines);
+  QTimer::singleShot (0, this, &MainWindow::fit_window_to_screen);
   ui->decodedTextBrowser->setContentFont (font);
   ui->decodedTextBrowser2->setContentFont (font);
   ui->houndQueueTextBrowser->setContentFont(font);
@@ -4775,6 +4782,18 @@ void MainWindow::setup_main_splitter ()
   // is one of five sections: waterfall, Band Activity, Rx Frequency, the
   // callsign info strip and the controls. rebuild_layout () arranges them
   // with splitters according to the layout chosen in View > Layout.
+  // Everything in the window lives in a scroll area: with very large text
+  // the window stays on the screen and the contents scroll instead.
+  if (auto * central = takeCentralWidget ())
+    {
+      m_centralScroll = new QScrollArea {this};
+      m_centralScroll->setObjectName ("central_scroll");
+      m_centralScroll->setFrameShape (QFrame::NoFrame);
+      m_centralScroll->setWidgetResizable (true);
+      m_centralScroll->setWidget (central);
+      setCentralWidget (m_centralScroll);
+    }
+
   m_layoutStash = new QWidget {ui->centralWidget};
   m_layoutStash->setObjectName ("layout_stash");
   m_layoutStash->hide ();
@@ -5010,6 +5029,25 @@ void MainWindow::reset_layout ()
   rebuild_layout (false);
 }
 
+void MainWindow::fit_window_to_screen ()
+{
+  if (!m_centralScroll || isMaximized () || isFullScreen ()) return;
+  auto const avail = QApplication::desktop ()->availableGeometry (this);
+  auto const frame = frameGeometry ().size () - size ();     // title bar and borders
+  auto const limit = avail.size () - frame;
+  // room the contents would like: grow to it, but never past the screen
+  auto const chrome = size () - m_centralScroll->viewport ()->size ();
+  auto const want = ui->centralWidget->minimumSizeHint () + chrome;
+  auto const target = size ().expandedTo (want).boundedTo (limit);
+  if (target != size ()) resize (target);
+  auto g = frameGeometry ();
+  if (g.right () > avail.right ()) g.moveRight (avail.right ());
+  if (g.bottom () > avail.bottom ()) g.moveBottom (avail.bottom ());
+  if (g.left () < avail.left ()) g.moveLeft (avail.left ());
+  if (g.top () < avail.top ()) g.moveTop (avail.top ());
+  if (g.topLeft () != frameGeometry ().topLeft ()) move (g.topLeft ());
+}
+
 void MainWindow::setup_tx_limits ()
 {
   // a narrow "Max" column beside Tx1-Tx4 and Tx6 (Tx5 is free text/73)
@@ -5026,7 +5064,7 @@ void MainWindow::setup_tx_limits ()
       spin->setSpecialValueText (QString {QChar {0x221E}});     // infinity: no limit
       spin->setAlignment (Qt::AlignCenter);
       spin->setFocusPolicy (Qt::ClickFocus);
-      spin->setMaximumWidth (fontMetrics ().horizontalAdvance ("888") + 34);
+      spin->setSizePolicy (QSizePolicy::Fixed, QSizePolicy::Fixed);
       spin->setToolTip (6 == n
           ? tr ("<p>Stop calling CQ after this many calls in a row with no answer.</p>"
                 "<p>∞ = keep calling until the Tx watchdog runs out.</p>")

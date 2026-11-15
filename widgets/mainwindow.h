@@ -84,6 +84,7 @@ class CallsignInfo;
 class QAction;
 class QActionGroup;
 class QSpinBox;
+class QScrollArea;
 class QSettings;
 class QLineEdit;
 class QFont;
@@ -1005,6 +1006,9 @@ private:
   // N times in a row with no reply (0 = no limit)
   QSpinBox * m_txLimit[7] {};
   void setup_tx_limits ();
+  // keep the main window on the screen; anything that doesn't fit scrolls
+  QScrollArea * m_centralScroll {nullptr};
+  void fit_window_to_screen ();
   QString m_repeatKey;
   int m_repeatCount {0};
   QString tx_repeat_key () const;   // dial frequency and clock colours from Settings > Colors
