@@ -41,6 +41,7 @@ public:
 
   // re-apply title bar attributes to one window
   static void updateTitleBar (QWidget *);
+  static void fit_to_screen (QWidget *);
 
   // colours used by code that styles individual widgets
   static QString controlBackground ();  // normal button face

@@ -13,6 +13,11 @@
 #include <QImage>
 #include <QPainter>
 #include <QRegularExpression>
+#include <QScreen>
+#include <QGuiApplication>
+#include <QTimer>
+#include <QPointer>
+#include <QWindow>
 
 #ifdef Q_OS_WIN
 #include <QLibrary>
@@ -668,6 +673,61 @@ QString Win11Theme::inputBackground ()
   return current_tokens ().input;
 }
 
+
+// keep a window inside the usable part of its screen (not under the
+// taskbar): a size saved on a bigger screen, a larger font or a higher
+// display scale could otherwise open it partly off the bottom
+void Win11Theme::fit_to_screen (QWidget * w)
+{
+  if (!w || w->isMaximized () || w->isFullScreen ()) return;
+  auto * screen = QGuiApplication::screenAt (w->frameGeometry ().center ());
+  if (!screen && w->windowHandle ()) screen = w->windowHandle ()->screen ();
+  if (!screen) screen = QGuiApplication::primaryScreen ();
+  if (!screen) return;
+  QRect const avail = screen->availableGeometry ();
+  QRect const frame = w->frameGeometry ();
+  QRect const inner = w->geometry ();
+  // the title bar and borders; guess them if the window system hasn't said yet
+  int extra_w = frame.width () - inner.width ();
+  int extra_h = frame.height () - inner.height ();
+  if (extra_h <= 0) {extra_w = 16; extra_h = 40;}
+  // leave it alone if every corner is on some screen's usable area, so a
+  // window stretched across two monitors on purpose stays that way
+  QRect const outer {inner.x () - extra_w / 2, inner.y () - (extra_h - extra_w / 2),
+                     inner.width () + extra_w, inner.height () + extra_h};
+  auto on_a_screen = [] (QPoint const& pt) {
+    for (auto * s : QGuiApplication::screens ()) if (s->availableGeometry ().contains (pt)) return true;
+    return false;
+  };
+  if (on_a_screen (outer.topLeft ()) && on_a_screen (outer.topRight ())
+      && on_a_screen (outer.bottomLeft ()) && on_a_screen (outer.bottomRight ())
+      && w->minimumSizeHint ().height () + extra_h <= avail.height ()) return;
+  int const max_w = avail.width () - extra_w;
+  int const max_h = avail.height () - extra_h;
+  if (max_w < 200 || max_h < 150) return;
+  // never let the smallest size the layout asks for be bigger than the screen
+  QSize min = w->minimumSize ();
+  if (min.width () > max_w || min.height () > max_h)
+    {
+      w->setMinimumSize (qMin (min.width (), max_w), qMin (min.height (), max_h));
+    }
+  else if (w->minimumSizeHint ().width () > max_w || w->minimumSizeHint ().height () > max_h)
+    {
+      w->setMinimumSize (qMin (w->minimumSizeHint ().width (), max_w), qMin (w->minimumSizeHint ().height (), max_h));
+    }
+  int const width = qMin (inner.width (), max_w);
+  int const height = qMin (inner.height (), max_h);
+  if (width != inner.width () || height != inner.height ()) w->resize (width, height);
+  // then move it so all of it, title bar included, is on the screen
+  int x = w->frameGeometry ().x ();
+  int y = w->frameGeometry ().y ();
+  int const fw = width + extra_w;
+  int const fh = height + extra_h;
+  x = qBound (avail.left (), x, avail.right () + 1 - fw);
+  y = qBound (avail.top (), y, avail.bottom () + 1 - fh);
+  if (x != w->frameGeometry ().x () || y != w->frameGeometry ().y ()) w->move (x, y);
+}
+
 bool Win11Theme::eventFilter (QObject * obj, QEvent * e)
 {
   if (e->type () == QEvent::StyleChange)
@@ -685,6 +745,29 @@ bool Win11Theme::eventFilter (QObject * obj, QEvent * e)
               w->setProperty ("w11_applied", mapped);
               if (mapped != sheet) w->setStyleSheet (mapped);
             }
+        }
+    }
+  if (e->type () == QEvent::Show)
+    {
+      auto * w = qobject_cast<QWidget *> (obj);
+      if (w && w->isWindow () && !w->property ("w11_fitted").toBool ())
+        {
+          auto const type = w->windowType ();
+          if (type == Qt::Window || type == Qt::Dialog)
+            {
+              w->setProperty ("w11_fitted", true);
+              fit_to_screen (w);
+              // once more after the window system has added the title bar
+              QPointer<QWidget> guard {w};
+              QTimer::singleShot (150, w, [guard] {if (guard) fit_to_screen (guard);});
+            }
+        }
+    }
+  if (e->type () == QEvent::Hide)
+    {
+      if (auto * w = qobject_cast<QWidget *> (obj))
+        {
+          if (w->isWindow ()) w->setProperty ("w11_fitted", false);
         }
     }
 #ifdef Q_OS_WIN
