@@ -1892,8 +1892,11 @@ void MainWindow::readSettings()
   ui->actionDisable_writing_of_ALL_TXT->setChecked(m_settings->value("disableWritingOfAllTxt", false).toBool());
   ui->actionDisable_event_logging->setChecked(m_settings->value("DisableEventLogging", false).toBool());
   ui->actionUse_Dark_Style->setChecked(m_settings->value("DarkStyle", false).toBool());
-  m_colorScheme = qBound (0, m_settings->value ("ColorScheme", ui->actionUse_Dark_Style->isChecked () ? 1 : 0).toInt (),
-                          Win11Theme::schemeCount () - 1);
+  // a new install starts in Digi Green; an upgrade keeps what it had
+  // (older versions only saved the light/dark choice)
+  int const first_scheme = m_settings->contains ("DarkStyle") ? (ui->actionUse_Dark_Style->isChecked () ? 1 : 0)
+                                                              : Win11Theme::digiGreenScheme ();
+  m_colorScheme = qBound (0, m_settings->value ("ColorScheme", first_scheme).toInt (), Win11Theme::schemeCount () - 1);
   ui->actionUse_Dark_Style->setChecked (Win11Theme::schemeIsDark (m_colorScheme));
   for (auto * action : m_schemeActions->actions ()) action->setChecked (action->data ().toInt () == m_colorScheme);
   ui->actionBand_Buttons->setChecked(m_settings->value("BandButtons", true).toBool());
@@ -2179,6 +2182,7 @@ void MainWindow::set_application_font (QFont const& font)
   m_useDarkStyle = ui->actionUse_Dark_Style->isChecked();
   Win11Theme::applyScheme (m_colorScheme, font, 0 == m_colorScheme ? user_style_sheet () : QString {});
   if (m_conditions) m_conditions->scheme_changed ();
+  apply_display_colors ();
   m_wideGraph->setDarkStyle(m_useDarkStyle);
   QTimer::singleShot (0, this, &MainWindow::fit_window_to_screen);
   check_button_color();
@@ -5194,19 +5198,41 @@ QString MainWindow::tx_repeat_key () const
 
 void MainWindow::apply_display_colors ()
 {
-  auto recolor = [] (QLabel * label, QColor const& text, QColor const& background) {
+  auto recolor = [] (QLabel * label, QString const& text, QColor const& background) {
     // keep the rest of the style (font, out-of-band red) and swap the colours
     static QHash<QLabel *, QString> originals;
     if (!originals.contains (label)) originals[label] = label->styleSheet ();
     auto sheet = originals[label];
     int const end = sheet.indexOf ('}');
     auto first = sheet.left (end);
-    first.replace (QRegularExpression {R"((?<![-\w])color\s*:\s*[^;]+;)"}, QString {"color: %1;"}.arg (text.name ()));
+    first.replace (QRegularExpression {R"((?<![-\w])color\s*:\s*[^;]+;)"}, QString {"color: %1;"}.arg (text));
     first.replace (QRegularExpression {R"(background-color\s*:\s*[^;]+;)"}, QString {"background-color: %1;"}.arg (background.name ()));
     label->setStyleSheet (first + sheet.mid (end));
   };
-  recolor (ui->labDialFreq, m_config.dial_text_color (), m_config.dial_background_color ());
-  recolor (ui->labUTC, m_config.clock_text_color (), m_config.clock_background_color ());
+  // Digi Green: the default yellow digits become the logo's blue-to-green
+  // blend; colours chosen in Settings are kept as they are
+  auto text_for = [] (QColor const& c) {
+    if (Win11Theme::isDigiGreen () && c == QColor {"#ffff00"})
+      {
+        return QString {"qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0A9BF0, stop:1 #8CF010)"};
+      }
+    return c.name ();
+  };
+  recolor (ui->labDialFreq, text_for (m_config.dial_text_color ()), m_config.dial_background_color ());
+  recolor (ui->labUTC, text_for (m_config.clock_text_color ()), m_config.clock_background_color ());
+
+  // and the logo in the corner of the menu bar
+  if (!m_cornerLogo)
+    {
+      m_cornerLogo = new QLabel {menuBar ()};
+      m_cornerLogo->setObjectName ("cornerLogo");
+      QPixmap logo {":/station_logo.png"};
+      int const h = qMax (20, menuBar ()->sizeHint ().height () - 4);
+      m_cornerLogo->setPixmap (logo.scaledToHeight (h * devicePixelRatioF (), Qt::SmoothTransformation));
+      m_cornerLogo->setContentsMargins (0, 0, 10, 0);
+      menuBar ()->setCornerWidget (m_cornerLogo, Qt::TopRightCorner);
+    }
+  m_cornerLogo->setVisible (Win11Theme::isDigiGreen ());
 }
 
 void MainWindow::embed_waterfall (bool embed)
@@ -16825,6 +16851,7 @@ void MainWindow::on_actionUse_Dark_Style_triggered (bool checked)
         for (auto * action : m_schemeActions->actions ()) action->setChecked (action->data ().toInt () == m_colorScheme);
       }
     if (m_conditions) m_conditions->scheme_changed ();
+    apply_display_colors ();
     m_wideGraph->setDarkStyle(m_useDarkStyle);
     check_button_color();
     ui->tabWidget->setTabShape(QTabWidget::Rounded);

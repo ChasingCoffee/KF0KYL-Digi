@@ -30,6 +30,7 @@
 #include <QMouseEvent>
 #include <QWheelEvent>
 #include <QProcess>
+#include <QFileDialog>
 #include <QPointer>
 #include <QtEndian>
 #include <memory>
@@ -2164,6 +2165,51 @@ protected:
 };
 
 //
+// A picture beside your call: the KF0KYL Digi logo unless you pick your
+// own. It takes the room the box has and hides when there isn't enough.
+//
+class StationLogo final
+  : public QWidget
+{
+public:
+  explicit StationLogo (QWidget * parent)
+    : QWidget {parent}
+  {
+    setSizePolicy (QSizePolicy::Expanding, QSizePolicy::Expanding);
+    setToolTip (QObject::tr ("Double-click to choose the picture beside your call"));
+  }
+  QSize sizeHint () const override {return {220, 130};}
+  QSize minimumSizeHint () const override {return {0, 0};}
+
+  void set_image (QImage const& img) {image_ = img; scaled_ = QImage {}; update ();}
+  std::function<void ()> on_double_click;
+
+protected:
+  void paintEvent (QPaintEvent *) override
+  {
+    if (image_.isNull () || width () < 90 || height () < 50) return;
+    QPainter p {this};
+    QRect const area = rect ().adjusted (4, 2, -4, -2);
+    QSize const fit = image_.size ().scaled (area.size (), Qt::KeepAspectRatio);
+    if (scaled_.size () != fit)
+      {
+        scaled_ = image_.scaled (fit * devicePixelRatioF (), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        scaled_.setDevicePixelRatio (devicePixelRatioF ());
+      }
+    p.drawImage (QPoint {area.center ().x () - fit.width () / 2, area.center ().y () - fit.height () / 2}, scaled_);
+  }
+
+  void mouseDoubleClickEvent (QMouseEvent *) override
+  {
+    if (on_double_click) on_double_click ();
+  }
+
+private:
+  QImage image_;
+  QImage scaled_;
+};
+
+//
 // VOACAP between you and the DX station: how likely each band is to
 // work through the day, hour by hour (UTC)
 //
@@ -2221,12 +2267,8 @@ protected:
         double const y = area.top () + b * ch;      // 80 m at the top
         if (b == selected)
           {
-            // the band on the map: its row picked out in the accent colour
-            QColor glow {Win11Theme::token ("accent")};
-            glow.setAlpha (55);
-            p.setPen (Qt::NoPen);
-            p.setBrush (glow);
-            p.drawRoundedRect (QRectF {0, y, width () - 0.5, ch}, 3, 3);
+            // the band on the map: its label in the accent colour, the row
+            // outlined (below) so its squares keep their real colours
             auto bold = small;
             bold.setBold (true);
             p.setFont (bold);
@@ -2260,9 +2302,9 @@ protected:
       }
     if (selected >= 0 && selected < bands)
       {
-        p.setPen (QPen {QColor {Win11Theme::token ("accent")}, 1.5});
+        p.setPen (QPen {QColor {Win11Theme::token ("accent")}, 2.});
         p.setBrush (Qt::NoBrush);
-        p.drawRoundedRect (QRectF {area.left () + 0.25, area.top () + selected * ch + 0.25, area.width () - 0.5, ch - 0.5}, 3, 3);
+        p.drawRoundedRect (QRectF {area.left () - 1, area.top () + selected * ch - 1, area.width () + 2, ch + 2}, 4, 4);
       }
     // the hour now
     p.setPen (QPen {QColor {Win11Theme::token ("text")}, 1.5});
@@ -2435,7 +2477,7 @@ void ConditionsWindow::show_call_colors ()
 
   struct Swatch {QColor a; QColor b;};
   QVector<Swatch> const swatches {
-    {QColor {Win11Theme::token ("accent")}, QColor {"#7C5CFF"}},
+    {QColor {Win11Theme::token ("accent")}, QColor {Win11Theme::token ("accent2")}},
     {QColor {"#FF5F6D"}, QColor {"#FFC371"}},
     {QColor {"#11998E"}, QColor {"#38EF7D"}},
     {QColor {"#F953C6"}, QColor {"#B91D73"}},
@@ -2539,6 +2581,111 @@ void ConditionsWindow::show_call_colors ()
   popup->show ();
 }
 
+void ConditionsWindow::apply_station_picture ()
+{
+  // "" is the KF0KYL Digi logo, "none" is nothing, anything else a file
+  QImage img;
+  if ("none" != station_picture_)
+    {
+      if (station_picture_.size ()) img.load (station_picture_);
+      if (img.isNull ()) img.load (":/station_logo.png");
+    }
+  station_logo_->set_image (img);
+}
+
+void ConditionsWindow::show_station_pictures ()
+{
+  auto * popup = new QFrame {this, Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint};
+  popup->setAttribute (Qt::WA_DeleteOnClose);
+  popup->setAttribute (Qt::WA_TranslucentBackground);
+  popup->setObjectName ("callPopupOuter");
+  auto * outer = new QVBoxLayout {popup};
+  outer->setContentsMargins (0, 0, 0, 0);
+  auto * card = new QFrame {popup};
+  card->setObjectName ("callPopup");
+  outer->addWidget (card);
+  auto * v = new QVBoxLayout {card};
+  v->setContentsMargins (16, 14, 16, 14);
+  v->setSpacing (10);
+  v->addWidget (box_title (tr ("Station picture"), card));
+  auto * tiles = new QHBoxLayout;
+  tiles->setSpacing (10);
+  auto tile = [card] (QString const& text, QIcon const& icon, bool on) {
+    auto * b = new QToolButton {card};
+    b->setObjectName ("pictureTile");
+    b->setCheckable (true);
+    b->setChecked (on);
+    b->setText (text);
+    b->setIcon (icon);
+    b->setIconSize ({84, 56});
+    b->setToolButtonStyle (Qt::ToolButtonTextUnderIcon);
+    b->setFixedSize (108, 92);
+    b->setCursor (Qt::PointingHandCursor);
+    return b;
+  };
+  bool const own = station_picture_.size () && "none" != station_picture_;
+  QPixmap own_pm;
+  if (own) own_pm.load (station_picture_);
+  auto * logo = tile (tr ("KF0KYL Digi"), QIcon {QPixmap {":/station_logo.png"}}, station_picture_.isEmpty ());
+  auto * yours = tile (own ? tr ("Yours") : tr ("Your own..."), own_pm.isNull () ? QIcon {} : QIcon {own_pm}, own);
+  auto * none = tile (tr ("None"), QIcon {}, "none" == station_picture_);
+  if (own_pm.isNull ()) yours->setText ("+\n" + tr ("Your own..."));
+  for (auto * b : {logo, yours, none}) tiles->addWidget (b);
+  v->addLayout (tiles);
+  auto * note = new QLabel {tr ("Your own: a PNG or JPG (a club logo, a QSL design, a photo). It's shown beside your call and sized to fit the box."), card};
+  note->setObjectName ("muted");
+  note->setWordWrap (true);
+  note->setMaximumWidth (350);
+  v->addWidget (note);
+  auto choose = [this, logo, yours, none] (QString const& picture) {
+    station_picture_ = picture;
+    settings_->beginGroup ("Conditions");
+    settings_->setValue ("StationPicture", station_picture_);
+    settings_->endGroup ();
+    apply_station_picture ();
+    logo->setChecked (picture.isEmpty ());
+    none->setChecked ("none" == picture);
+    yours->setChecked (picture.size () && "none" != picture);
+  };
+  connect (logo, &QToolButton::clicked, this, [choose] {choose ({});});
+  connect (none, &QToolButton::clicked, this, [choose] {choose ("none");});
+  connect (yours, &QToolButton::clicked, this, [this, popup, choose, yours] {
+      popup->hide ();
+      auto const file = QFileDialog::getOpenFileName (this, tr ("Picture beside your call"), {},
+                                                       tr ("Pictures (*.png *.jpg *.jpeg *.bmp *.gif)"));
+      if (file.size () && !QImage {file}.isNull ())
+        {
+          choose (file);
+          yours->setIcon (QIcon {QPixmap {file}});
+          yours->setText (tr ("Yours"));
+        }
+      else
+        {
+          choose (station_picture_);         // put the buttons back as they were
+        }
+      popup->close ();
+    });
+  auto * bottom = new QHBoxLayout;
+  bottom->addStretch ();
+  auto * reset = new QToolButton {card};
+  reset->setObjectName ("chip");
+  reset->setText (tr ("Reset"));
+  reset->setToolTip (tr ("Back to the KF0KYL Digi logo"));
+  connect (reset, &QToolButton::clicked, this, [choose] {choose ({});});
+  auto * done = new QToolButton {card};
+  done->setObjectName ("doneButton");
+  done->setText (tr ("Done"));
+  connect (done, &QToolButton::clicked, popup, &QWidget::close);
+  bottom->addWidget (reset);
+  bottom->addWidget (done);
+  v->addLayout (bottom);
+  popup->setStyleSheet (styleSheet ());
+  popup->adjustSize ();
+  auto pos = station_logo_->mapToGlobal (QPoint {0, station_logo_->height () / 2});
+  popup->move (pos);
+  popup->show ();
+}
+
 void ConditionsWindow::save_call_colors ()
 {
   settings_->beginGroup ("Conditions");
@@ -2555,7 +2702,7 @@ void ConditionsWindow::apply_call_colors ()
   if (call_auto_)
     {
       call_label_->first = QColor {Win11Theme::token ("accent")};
-      call_label_->second = QColor {"#7C5CFF"};
+      call_label_->second = QColor {Win11Theme::token ("accent2")};
       call_label_->gradient = call_gradient_;
     }
   else
@@ -2626,8 +2773,19 @@ void ConditionsWindow::build_ui ()
   top->setSpacing (12);
   top_row_->setMaximumHeight (215);
 
-  auto * clock_box = make_box ("clock", tr ("Station"), body);
+  auto * clock_box = make_box ("clock", {}, body);
+  auto * clock_row = new QHBoxLayout;
+  clock_row->setSpacing (16);
+  auto * clock_left = new QVBoxLayout;
+  clock_left->setSpacing (4);
+  clock_row->addLayout (clock_left);
+  station_logo_ = new StationLogo {clock_box};
+  station_logo_->setObjectName ("plain");
+  station_logo_->on_double_click = [this] {show_station_pictures ();};
+  clock_row->addWidget (station_logo_, 1);
+  body->addLayout (clock_row);
   call_label_ = new CallSign {clock_box};
+  call_label_->setSizePolicy (QSizePolicy::Preferred, QSizePolicy::Fixed);
   call_label_->setObjectName ("plain");
   call_label_->on_double_click = [this] {show_call_colors ();};
   utc_clock_ = new QLabel {clock_box};
@@ -2636,12 +2794,17 @@ void ConditionsWindow::build_ui ()
   utc_date_->setObjectName ("muted");
   local_clock_ = new QLabel {clock_box};      // kept for the local time, shown in the date line
   local_clock_->hide ();
-  body->addStretch ();
-  body->addWidget (call_label_);
-  body->addWidget (utc_clock_);
-  body->addWidget (utc_date_);
-  body->addStretch ();
+  clock_left->addWidget (box_title (tr ("Station"), clock_box));
+  clock_left->addStretch ();
+  clock_left->addWidget (call_label_);
+  clock_left->addWidget (utc_clock_);
+  clock_left->addWidget (utc_date_);
+  clock_left->addStretch ();
   top->addWidget (clock_box, 3);
+  settings_->beginGroup ("Conditions");
+  station_picture_ = settings_->value ("StationPicture", QString {}).toString ();
+  settings_->endGroup ();
+  apply_station_picture ();
   settings_->beginGroup ("Conditions");
   call_auto_ = settings_->value ("CallColorAuto", true).toBool ();
   call_first_ = QColor {settings_->value ("CallColor1", "#4CC2FF").toString ()};
@@ -3187,7 +3350,7 @@ QWidget#plain {background: transparent;}
 QScrollArea#plainScroll {background: transparent; border: none;}
 QFrame#callPopupOuter {background: transparent;}
 QFrame#conditionsTile, QFrame#conditionsBox {background-color: %2; border: 1px solid %3; border-radius: 16px;}
-QLabel#boxTitle {color: %4; font-weight: 600; font-size: %9pt;}
+QLabel#boxTitle {color: %13; font-weight: 600; font-size: %9pt;}
 QLabel#muted {color: %4;}
 QToolButton#chip {background: transparent; color: %4; border: 1px solid %3; border-radius: 13px; padding: 3px 11px; font-weight: normal;}
 QToolButton#chip:hover {border-color: %5; color: %6;}
@@ -3202,6 +3365,9 @@ QProgressBar#beaconBar::chunk {background: qlineargradient(x1:0, y1:0, x2:1, y2:
 QFrame#callPopup {background-color: %2; border: 1px solid %12; border-radius: 16px;}
 QToolButton#swatch {border: 2px solid transparent; border-radius: 8px;}
 QToolButton#swatch:hover {border: 2px solid %6;}
+QToolButton#pictureTile {background: %8; color: %6; border: 1px solid %3; border-radius: 12px; padding: 6px;}
+QToolButton#pictureTile:checked {border: 2px solid %5; background: %8;}
+QToolButton#pictureTile:hover {border-color: %5;}
 QToolButton#doneButton {background: %5; color: %11; border: none; border-radius: 13px; padding: 3px 14px; font-weight: 600;}
 )"}
                  .arg (tok ("bg"), tok ("card"), tok ("border"), tok ("text_secondary"), accent.name (), tok ("text"))
@@ -3210,7 +3376,8 @@ QToolButton#doneButton {background: %5; color: %11; border: none; border-radius:
                  .arg (base * 0.82, 0, 'f', 1)
                  .arg (Win11Theme::isDark () ? "#5A6170" : "#A6ADB9")
                  .arg (tok ("accent_text"))
-                 .arg (tok ("border_strong")));
+                 .arg (tok ("border_strong"))
+                 .arg (tok ("title")));
   utc_date_->setStyleSheet (QString {});
   // the font may have changed size: give each picker button room for its text
   for (auto * b : findChildren<QPushButton *> ("segButton"))
@@ -3724,7 +3891,7 @@ void ConditionsWindow::run_area ()
     QString {"Transmit :%1   %2   %3 %4"}.arg (pos (lat, 'N', 'S')).arg (pos (lon, 'E', 'W')).arg ("DE", -20).arg (long_path ? "Long " : "Short"),
     QString {"Pcenter  :%1   %2   %3"}.arg (pos (lat, 'N', 'S')).arg (pos (lon, 'E', 'W')).arg ("DE", -20),
     "Area     :    -180.0     180.0     -90.0      90.0",
-    "Gridsize :  121    1",
+    "Gridsize :  181    1",
     "Method   :   30",
     "Coeffs   :CCIR",
     "Months   :" + nine (QString {"%1"}.arg (double (now.date ().month ()), 7, 'f', 2), "   0.00"),
@@ -3782,10 +3949,10 @@ void ConditionsWindow::on_area (QString const& path, QString const& label)
   auto const header = QString::fromLatin1 (file.readLine ());
   int const rel_end = header.indexOf ("   REL") + 6;
   if (rel_end < 6) return;
-  int const N = 121;
+  // VOACAP's numbers on a grid of points...
+  int const N = 181;
+  QVector<float> field (N * N, 0.f);
   double best = 0.;
-  QImage img {N, N, QImage::Format_ARGB32_Premultiplied};
-  img.fill (Qt::transparent);
   while (!file.atEnd ())
     {
       auto const line = QString::fromLatin1 (file.readLine ());
@@ -3797,16 +3964,64 @@ void ConditionsWindow::on_area (QString const& path, QString const& label)
       if (!ok1 || !ok2 || !ok3) continue;
       int const x = qBound (0, qRound ((lon + 180.) / 360. * (N - 1)), N - 1);
       int const y = qBound (0, qRound ((90. - lat) / 180. * (N - 1)), N - 1);
-      if (rel < 0.02) continue;
-      QColor c = VoacapGrid_colour (rel);
-      c.setAlphaF (qMin (0.82, 0.42 + 0.45 * rel));     // bright and solid, the map still showing a little
+      field[y * N + x] = static_cast<float> (qBound (0., rel, 1.));
       best = qMax (best, rel);
-      img.setPixel (x, y, qPremultiply (c.rgba ()));
+    }
+  // softened a little across neighbouring points, so the steps VOACAP
+  // makes between them don't show as jagged edges
+  for (int pass = 0; pass < 2; ++pass)
+    {
+      QVector<float> soft (field.size ());
+      for (int y = 0; y < N; ++y)
+        {
+          for (int x = 0; x < N; ++x)
+            {
+              double sum = 0, weight = 0;
+              for (int dy = -1; dy <= 1; ++dy)
+                {
+                  for (int dx = -1; dx <= 1; ++dx)
+                    {
+                      int const yy = y + dy;
+                      int const xx = (x + dx + N - 1) % (N - 1);     // round the world east-west
+                      if (yy < 0 || yy >= N) continue;
+                      double const w = (dx ? 1 : 2) * (dy ? 1 : 2);
+                      sum += field[yy * N + xx] * w;
+                      weight += w;
+                    }
+                }
+              soft[y * N + x] = static_cast<float> (sum / weight);
+            }
+        }
+      field = soft;
+    }
+  // ...blended smoothly between the points first and only then coloured,
+  // with the weakest areas fading out rather than stopping in a hard edge
+  int const W = 1440, H = 720;
+  QImage img {W, H, QImage::Format_ARGB32_Premultiplied};
+  for (int y = 0; y < H; ++y)
+    {
+      double const gy = (y + 0.5) / H * (N - 1);
+      int const y0 = qMin (static_cast<int> (gy), N - 2);
+      double const fy = gy - y0;
+      auto * out = reinterpret_cast<QRgb *> (img.scanLine (y));
+      for (int x = 0; x < W; ++x)
+        {
+          double const gx = (x + 0.5) / W * (N - 1);
+          int const x0 = qMin (static_cast<int> (gx), N - 2);
+          double const fx = gx - x0;
+          double const sx = fx, sy = fy;
+          double const v = (field[y0 * N + x0] * (1 - sx) + field[y0 * N + x0 + 1] * sx) * (1 - sy)
+            + (field[(y0 + 1) * N + x0] * (1 - sx) + field[(y0 + 1) * N + x0 + 1] * sx) * sy;
+          double const a = qBound (0., v / 0.12, 1.) * qMin (0.82, 0.42 + 0.45 * v);
+          if (a < 0.004) {out[x] = 0; continue;}
+          QColor c = VoacapGrid_colour (v);
+          c.setAlphaF (a);
+          out[x] = qPremultiply (c.rgba ());
+        }
     }
   // say how good the best of it is: long path is often weak everywhere
   map_->prop_label = label + tr (" \u00B7 best %1%").arg (qRound (best * 100));
-  // smoothed so the edges are soft rather than blocky
-  map_->set_prop (img.scaled (N * 4, N * 4, Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
+  map_->set_prop (img);
 }
 
 QString ConditionsWindow::voacap_root ()

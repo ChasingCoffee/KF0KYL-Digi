@@ -902,6 +902,7 @@ set (TOP_LEVEL_RESOURCES
   artwork/map_night.jpg
   artwork/map_terrain.jpg
   artwork/map_cities.txt
+  artwork/station_logo.png
   )
 
 set (PALETTE_FILES

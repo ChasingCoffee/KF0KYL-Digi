@@ -47,8 +47,11 @@ public:
   static QString controlBorder ();      // normal button border
   static QString inputBackground ();    // line edit / combo face
   // any colour of the scheme in use: bg, layer, card, ctrl, ctrl_hover,
-  // border, border_strong, text, text_secondary, accent, accent_text, input
+  // border, border_strong, text, text_secondary, accent, accent_text, input,
+  // title (small headings), accent2 (second colour of blends)
   static QString token (QString const& name);
+  static bool isDigiGreen ();
+  static int digiGreenScheme ();        // the default for a new install
 
 protected:
   bool eventFilter (QObject *, QEvent *) override;

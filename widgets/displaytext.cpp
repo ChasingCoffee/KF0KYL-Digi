@@ -1,5 +1,7 @@
 #include "displaytext.h"
 
+#include <cstdlib>
+
 #include <vector>
 #include <algorithm>
 
@@ -160,6 +162,13 @@ void DisplayText::insertText(QString const& text, QColor bg, QColor fg
       block_format.setBackground (bg);
     }
   format.clearForeground ();
+  if (bg.isValid () && (!fg.isValid () || std::abs (fg.lightness () - bg.lightness ()) < 100))
+    {
+      // no usable text colour for this highlight: dark text on a light
+      // highlight, light text on a dark one, so the line can be read in
+      // any colour scheme
+      fg = bg.lightness () > 140 ? QColor {"#000000"} : QColor {"#FFFFFF"};
+    }
   if (fg.isValid ())
     {
       format.setForeground (fg);

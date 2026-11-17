@@ -89,12 +89,15 @@ namespace
   };
 
   // the green of the KF0KYL Digi logo
+  // Digi Green: the logo's colours. Black, white text, blue for picked
+  // things, lime green for titles, switches and Monitor. High contrast.
   Tokens const green_tokens {
-    "#0B0F0B", "#080B08", "#121912", "#152015", "#1E2E1E", "#101810",
-    "#243524", "#355235", "#EAF7E6", "#A8C6A0", "#5D7358",
-    "#7CDB3A", "#6FC734", "#62B12E", "#000000",
-    "#0E140E", "#3D5C3A", "#2E5A1E"
+    "#000000", "#050806", "#070B08", "#0F1711", "#16231A", "#0B120D",
+    "#1F3A24", "#2F5A36", "#FFFFFF", "#B9C7BC", "#5E6F62",
+    "#0A9BF0", "#2AAAF5", "#0884CC", "#FFFFFF",
+    "#050806", "#2F5A36", "#0A4A73"
   };
+  char const * const digi_lime = "#8CF010";
 
   // a soft paper-coloured light scheme, easier on the eyes than white
   Tokens const paper_tokens {
@@ -118,6 +121,7 @@ namespace
 
   int current_scheme {0};
   Tokens const& current_tokens () {return *schemes[current_scheme].tokens;}
+  bool digi () {return &green_tokens == schemes[current_scheme].tokens;}
 
   // Parts of the main window set their own colours with fixed values
   // written for the plain Light and Dark schemes. In the other schemes
@@ -161,6 +165,8 @@ namespace
       {
         sheet += " QLabel {border-radius: 9px; padding: 1px 10px; font-weight: 600;}";
       }
+    // Digi Green: the "on" greens (Monitor, Receiving) in the logo's lime
+    if (digi ()) sheet.replace ("#3FB950", digi_lime, Qt::CaseInsensitive);
     QList<QPair<QString, QString>> const map {
       {"#3A3A3A", t.ctrl}, {"#4D4D4D", t.border}, {"#F0F0F0", t.text},
       {"#1F1F1F", t.input}, {"#2D2D2D", t.ctrl}, {"#373737", t.ctrl_hover},
@@ -179,7 +185,7 @@ namespace
     QDir const dir {QDir::tempPath () + "/kf0kyldigi-theme"};
     dir.mkpath (".");
     auto const name = dir.filePath (QString {"switch_%1_%2_%3_%4.png"}
-                                    .arg (QString {t.accent}.mid (1)).arg (QString {t.border_strong}.mid (1))
+                                    .arg (QString {&t == &green_tokens ? digi_lime : t.accent}.mid (1)).arg (QString {t.border_strong}.mid (1))
                                     .arg (on ? "on" : "off").arg (disabled ? "dis" : "en"));
     if (!QFile::exists (name))
       {
@@ -187,7 +193,7 @@ namespace
         img.fill (Qt::transparent);
         QPainter p {&img};
         p.setRenderHint (QPainter::Antialiasing);
-        QColor track = on ? QColor {t.accent} : QColor {t.border_strong};
+        QColor track = on ? QColor {&t == &green_tokens ? digi_lime : t.accent} : QColor {t.border_strong};
         QColor knob = on ? QColor {t.accent_text} : QColor {t.text_secondary};
         if (on) knob = QColor {"#FFFFFF"};
         if (disabled) {track.setAlpha (90); knob.setAlpha (120);}
@@ -262,7 +268,7 @@ QToolButton[popupMode="2"] { padding-right: 22px; }
 /* Halt Tx always reads as a stop button */
 QPushButton#stopTxButton { color: #FF6B6B; border: 1px solid rgba(229, 72, 77, 150); background-color: rgba(229, 72, 77, 28); }
 QPushButton#stopTxButton:hover { background-color: rgba(229, 72, 77, 60); }
-QLabel#lh_decodes_title_label, QLabel#rh_decodes_title_label { color: @text_secondary; font-weight: 600; }
+QLabel#lh_decodes_title_label, QLabel#rh_decodes_title_label { color: @title; font-weight: 600; }
 
 /* ---- text inputs ---- */
 QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QDateTimeEdit, QDateEdit, QTimeEdit {
@@ -388,7 +394,7 @@ QGroupBox::title {
   subcontrol-position: top left;
   left: 12px;
   padding: 0 4px;
-  color: @text_secondary;
+  color: @title;
   background: transparent;
   font-weight: 600;
 }
@@ -461,6 +467,8 @@ QDialogButtonBox QPushButton { min-width: 76px; }
     s.replace ("@switch_dis_on", switch_image (t, true, true));
     s.replace ("@switch_off", switch_image (t, false, false));
     s.replace ("@switch_on", switch_image (t, true, false));
+    // small titles: lime in Digi Green, grey elsewhere
+    s.replace ("@title", &t == &green_tokens ? QString {digi_lime} : QString {t.text_secondary});
     // longest names first so that e.g. @accent_text is not clobbered by @accent
     QList<QPair<QString, QString>> const map {
       {"@border_strong", t.border_strong},
@@ -617,6 +625,14 @@ void Win11Theme::updateTitleBar (QWidget * w)
 #endif
 }
 
+bool Win11Theme::isDigiGreen () {return digi ();}
+
+int Win11Theme::digiGreenScheme ()
+{
+  for (int i = 0; i < scheme_count; ++i) if (schemes[i].tokens == &green_tokens) return i;
+  return 1;
+}
+
 QString Win11Theme::token (QString const& name)
 {
   auto const& t = current_tokens ();
@@ -632,6 +648,8 @@ QString Win11Theme::token (QString const& name)
   if (name == "accent") return t.accent;
   if (name == "accent_text") return t.accent_text;
   if (name == "input") return t.input;
+  if (name == "title") return digi () ? digi_lime : t.text_secondary;
+  if (name == "accent2") return digi () ? digi_lime : "#7C5CFF";       // second colour of blends
   return t.text;
 }
 

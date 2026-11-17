@@ -90,6 +90,8 @@ private:
   QAbstractButton * make_chip (QString const& text, QString const& tip, QWidget * parent);
   QWidget * make_segments (QStringList const& labels, QStringList const& tips, QButtonGroup *& group, QWidget * parent);
   void show_call_colors ();
+  void show_station_pictures ();
+  void apply_station_picture ();
   void save_call_colors ();
   void apply_call_colors ();
   void add_box_action (QString const& key, QString const& text);
@@ -133,6 +135,8 @@ private:
   QHash<QString, Tile> tiles_;
   QLabel * band_cells_[4][2] {};
   CallSign * call_label_;
+  class StationLogo * station_logo_ {nullptr};
+  QString station_picture_;
   bool call_auto_ {true};
   QColor call_first_;
   QColor call_second_;
