@@ -28,6 +28,15 @@
 #include <QToolTip>
 #include <QHelpEvent>
 #include <QMouseEvent>
+#include <QWheelEvent>
+#include <QProcess>
+#include <QScrollArea>
+#include <QStandardPaths>
+#include <QDirIterator>
+#include <QFileInfo>
+#include <QDir>
+#include <QCoreApplication>
+#include <algorithm>
 #include <QLocale>
 #include <QComboBox>
 #include <QCheckBox>
@@ -427,6 +436,7 @@ public:
   void changed ()
   {
     composite_ = scaled_ = projected_ = QImage {};
+    scaled_key_.clear ();
     grid_key_.clear ();
     update ();
   }
@@ -462,9 +472,10 @@ public:
     };
     auto const window = pal.window ().color ();
     auto const accent = pal.highlight ().color ();
-    QColor const sea = dark ? window.darker (160) : QColor {"#BFD7EA"};
-    QColor const land_color = dark ? mix (window, accent, 0.40) : QColor {"#E8E3C8"};
-    QColor const border_color = dark ? mix (window, accent, 0.7) : QColor {"#8A8466"};
+    // dark schemes: clearly lighter land than sea, bright borders
+    QColor const sea = dark ? window.darker (150) : QColor {"#BFD7EA"};
+    QColor const land_color = dark ? mix (QColor {"#2B3442"}, accent, 0.38) : QColor {"#E8E3C8"};
+    QColor const border_color = dark ? mix (accent, QColor {"#FFFFFF"}, 0.45) : QColor {"#8A8466"};
     countries_ = QImage {land_.size (), QImage::Format_ARGB32_Premultiplied};
     countries_.fill (sea);
     QPainter p {&countries_};
@@ -508,7 +519,7 @@ public:
   {
     my_lat_ = lat;
     my_lon_ = lon;
-    lut_.clear ();                    // the centred map moves with you
+    lut_key_.clear ();                // the centred map moves with you
     changed ();
   }
   void set_dx (QString const& call, double lat, double lon) {dx_call_ = call; dx_lat_ = lat; dx_lon_ = lon; update ();}
@@ -516,35 +527,195 @@ public:
   void set_aurora (QImage const& img) {aurora_ = img; changed ();}
   void set_rain (QImage const& img) {rain_ = img; changed ();}
 
+  void set_projection (Projection p)
+  {
+    if (p == projection) return;
+    projection = p;
+    reset_view ();
+  }
+
+  // back to the whole map
+  void reset_view ()
+  {
+    zoom_ = 1.;
+    clon_ = 0.;
+    clat_ = 12.;                       // a little north: more land, less Antarctica
+    az_pan_ = QPointF {};
+    clamp_view ();
+    view_changed ();
+  }
+
 protected:
   void resizeEvent (QResizeEvent *) override
   {
-    scaled_ = projected_ = QImage {};
-    grid_key_.clear ();
+    clamp_view ();
+    view_changed ();
   }
+
+  void view_changed ()
+  {
+    scaled_key_.clear ();
+    projected_key_.clear ();
+    grid_key_.clear ();
+    update ();
+  }
+
+  // ---- zoom and pan ----
+  // flat: pixels per degree; at zoom 1 the map just covers the widget
+  double flat_scale () const {return zoom_ * qMax (width () / 360., height () / 180.);}
+  QRectF world_rect () const
+  {
+    double const s = flat_scale ();
+    return {width () / 2. + (-180. - clon_) * s, height () / 2. - (90. - clat_) * s, 360. * s, 180. * s};
+  }
+  // centred: the radius of the world and where its middle is
+  double az_radius () const {return zoom_ * (qMin (width (), height ()) / 2. - 2.);}
+  QPointF az_centre () const {return QPointF {width () / 2., height () / 2.} + az_pan_;}
+
+  void clamp_view ()
+  {
+    if (width () <= 0 || height () <= 0) return;
+    double const s = flat_scale ();
+    double const hw = width () / 2. / s, hh = height () / 2. / s;
+    clon_ = hw >= 180. ? 0. : qBound (-180. + hw, clon_, 180. - hw);
+    clat_ = hh >= 90. ? 0. : qBound (-90. + hh, clat_, 90. - hh);
+    double const r = az_radius ();
+    double const len = std::hypot (az_pan_.x (), az_pan_.y ());
+    if (zoom_ <= 1.0001) az_pan_ = QPointF {};
+    else if (len > r) az_pan_ *= r / len;
+  }
+
+  void zoom_at (QPointF const& pt, double factor)
+  {
+    double const nz = qBound (1., zoom_ * factor, 12.);
+    if (std::abs (nz - zoom_) < 1e-6) return;
+    if (Flat == projection)
+      {
+        double lat, lon;
+        bool const ok = from_point (pt, lat, lon);
+        zoom_ = nz;
+        if (ok)
+          {
+            double const s = flat_scale ();
+            clon_ = lon - (pt.x () - width () / 2.) / s;
+            clat_ = lat + (pt.y () - height () / 2.) / s;
+          }
+      }
+    else
+      {
+        auto const c = az_centre ();
+        double const k = nz / zoom_;
+        az_pan_ = pt - (pt - c) * k - QPointF {width () / 2., height () / 2.};
+        zoom_ = nz;
+      }
+    clamp_view ();
+    view_changed ();
+  }
+
+  void wheelEvent (QWheelEvent * e) override
+  {
+#if QT_VERSION >= QT_VERSION_CHECK (5, 14, 0)
+    auto const pos = e->position ();
+#else
+    auto const pos = e->posF ();
+#endif
+    zoom_at (pos, std::pow (1.0015, e->angleDelta ().y ()));
+    e->accept ();
+  }
+
+  void mouseReleaseEvent (QMouseEvent * e) override
+  {
+    if (dragging_)
+      {
+        dragging_ = false;
+        setCursor (Qt::ArrowCursor);
+        view_changed ();
+      }
+    pressed_ = false;
+    QWidget::mouseReleaseEvent (e);
+  }
+
+  // + - and Fit buttons in the top right corner
+  void draw_zoom_buttons (QPainter& p)
+  {
+    zoom_rects_.clear ();
+    double const b = 28, gap = 6;
+    double x = width () - 12 - b;
+    QString const labels[] = {QObject::tr ("Fit"), QString {QChar {0x2212}}, "+"};
+    auto f = font ();
+    f.setBold (true);
+    p.setFont (f);
+    for (int i = 0; i < 3; ++i)
+      {
+        QRectF const r {x - (i == 0 ? 10 : 0), 12, b + (i == 0 ? 10 : 0), b};
+        zoom_rects_.prepend (r);
+        p.setPen (QPen {QColor {255, 255, 255, 40}, 1});
+        p.setBrush (QColor {13, 17, 23, 190});
+        p.drawRoundedRect (r, 9, 9);
+        p.setPen (i == 0 && zoom_ <= 1.0001 ? QColor {233, 236, 241, 90} : QColor {233, 236, 241});
+        p.drawText (r, Qt::AlignCenter, labels[i]);
+        x -= b + gap + (i == 0 ? 10 : 0);
+      }
+  }
+
 
   void paintEvent (QPaintEvent *) override
   {
     QPainter p {this};
     p.setRenderHint (QPainter::Antialiasing);
     auto const r = map_rect ();
-    // rounded corners, or the round world when centred on you
+    // rounded corners; the round world too when centred on you
     QPainterPath shape;
-    if (Flat == projection) shape.addRoundedRect (QRectF {r}, 12, 12);
-    else shape.addEllipse (QRectF {r});
+    shape.addRoundedRect (QRectF {rect ()}, 12, 12);
+    if (Azimuthal == projection)
+      {
+        QPainterPath world;
+        world.addEllipse (az_centre (), az_radius (), az_radius ());
+        shape = shape.intersected (world);
+      }
     p.setClipPath (shape);
     if (Flat == projection)
       {
-        if (scaled_.size () != r.size ())
+        auto const key = QString {"%1/%2/%3/%4x%5"}.arg (zoom_).arg (clon_).arg (clat_).arg (width ()).arg (height ());
+        if (dragging_ || scaled_key_ != key)
           {
-            scaled_ = composite ().scaled (r.size (), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            // the part of the world in view, scaled once per view
+            auto const& src = composite ();
+            QRectF const world = world_rect ();
+            QRectF const vis = world & QRectF {rect ()};
+            QRectF const from {(vis.left () - world.left ()) / world.width () * src.width (),
+                (vis.top () - world.top ()) / world.height () * src.height (),
+                vis.width () / world.width () * src.width (),
+                vis.height () / world.height () * src.height ()};
+            if (dragging_)
+              {
+                p.drawImage (vis, src, from);       // quick while the map is moving
+              }
+            else
+              {
+                scaled_ = QImage {size (), QImage::Format_ARGB32_Premultiplied};
+                scaled_.fill (Qt::transparent);
+                QPainter sp {&scaled_};
+                sp.setRenderHint (QPainter::SmoothPixmapTransform);
+                sp.drawImage (vis, src, from);
+                scaled_key_ = key;
+              }
           }
-        p.drawImage (r.topLeft (), scaled_);
+        if (!dragging_) p.drawImage (0, 0, scaled_);
       }
     else
       {
-        if (projected_.size () != r.size ()) project (r.width ());
-        p.drawImage (r.topLeft (), projected_);
+        auto const key = QString {"%1/%2,%3/%4x%5/%6,%7"}.arg (zoom_).arg (az_pan_.x ()).arg (az_pan_.y ())
+          .arg (width ()).arg (height ()).arg (centre_lat ()).arg (centre_lon ());
+        if (dragging_ && !projected_.isNull ())
+          {
+            p.drawImage (az_pan_ - projected_pan_, projected_);   // shift the last picture while moving
+          }
+        else
+          {
+            if (projected_key_ != key) {project (); projected_key_ = key; projected_pan_ = az_pan_;}
+            p.drawImage (0, 0, projected_);
+          }
       }
     if (grid != NoGrid) draw_grid (p, r);
 
@@ -647,9 +818,10 @@ protected:
       {
         p.setPen (QPen {QColor {Win11Theme::token ("border")}, 1});
         p.setBrush (Qt::NoBrush);
-        p.drawEllipse (QRectF {r}.adjusted (0.5, 0.5, -0.5, -0.5));
+        p.drawEllipse (az_centre (), az_radius (), az_radius ());
       }
     draw_legend (p, r);
+    draw_zoom_buttons (p);
   }
 
   // which stations are shown: chips in a see-through bar on the map;
@@ -680,8 +852,8 @@ protected:
     auto const ring_text = QObject::tr ("Country only");
     double const ring_w = fm.boundingRect (ring_text).width () + 22;
     double const panel_w = x + ring_w + 4;
-    QPointF const origin {r.left () + 12., r.bottom () - h - 20.};
-    if (Azimuthal == projection) const_cast<QPointF&> (origin) = QPointF {r.left () + 4., r.bottom () - h - 12.};
+    Q_UNUSED (r);
+    QPointF const origin {12., height () - h - 24.};
     QRectF const panel {origin.x (), origin.y (), panel_w, h + 12};
     p.setPen (QPen {QColor {255, 255, 255, 40}, 1});
     p.setBrush (QColor {13, 17, 23, 190});
@@ -715,6 +887,17 @@ protected:
 
   void mousePressEvent (QMouseEvent * e) override
   {
+    for (int i = 0; i < zoom_rects_.size (); ++i)
+      {
+        if (zoom_rects_[i].contains (e->pos ()))
+          {
+            QPointF const middle {width () / 2., height () / 2.};
+            if (0 == i) zoom_at (middle, 1.5);
+            else if (1 == i) zoom_at (middle, 1. / 1.5);
+            else reset_view ();
+            return;
+          }
+      }
     for (int i = 0; i < legend_rects_.size (); ++i)
       {
         if (legend_rects_[i].contains (e->pos ()))
@@ -722,6 +905,15 @@ protected:
             if (on_legend) on_legend (i);
             return;
           }
+      }
+    if (Qt::LeftButton == e->button ())
+      {
+        // the start of a drag to move the map
+        pressed_ = true;
+        press_pos_ = e->pos ();
+        press_clon_ = clon_;
+        press_clat_ = clat_;
+        press_pan_ = az_pan_;
       }
     QWidget::mousePressEvent (e);
   }
@@ -769,8 +961,32 @@ protected:
 
   void mouseMoveEvent (QMouseEvent * e) override
   {
+    if (pressed_ && (e->buttons () & Qt::LeftButton))
+      {
+        QPoint const d = e->pos () - press_pos_;
+        if (!dragging_ && d.manhattanLength () > 4 && zoom_ > 1.0001) dragging_ = true;
+        if (dragging_)
+          {
+            if (Flat == projection)
+              {
+                double const s = flat_scale ();
+                clon_ = press_clon_ - d.x () / s;
+                clat_ = press_clat_ + d.y () / s;
+              }
+            else
+              {
+                az_pan_ = press_pan_ + d;
+              }
+            clamp_view ();
+            setCursor (Qt::ClosedHandCursor);
+            QToolTip::hideText ();
+            update ();
+            return;
+          }
+      }
     bool over_legend = false;
     for (auto const& lr : legend_rects_) over_legend = over_legend || lr.contains (e->pos ());
+    for (auto const& zr : zoom_rects_) over_legend = over_legend || zr.contains (e->pos ());
     setCursor (over_legend || station_at (e->pos ()).size () ? Qt::PointingHandCursor : Qt::ArrowCursor);
     // keep the place under the pointer up to date while a tip is showing
     if (QToolTip::isVisible ()) show_tip (e->pos (), e->globalPos ());
@@ -874,14 +1090,14 @@ private:
 
       case DayNight:
         {
-          if (day_small_.isNull () || shade_.isEmpty ()) {base_ = countries_; break;}
+          if (day_.isNull () || shade_.isEmpty ()) {base_ = countries_; break;}
           // blend the day picture into the city lights across the gray line
-          base_ = QImage {day_small_.size (), QImage::Format_RGB32};
+          base_ = QImage {day_.size (), QImage::Format_RGB32};
           int const W = base_.width (), H = base_.height ();
           for (int y = 0; y < H; ++y)
             {
-              auto const * d = reinterpret_cast<QRgb const *> (day_small_.constScanLine (y));
-              auto const * n = reinterpret_cast<QRgb const *> (night_small_.constScanLine (y));
+              auto const * d = reinterpret_cast<QRgb const *> (day_.constScanLine (y));
+              auto const * n = reinterpret_cast<QRgb const *> (night_lights_.constScanLine (y));
               auto * out = reinterpret_cast<QRgb *> (base_.scanLine (y));
               int const sy = qMin (179, y * 180 / H);
               for (int x = 0; x < W; ++x)
@@ -914,7 +1130,13 @@ private:
         p.setRenderHint (QPainter::SmoothPixmapTransform);
         auto const all = composite_.rect ();
         // the day/night picture already shows the night side
-        if (gray_line && style != DayNight) p.drawImage (all, night_);
+        if (gray_line && style != DayNight)
+          {
+            // lighter shading on the plain map so the land still shows at night
+            p.setOpacity (Countries == style ? 0.6 : 1.);
+            p.drawImage (all, night_);
+            p.setOpacity (1.);
+          }
         if (show_rain && !rain_.isNull ()) p.drawImage (all, rain_);
         if (show_aurora && !aurora_.isNull ()) p.drawImage (all, aurora_);
       }
@@ -926,44 +1148,49 @@ private:
 
   // the flat picture redrawn centred on you; a table of which source
   // pixel goes where is worked out once for each size
-  void project (int size)
+  void project ()
   {
     auto const& src = composite ();
     int const W = src.width (), H = src.height ();
-    if (lut_.size () != size * size || lut_src_ != src.size ())
+    int const w = width (), h = height ();
+    auto const lut_key = QString {"%1/%2,%3/%4x%5/%6,%7/%8x%9"}.arg (zoom_).arg (az_pan_.x ()).arg (az_pan_.y ())
+      .arg (w).arg (h).arg (centre_lat ()).arg (centre_lon ()).arg (W).arg (H);
+    if (lut_key_ != lut_key)
       {
-        lut_.resize (size * size);
-        lut_src_ = src.size ();
+        // which source pixel goes where, worked out once for each view
+        lut_key_ = lut_key;
+        lut_.resize (w * h);
         double const p0 = rad (centre_lat ()), l0 = rad (centre_lon ());
         double const sp0 = std::sin (p0), cp0 = std::cos (p0);
-        double const half = size / 2.;
-        for (int y = 0; y < size; ++y)
+        auto const c = az_centre ();
+        double const R = az_radius ();
+        for (int y = 0; y < h; ++y)
           {
-            for (int x = 0; x < size; ++x)
+            for (int x = 0; x < w; ++x)
               {
-                double const dx = (x + 0.5 - half) / half, dy = (y + 0.5 - half) / half;
+                double const dx = (x + 0.5 - c.x ()) / R, dy = (y + 0.5 - c.y ()) / R;
                 double const rho = std::sqrt (dx * dx + dy * dy);
-                if (rho > 1.) {lut_[y * size + x] = -1; continue;}
-                double const c = rho * pi, az = std::atan2 (dx, -dy);
-                double const sc = std::sin (c), cc = std::cos (c);
+                if (rho > 1.) {lut_[y * w + x] = -1; continue;}
+                double const cc_ = rho * pi, az = std::atan2 (dx, -dy);
+                double const sc = std::sin (cc_), cc = std::cos (cc_);
                 double const lat = std::asin (qBound (-1., sp0 * cc + cp0 * sc * std::cos (az), 1.));
                 double lon = l0 + std::atan2 (std::sin (az) * sc * cp0, cc - sp0 * std::sin (lat));
                 double lon_deg = std::fmod (deg (lon) + 540., 360.) - 180.;
                 int const sx = qBound (0, static_cast<int> ((lon_deg + 180.) / 360. * W), W - 1);
                 int const sy = qBound (0, static_cast<int> ((90. - deg (lat)) / 180. * H), H - 1);
-                lut_[y * size + x] = sy * W + sx;
+                lut_[y * w + x] = sy * W + sx;
               }
           }
       }
-    projected_ = QImage {size, size, QImage::Format_ARGB32_Premultiplied};
+    projected_ = QImage {w, h, QImage::Format_ARGB32_Premultiplied};
     projected_.fill (Qt::transparent);
     auto const * in = reinterpret_cast<QRgb const *> (src.constBits ());
-    for (int y = 0; y < size; ++y)
+    for (int y = 0; y < h; ++y)
       {
         auto * out = reinterpret_cast<QRgb *> (projected_.scanLine (y));
-        for (int x = 0; x < size; ++x)
+        for (int x = 0; x < w; ++x)
           {
-            int const i = lut_[y * size + x];
+            int const i = lut_[y * w + x];
             if (i >= 0) out[x] = in[i];
           }
       }
@@ -971,44 +1198,41 @@ private:
 
   QRect map_rect () const
   {
-    int w = width (), h = height ();
     if (Azimuthal == projection)
       {
-        int const s = qMin (w, h);
-        return QRect {(w - s) / 2, (h - s) / 2, s, s};
+        double const R = az_radius ();
+        return QRectF {az_centre () - QPointF {R, R}, QSizeF {2 * R, 2 * R}}.toAlignedRect ();
       }
-    // keep the flat map 2:1 and centred
-    if (w > 2 * h) w = 2 * h; else h = w / 2;
-    return QRect {(width () - w) / 2, (height () - h) / 2, w, h};
+    return world_rect ().toAlignedRect ();
   }
 
 public:
   QPointF to_point (double lat, double lon) const
   {
-    auto const r = map_rect ();
     if (Flat == projection)
       {
-        return {r.left () + (lon + 180.) / 360. * r.width (), r.top () + (90. - lat) / 180. * r.height ()};
+        double const s = flat_scale ();
+        return {width () / 2. + (lon - clon_) * s, height () / 2. - (lat - clat_) * s};
       }
     double dist, bearing;
     path_to (centre_lat (), centre_lon (), lat, lon, dist, bearing);
-    double const rho = dist / pi * r.width () / 2.;
-    return {r.center ().x () + 0.5 + rho * std::sin (rad (bearing)),
-            r.center ().y () + 0.5 - rho * std::cos (rad (bearing))};
+    double const rho = dist / pi * az_radius ();
+    auto const c = az_centre ();
+    return {c.x () + rho * std::sin (rad (bearing)), c.y () - rho * std::cos (rad (bearing))};
   }
 
   bool from_point (QPointF const& pt, double& lat, double& lon) const
   {
-    auto const r = map_rect ();
     if (Flat == projection)
       {
-        if (!r.contains (pt.toPoint ())) return false;
-        lon = (pt.x () - r.left ()) / r.width () * 360. - 180.;
-        lat = 90. - (pt.y () - r.top ()) / r.height () * 180.;
-        return true;
+        double const s = flat_scale ();
+        lon = clon_ + (pt.x () - width () / 2.) / s;
+        lat = clat_ - (pt.y () - height () / 2.) / s;
+        return lon >= -180. && lon <= 180. && lat >= -90. && lat <= 90.;
       }
-    double const half = r.width () / 2.;
-    double const dx = (pt.x () - r.left () - half) / half, dy = (pt.y () - r.top () - half) / half;
+    auto const c = az_centre ();
+    double const R = az_radius ();
+    double const dx = (pt.x () - c.x ()) / R, dy = (pt.y () - c.y ()) / R;
     double const rho = std::sqrt (dx * dx + dy * dy);
     if (rho > 1.) return false;
     destination (centre_lat (), centre_lon (), deg (std::atan2 (dx, -dy)), rho * pi, lat, lon);
@@ -1044,8 +1268,8 @@ private:
   void draw_grid (QPainter& p, QRect const& r)
   {
     // the lines only change with the size, the view or where you are
-    auto const key = QString {"%1/%2/%3x%4/%5,%6"}.arg (grid).arg (projection).arg (r.width ()).arg (r.height ())
-      .arg (centre_lat ()).arg (centre_lon ());
+    auto const key = QString {"%1/%2/%3x%4/%5,%6/%7/%8,%9"}.arg (grid).arg (projection).arg (r.width ()).arg (r.height ())
+      .arg (centre_lat ()).arg (centre_lon ()).arg (zoom_).arg (clon_ + az_pan_.x ()).arg (clat_ + az_pan_.y ());
     if (key != grid_key_)
       {
         grid_key_ = key;
@@ -1087,12 +1311,12 @@ private:
         for (int lat = -60; lat <= 60; lat += 30)
           {
             auto const pt = to_point (lat, -180.);
-            outlined_text (p, pt + QPointF {3, -3}, QString {"%1%2"}.arg (lat).arg (QChar {0x00B0}), f, label);
+            outlined_text (p, QPointF {qMax (0., pt.x ()) + 4, pt.y () - 3}, QString {"%1%2"}.arg (lat).arg (QChar {0x00B0}), f, label);
           }
         for (int lon = -150; lon <= 150; lon += 30)
           {
             auto const pt = to_point (-90., lon);
-            outlined_text (p, pt + QPointF {3, -4}, QString {"%1%2"}.arg (lon).arg (QChar {0x00B0}), f, label);
+            outlined_text (p, QPointF {pt.x () + 3, qMin (double (height ()), pt.y ()) - 5}, QString {"%1%2"}.arg (lon).arg (QChar {0x00B0}), f, label);
           }
         return;
       }
@@ -1210,9 +1434,23 @@ private:
   QImage base_;
   QImage composite_;
   QImage scaled_;
+  QString scaled_key_;
   QImage projected_;
+  QString projected_key_;
+  QPointF projected_pan_;
   QVector<int> lut_;
-  QSize lut_src_;
+  QString lut_key_;
+  double zoom_ {1.};
+  double clon_ {0.};
+  double clat_ {12.};
+  QPointF az_pan_;
+  bool pressed_ {false};
+  bool dragging_ {false};
+  QPoint press_pos_;
+  double press_clon_ {0.};
+  double press_clat_ {0.};
+  QPointF press_pan_;
+  QVector<QRectF> zoom_rects_;
   QImage night_;
   QVector<double> shade_;
   QImage aurora_;
@@ -1479,6 +1717,127 @@ protected:
   void mouseDoubleClickEvent (QMouseEvent *) override
   {
     if (on_double_click) on_double_click ();
+  }
+};
+
+//
+// VOACAP between you and the DX station: how likely each band is to
+// work through the day, hour by hour (UTC)
+//
+class VoacapGrid final
+  : public QWidget
+{
+public:
+  static int const bands = 9;
+  explicit VoacapGrid (QWidget * parent)
+    : QWidget {parent}
+  {
+    setMinimumHeight (150);
+    setSizePolicy (QSizePolicy::Expanding, QSizePolicy::Expanding);
+    setMouseTracking (true);
+  }
+
+  static char const * band_name (int b)
+  {
+    static char const * const names[bands] = {"80", "60", "40", "30", "20", "17", "15", "12", "10"};
+    return names[b];
+  }
+
+  // reliability 0..1 and signal to noise, [band][hour UTC]; empty when unknown
+  QVector<QVector<float>> rel;
+  QVector<QVector<float>> snr;
+
+  static QColor colour (double v)
+  {
+    struct Stop {double at; QColor c;};
+    static Stop const stops[] = {{0., QColor {60, 40, 90}}, {0.3, QColor {60, 110, 220}}, {0.55, QColor {40, 190, 130}},
+                                 {0.75, QColor {240, 200, 60}}, {1., QColor {250, 90, 60}}};
+    v = qBound (0., v, 1.);
+    for (int i = 0; i < 4; ++i)
+      {
+        if (v <= stops[i + 1].at)
+          {
+            double const t = (v - stops[i].at) / (stops[i + 1].at - stops[i].at);
+            auto const& a = stops[i].c;
+            auto const& b = stops[i + 1].c;
+            return QColor::fromRgbF (a.redF () + (b.redF () - a.redF ()) * t, a.greenF () + (b.greenF () - a.greenF ()) * t,
+                                     a.blueF () + (b.blueF () - a.blueF ()) * t);
+          }
+      }
+    return stops[4].c;
+  }
+
+protected:
+  QRectF cells () const
+  {
+    QFontMetricsF fm {font ()};
+    double const left = fm.boundingRect ("80").width () + 8;
+    return QRectF {left, 0, width () - left - 1, height () - fm.height () - 4};
+  }
+
+  void paintEvent (QPaintEvent *) override
+  {
+    QPainter p {this};
+    p.setRenderHint (QPainter::Antialiasing);
+    QColor const muted {Win11Theme::token ("text_secondary")};
+    auto small = font ();
+    small.setPointSizeF (qMax (6.5, small.pointSizeF () * 0.85));
+    p.setFont (small);
+    QFontMetricsF fm {small};
+    auto const area = cells ();
+    double const cw = area.width () / 24., ch = area.height () / bands;
+    int const now = QDateTime::currentDateTimeUtc ().time ().hour ();
+    for (int b = 0; b < bands; ++b)
+      {
+        double const y = area.top () + b * ch;      // 80 m at the top
+        p.setPen (muted);
+        p.drawText (QRectF {0, y, area.left () - 6, ch}, Qt::AlignRight | Qt::AlignVCenter, band_name (b));
+        for (int h = 0; h < 24; ++h)
+          {
+            QRectF const cell {area.left () + h * cw + 0.75, y + 0.75, cw - 1.5, ch - 1.5};
+            QColor c;
+            if (b < rel.size () && h < rel[b].size ())
+              {
+                double const v = rel[b][h];
+                c = colour (v);
+                c.setAlphaF (0.25 + 0.75 * v);
+              }
+            else
+              {
+                c = QColor {Win11Theme::token ("ctrl")};
+              }
+            p.setPen (Qt::NoPen);
+            p.setBrush (c);
+            p.drawRoundedRect (cell, 2, 2);
+          }
+      }
+    // the hour now
+    p.setPen (QPen {QColor {Win11Theme::token ("text")}, 1.5});
+    p.setBrush (Qt::NoBrush);
+    p.drawRoundedRect (QRectF {area.left () + now * cw + 0.5, area.top () + 0.5, cw - 1, area.height () - 1}, 3, 3);
+    p.setPen (muted);
+    for (int h = 0; h < 24; h += 6)
+      {
+        p.drawText (QPointF {area.left () + h * cw + 1, area.bottom () + fm.ascent () + 3},
+                    18 == h ? QObject::tr ("18 UTC") : QString::number (h));
+      }
+  }
+
+  void mouseMoveEvent (QMouseEvent * e) override
+  {
+    auto const area = cells ();
+    if (!area.contains (e->pos ()) || rel.isEmpty ())
+      {
+        QToolTip::hideText ();
+        return;
+      }
+    int const h = qBound (0, static_cast<int> ((e->pos ().x () - area.left ()) / (area.width () / 24.)), 23);
+    int const b = qBound (0, static_cast<int> ((e->pos ().y () - area.top ()) / (area.height () / bands)), bands - 1);
+    if (b >= rel.size () || h >= rel[b].size ()) return;
+    auto text = QObject::tr ("<b>%1 m at %2:00 UTC</b><br/>Reliability %3%")
+      .arg (band_name (b)).arg (h, 2, 10, QChar {'0'}).arg (qRound (rel[b][h] * 100));
+    if (b < snr.size () && h < snr[b].size ()) text += QObject::tr ("<br/>Signal to noise %1 dB in 1 Hz").arg (qRound (snr[b][h]));
+    QToolTip::showText (e->globalPos (), text, this);
   }
 };
 
@@ -1770,7 +2129,17 @@ void ConditionsWindow::update_containers ()
 {
   // hide a row or column when every box in it is switched off
   top_row_->setVisible (box_on ("clock") || box_on ("xray") || box_on ("sun") || box_on ("beacons"));
-  left_column_->setVisible (box_on ("de") || box_on ("dx") || box_on ("bands"));
+  left_scroll_->setVisible (box_on ("de") || box_on ("dx") || box_on ("voacap") || box_on ("bands"));
+  // the boxes left in the column share its height: VOACAP's chart grows
+  // when it's shown, otherwise the boxes keep their size at the top
+  if (side_)
+    {
+      bool const grow = box_on ("voacap");
+      side_->setStretchFactor (boxes_["voacap"], grow ? 1 : 0);
+      side_->setStretchFactor (side_filler_, grow ? 0 : 1);
+      side_filler_->setVisible (!grow);
+    }
+  if (box_on ("voacap")) schedule_voacap ();
   if (box_on ("sun") && isVisible ()) sun_timer_->start (); else sun_timer_->stop ();
 }
 
@@ -1911,7 +2280,7 @@ void ConditionsWindow::build_ui ()
   auto * side = new QVBoxLayout {left_column_};
   side->setContentsMargins (0, 0, 0, 0);
   side->setSpacing (12);
-  left_column_->setFixedWidth (285);
+  left_column_->setObjectName ("plain");
 
   auto * de_box = make_box ("de", tr ("DE · You"), body);
   de_info_ = new QLabel {de_box};
@@ -1926,6 +2295,81 @@ void ConditionsWindow::build_ui ()
   dx_info_->setTextFormat (Qt::RichText);
   body->addWidget (dx_info_);
   side->addWidget (dx_box);
+
+  auto * voacap_box = make_box ("voacap", {}, body);
+  {
+    auto * head = new QHBoxLayout;
+    head->addWidget (box_title (tr ("VOACAP · DE → DX"), voacap_box));
+    head->addStretch ();
+    voacap_call_ = new QLabel {voacap_box};
+    voacap_call_->setStyleSheet ("font-weight: 600;");
+    head->addWidget (voacap_call_);
+    body->addLayout (head);
+  }
+  voacap_box->setToolTip (tr ("<p>VOACAP's prediction for the path from you to the DX station: how likely each band "
+                              "is to work, hour by hour (UTC), for the month and the sunspot level now. The outlined "
+                              "column is this hour.</p><p>Both ends are taken as simple antennas with no gain; "
+                              "a good beam does better.</p>"));
+  {
+    auto * settings_row = new QHBoxLayout;
+    settings_row->setSpacing (4);
+    voacap_power_ = new QComboBox {voacap_box};
+    for (int w : {5, 10, 25, 50, 100, 200, 500, 1000, 1500}) voacap_power_->addItem (QString {"%1 W"}.arg (w), w);
+    voacap_power_->setToolTip (tr ("Your transmitter power"));
+    voacap_mode_ = new QComboBox {voacap_box};
+    // signal to noise each mode needs, in a 1 Hz bandwidth
+    struct {char const * name; double snr;} const modes[] = {{"FT8", 13.}, {"FT4", 17.}, {"WSPR", 6.}, {"CW", 24.}, {"SSB", 44.}};
+    for (auto const& m : modes) voacap_mode_->addItem (m.name, m.snr);
+    voacap_mode_->setToolTip (tr ("The mode, which sets how strong a signal has to be to get through"));
+    voacap_toa_ = new QComboBox {voacap_box};
+    for (double a : {0.5, 1., 3., 5., 10., 15.}) voacap_toa_->addItem (QString {"%1%2"}.arg (a).arg (QChar {0x00B0}), a);
+    voacap_toa_->setToolTip (tr ("The lowest take-off angle your antenna radiates at. Low antennas and verticals "
+                                 "near buildings: 5 to 10%1. High antennas over open ground: 1 to 3%1.").arg (QChar {0x00B0}));
+    for (auto * combo : {voacap_power_, voacap_mode_, voacap_toa_})
+      {
+        combo->setSizeAdjustPolicy (QComboBox::AdjustToContents);
+        settings_row->addWidget (combo);
+      }
+    settings_row->addStretch ();
+    body->addLayout (settings_row);
+    settings_row = new QHBoxLayout;
+    settings_row->addWidget (make_segments ({tr ("Short"), tr ("Long")}, {tr ("Short path"), tr ("Long path, the other way round the world")},
+                                            voacap_path_, voacap_box));
+    settings_row->addStretch ();
+    body->addLayout (settings_row);
+  }
+  voacap_grid_ = new VoacapGrid {voacap_box};
+  voacap_grid_->setObjectName ("plain");
+  body->addWidget (voacap_grid_, 1);
+  voacap_now_ = new QLabel {voacap_box};
+  voacap_now_->setWordWrap (true);
+  voacap_now_->setTextFormat (Qt::RichText);
+  body->addWidget (voacap_now_);
+  settings_->beginGroup ("Conditions");
+  voacap_power_->setCurrentIndex (qMax (0, voacap_power_->findData (settings_->value ("VoacapPower", 100).toInt ())));
+  voacap_mode_->setCurrentIndex (qMax (0, voacap_mode_->findText (settings_->value ("VoacapMode", "FT8").toString ())));
+  voacap_toa_->setCurrentIndex (qMax (0, voacap_toa_->findData (settings_->value ("VoacapTOA", 3.).toDouble ())));
+  voacap_path_->button (settings_->value ("VoacapLongPath", false).toBool () ? 1 : 0)->setChecked (true);
+  settings_->endGroup ();
+  voacap_timer_ = new QTimer {this};
+  voacap_timer_->setSingleShot (true);
+  voacap_timer_->setInterval (600);
+  connect (voacap_timer_, &QTimer::timeout, this, &ConditionsWindow::run_voacap);
+  auto voacap_changed = [this] {
+    settings_->beginGroup ("Conditions");
+    settings_->setValue ("VoacapPower", voacap_power_->currentData ());
+    settings_->setValue ("VoacapMode", voacap_mode_->currentText ());
+    settings_->setValue ("VoacapTOA", voacap_toa_->currentData ());
+    settings_->setValue ("VoacapLongPath", 1 == voacap_path_->checkedId ());
+    settings_->endGroup ();
+    voacap_timer_->start ();
+  };
+  for (auto * combo : {voacap_power_, voacap_mode_, voacap_toa_})
+    {
+      connect (combo, static_cast<void (QComboBox::*) (int)> (&QComboBox::currentIndexChanged), this, voacap_changed);
+    }
+  connect (voacap_path_, static_cast<void (QButtonGroup::*) (QAbstractButton *)> (&QButtonGroup::buttonClicked), this, voacap_changed);
+  side->addWidget (voacap_box);
 
   auto * bands_box = make_box ("bands", tr ("Band outlook"), body);
   bands_box->setToolTip (tr ("A rough estimate from the solar flux and K index, not a forecast for any one path."));
@@ -1956,8 +2400,19 @@ void ConditionsWindow::build_ui ()
   est->setObjectName ("muted");
   body->addWidget (est);
   side->addWidget (bands_box);
-  side->addStretch ();
-  middle->addWidget (left_column_);
+  side_ = side;
+  side_filler_ = new QWidget {left_column_};      // takes up the space when no box can
+  side->addWidget (side_filler_, 1);
+  // the column scrolls if its boxes don't fit the window's height
+  left_scroll_ = new QScrollArea {this};
+  left_scroll_->setObjectName ("plainScroll");
+  left_scroll_->setWidget (left_column_);
+  left_scroll_->setWidgetResizable (true);
+  left_scroll_->setFrameShape (QFrame::NoFrame);
+  left_scroll_->setHorizontalScrollBarPolicy (Qt::ScrollBarAlwaysOff);
+  left_scroll_->setFixedWidth (310);
+  left_scroll_->viewport ()->setObjectName ("plain");
+  middle->addWidget (left_scroll_);
 
   // the map, in its own card
   auto * map_card = new QFrame {this};
@@ -1988,6 +2443,7 @@ void ConditionsWindow::build_ui ()
   add_box_action ("spacewx", tr ("Space weather"));
   add_box_action ("de", tr ("You (DE)"));
   add_box_action ("dx", tr ("DX station"));
+  add_box_action ("voacap", tr ("VOACAP DE-DX"));
   add_box_action ("bands", tr ("Band outlook"));
   update_containers ();
 
@@ -2076,7 +2532,7 @@ QWidget * ConditionsWindow::build_map_bar ()
   settings_->endGroup ();
 
   auto apply = [this] {
-    map_->projection = static_cast<ConditionsMap::Projection> (projection_group_->checkedId ());
+    map_->set_projection (static_cast<ConditionsMap::Projection> (projection_group_->checkedId ()));
     map_->grid = static_cast<ConditionsMap::Grid> (grid_box_->currentIndex ());
     map_->gray_line = gray_box_->isChecked ();
     map_->show_aurora = aurora_box_->isChecked ();
@@ -2241,6 +2697,7 @@ void ConditionsWindow::apply_colors ()
   setStyleSheet (QString {R"(
 QWidget#ConditionsWindow {background-color: %1;}
 QWidget#plain {background: transparent;}
+QScrollArea#plainScroll {background: transparent; border: none;}
 QFrame#callPopupOuter {background: transparent;}
 QFrame#conditionsTile, QFrame#conditionsBox {background-color: %2; border: 1px solid %3; border-radius: 16px;}
 QLabel#boxTitle {color: %4; font-weight: 600; font-size: %9pt;}
@@ -2348,6 +2805,8 @@ void ConditionsWindow::tick ()
         }
       update_de_dx ();
       xray_graph_->update ();
+      if (0 == now.time ().minute ()) schedule_voacap ();      // a new hour on the chart
+      else voacap_grid_->update ();
     }
 }
 
@@ -2446,6 +2905,7 @@ void ConditionsWindow::request (QString const& url, void (ConditionsWindow::*han
           updated_ = QDateTime::currentDateTimeUtc ();
           update_tiles ();
           update_bands ();
+          schedule_voacap ();             // the solar flux sets VOACAP's sunspot number
           QString text = tr ("Space weather and aurora: NOAA Space Weather Prediction Center, updated %1 UTC. "
                              "Sun: NASA SDO. Maps: NASA Blue Marble and Black Marble, Natural Earth; rain and snow: NASA GIBS.")
             .arg (updated_.toString ("hh:mm"));
@@ -2677,7 +3137,7 @@ void ConditionsWindow::update_de_dx ()
       dx = big (slashed (dx_call_).toHtmlEscaped ());
       if (!have_dx)
         {
-          dx += QString {"<span style=\"color:%1\">%2</span>"}.arg (muted, tr ("No grid square yet."));
+          dx += QString {"<div style=\"color:%1\">%2</div>"}.arg (muted, tr ("No grid square yet."));
         }
       else
         {
@@ -2705,6 +3165,220 @@ void ConditionsWindow::update_de_dx ()
   dx_info_->setText (dx);
 }
 
+void ConditionsWindow::schedule_voacap ()
+{
+  if (voacap_timer_) voacap_timer_->start ();
+}
+
+QString ConditionsWindow::voacap_root ()
+{
+  // a writable copy of VOACAP's data; the engine writes into its run folder
+  auto const base = QStandardPaths::writableLocation (QStandardPaths::AppLocalDataLocation);
+  QDir root {base + "/voacap/itshfbc"};
+  auto const marker = root.filePath ("kf0kyl-data-1");
+  if (!QFile::exists (marker))
+    {
+      QDirIterator it {":/voacap/itshfbc", QDirIterator::Subdirectories};
+      while (it.hasNext ())
+        {
+          auto const from = it.next ();
+          if (QFileInfo {from}.isDir ()) continue;
+          auto const rel = from.mid (QString {":/voacap/itshfbc/"}.size ());
+          auto const to = root.filePath (rel);
+          QDir {}.mkpath (QFileInfo {to}.absolutePath ());
+          QFile::remove (to);
+          QFile::copy (from, to);
+          QFile::setPermissions (to, QFile::ReadOwner | QFile::WriteOwner | QFile::ReadUser | QFile::WriteUser);
+        }
+      for (auto const& sub : {"run", "areadata", "area_inv"}) root.mkpath (sub);
+      QFile m {marker};
+      m.open (QIODevice::WriteOnly);
+    }
+  return root.absolutePath ();
+}
+
+QString ConditionsWindow::voacap_program ()
+{
+  auto const dir = QCoreApplication::applicationDirPath ();
+#ifdef Q_OS_WIN
+  QString const name {"voacapl.exe"};
+#else
+  QString const name {"voacapl"};
+#endif
+  for (auto const& path : {dir + '/' + name, dir + "/contrib/voacapl/" + name, dir + "/../bin/" + name})
+    {
+      if (QFileInfo {path}.isExecutable ()) return path;
+    }
+  return {};
+}
+
+void ConditionsWindow::run_voacap ()
+{
+  if (!box_on ("voacap") || !isVisible ()) return;
+  if (voacap_process_)
+    {
+      voacap_again_ = true;            // one already running: go again when it's done
+      return;
+    }
+  voacap_call_->setText (slashed (dx_call_).toHtmlEscaped ());
+  double lat1, lon1, lat2, lon2;
+  bool const have_me = grid_to_latlon (my_grid_, lat1, lon1);
+  bool have_dx = dx_call_.size () && grid_to_latlon (dx_grid_, lat2, lon2);
+  if (!have_dx && dx_call_.size () && map_->stations.contains (dx_call_))
+    {
+      lat2 = map_->stations[dx_call_].lat;
+      lon2 = map_->stations[dx_call_].lon;
+      have_dx = true;
+    }
+  auto const muted = Win11Theme::token ("text_secondary");
+  auto say = [this, muted] (QString const& text) {
+    voacap_grid_->rel.clear ();
+    voacap_grid_->snr.clear ();
+    voacap_grid_->update ();
+    voacap_now_->setText (QString {"<span style=\"color:%1\">%2</span>"}.arg (muted, text));
+  };
+  if (!have_me) {say (tr ("Put your grid in Settings > General.")); return;}
+  if (!have_dx) {say (tr ("Pick a DX station with a grid square to see the path.")); return;}
+  auto const program = voacap_program ();
+  if (program.isEmpty ()) {say (tr ("The VOACAP engine wasn't found next to the program.")); return;}
+
+  // sunspot number from today's solar flux: SFI = 63.7 + 0.728 R + 0.00089 R^2
+  double ssn = 100.;
+  if (!qIsNaN (sfi_))
+    {
+      double const disc = 0.728 * 0.728 + 4. * 0.00089 * (sfi_ - 63.7);
+      ssn = disc > 0 ? (-0.728 + std::sqrt (disc)) / (2. * 0.00089) : 0.;
+    }
+  else if (!qIsNaN (ssn_))
+    {
+      ssn = ssn_;
+    }
+  ssn = qBound (0., ssn, 300.);
+  auto const now = QDateTime::currentDateTimeUtc ();
+  double const kw = voacap_power_->currentData ().toInt () / 1000.;
+  double const snr = voacap_mode_->currentData ().toDouble ();
+  double const toa = voacap_toa_->currentData ().toDouble ();
+  bool const long_path = 1 == voacap_path_->checkedId ();
+  // the cards are read in fixed columns, so the spacing matters
+  auto latlon = [] (double v, char pos, char neg, int width) {
+    return QString {"%1%2"}.arg (std::abs (v), width, 'f', 2).arg (v >= 0 ? pos : neg);
+  };
+  QStringList lines {
+    "LINEMAX      55       number of lines-per-page",
+    "COEFFS    CCIR",
+    "TIME          1   24    1    1",
+    QString {"MONTH     %1%2"}.arg (now.date ().year (), 5).arg (double (now.date ().month ()), 5, 'f', 2),
+    QString {"SUNSPOT   %1."}.arg (qRound (ssn), 4),
+    "LABEL     DE                  DX",
+    QString {"CIRCUIT   %1%2%3%4  %5     0"}.arg (latlon (lat1, 'N', 'S', 5)).arg (latlon (lon1, 'E', 'W', 9))
+      .arg (latlon (lat2, 'N', 'S', 9)).arg (latlon (lon2, 'E', 'W', 9)).arg (long_path ? 'L' : 'S'),
+    QString {"SYSTEM       1. 145.%1  90.%2 3.00 0.10"}.arg (toa, 5, 'f', 2).arg (snr, 5, 'f', 1),
+    "FPROB      1.00 1.00 1.00 0.00",
+    QString {"ANTENNA       1    1    2   30     0.000[default/isotrope     ]  0.0%1"}.arg (kw, 10, 'f', 4),
+    "ANTENNA       2    2    2   30     0.000[default/isotrope     ]  0.0    0.0000",
+    "FREQUENCY  3.57 5.36 7.0710.1414.0718.1021.0724.9228.07 0.00 0.00",
+    "METHOD       30    0",
+    "EXECUTE",
+    "QUIT",
+  };
+  auto const root = voacap_root ();
+  QFile input {root + "/run/kf0kyl.dat"};
+  if (!input.open (QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
+    {
+      say (tr ("VOACAP couldn't write its input file."));
+      return;
+    }
+  input.write (lines.join ('\n').toLatin1 () + '\n');
+  input.close ();
+  QFile::remove (root + "/run/kf0kyl.out");
+
+  voacap_process_ = new QProcess {this};
+  voacap_process_->setWorkingDirectory (root + "/run");
+  connect (voacap_process_, static_cast<void (QProcess::*) (int, QProcess::ExitStatus)> (&QProcess::finished), this,
+           [this, root] (int, QProcess::ExitStatus) {
+             voacap_process_->deleteLater ();
+             voacap_process_ = nullptr;
+             on_voacap (root + "/run/kf0kyl.out");
+             if (voacap_again_) {voacap_again_ = false; schedule_voacap ();}
+           });
+  connect (voacap_process_, &QProcess::errorOccurred, this, [this] (QProcess::ProcessError error) {
+      if (QProcess::FailedToStart != error || !voacap_process_) return;
+      voacap_process_->deleteLater ();
+      voacap_process_ = nullptr;
+      voacap_now_->setText (tr ("VOACAP couldn't be started."));
+    });
+  voacap_process_->start (program, {"-s", root, "kf0kyl.dat", "kf0kyl.out"});
+  voacap_ran_ = now;
+}
+
+void ConditionsWindow::on_voacap (QString const& path)
+{
+  // blocks for each hour: a FREQ line starting with the hour, then a line
+  // per value; REL and SNR give a number for the MUF column and then one
+  // for each of our nine frequencies
+  QFile file {path};
+  if (!file.open (QIODevice::ReadOnly | QIODevice::Text))
+    {
+      voacap_now_->setText (tr ("VOACAP didn't give a prediction for this path."));
+      return;
+    }
+  QVector<QVector<float>> rel (VoacapGrid::bands, QVector<float> (24, 0.f));
+  QVector<QVector<float>> snr (VoacapGrid::bands, QVector<float> (24, 0.f));
+  int hour = -1;
+  int found = 0;
+  while (!file.atEnd ())
+    {
+      auto const line = QString::fromLatin1 (file.readLine ()).trimmed ();
+      auto const parts = line.simplified ().split (' ');
+      if (parts.size () < 3) continue;
+      if (parts.last () == "FREQ")
+        {
+          bool ok;
+          double const h = parts[0].toDouble (&ok);
+          hour = ok ? static_cast<int> (std::lround (h)) % 24 : -1;
+          continue;
+        }
+      if (hour < 0) continue;
+      bool const is_rel = parts.last () == "REL";
+      bool const is_snr = parts.last () == "SNR";
+      if (!is_rel && !is_snr) continue;
+      for (int b = 0; b < VoacapGrid::bands && b + 1 < parts.size () - 1; ++b)
+        {
+          bool ok;
+          double const v = parts[b + 1].toDouble (&ok);
+          if (!ok) continue;
+          if (is_rel) rel[b][hour] = static_cast<float> (v);
+          else snr[b][hour] = static_cast<float> (v);
+        }
+      if (is_rel) ++found;
+    }
+  if (found < 12)
+    {
+      voacap_grid_->rel.clear ();
+      voacap_grid_->update ();
+      voacap_now_->setText (tr ("VOACAP didn't give a prediction for this path."));
+      return;
+    }
+  voacap_grid_->rel = rel;
+  voacap_grid_->snr = snr;
+  voacap_grid_->update ();
+  // the best bands this hour
+  int const now = QDateTime::currentDateTimeUtc ().time ().hour ();
+  QVector<int> order;
+  for (int b = 0; b < VoacapGrid::bands; ++b) order << b;
+  std::sort (order.begin (), order.end (), [&rel, now] (int a, int b) {return rel[a][now] > rel[b][now];});
+  QStringList best;
+  for (int i = 0; i < 3; ++i)
+    {
+      int const b = order[i];
+      if (rel[b][now] < 0.05) break;
+      auto const text = QString {"%1m %2%"}.arg (VoacapGrid::band_name (b)).arg (qRound (rel[b][now] * 100));
+      best << (0 == i ? "<b>" + text + "</b>" : text);
+    }
+  voacap_now_->setText (best.isEmpty () ? tr ("Now: no band is likely to work this path.")
+                        : tr ("Now: %1").arg (best.join (" · ")));
+}
+
 void ConditionsWindow::set_my_call (QString const& call)
 {
   my_call_ = call.trimmed ().toUpper ();
@@ -2721,6 +3395,7 @@ void ConditionsWindow::set_my_grid (QString const& grid)
   double lat, lon;
   if (grid_to_latlon (grid, lat, lon)) map_->set_my (lat, lon);
   update_de_dx ();
+  schedule_voacap ();
 }
 
 void ConditionsWindow::set_miles (bool miles)
@@ -2749,6 +3424,7 @@ void ConditionsWindow::set_dx (QString const& call, QString const& grid)
       map_->set_dx (call, qQNaN (), qQNaN ());
     }
   update_de_dx ();
+  schedule_voacap ();
 }
 
 void ConditionsWindow::add_station (QString const& call, QString const& grid, int snr, bool cq, bool to_me,

@@ -4795,6 +4795,8 @@ void MainWindow::setup_callsign_info ()
   m_callInfoTimer->setInterval (600);   // wait for typing to settle
   connect (m_callInfoTimer, &QTimer::timeout, this, &MainWindow::update_callsign_info);
   connect (ui->dxCallEntry, &QLineEdit::textChanged, m_callInfoTimer, static_cast<void (QTimer::*) ()> (&QTimer::start));
+  // the DX grid too, so the Conditions window (distance, VOACAP) follows it
+  connect (ui->dxGridEntry, &QLineEdit::textChanged, m_callInfoTimer, static_cast<void (QTimer::*) ()> (&QTimer::start));
 
   connect (&m_callLookup, &CallsignLookup::found, m_callInfo, &CallsignInfo::setInfo);
   connect (&m_callLookup, &CallsignLookup::photo, m_callInfo, &CallsignInfo::setPhoto);

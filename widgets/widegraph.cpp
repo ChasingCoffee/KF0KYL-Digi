@@ -61,6 +61,11 @@ WideGraph::WideGraph(QSettings * settings, QWidget *parent) :
       box->insertWidget (index < 0 ? box->count () : index, m_controlsScroll);
     }
 
+  // the show/hide controls switch over the waterfall is a sliding switch
+  // now, wider than the old check box
+  ui->cbControls->setMaximumWidth (QWIDGETSIZE_MAX);
+  ui->cbControls->setGeometry (3, 3, 34, 20);
+
   // "Fit" keeps the whole band visible however narrow the waterfall gets
   m_fitBand = new QCheckBox {tr ("Fit"), ui->controls_widget};
   m_fitBand->setObjectName ("cbFitBand");

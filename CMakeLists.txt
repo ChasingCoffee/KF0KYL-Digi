@@ -1609,6 +1609,12 @@ endfunction (add_resources resources path)
 add_resources (wsjtx_RESOURCES "" ${TOP_LEVEL_RESOURCES})
 add_resources (wsjtx_RESOURCES /Palettes ${PALETTE_FILES})
 add_resources (wsjtx_RESOURCES /Translations ${QM_FILES})
+# VOACAP data for the Conditions window, copied out to a writable folder
+# the first time a prediction is run
+foreach (voa_sub_ coeffs antennas/default database run)
+  file (GLOB voa_files_ ${CMAKE_CURRENT_SOURCE_DIR}/contrib/voacapl/data/itshfbc/${voa_sub_}/*)
+  add_resources (wsjtx_RESOURCES /voacap/itshfbc/${voa_sub_} ${voa_files_})
+endforeach ()
 
 configure_file (wsjtx.qrc.in wsjtx.qrc @ONLY)
 
@@ -1821,6 +1827,10 @@ generate_version_info (wsjtx_app_version_VERSION_RESOURCES
   ICON ${WSJTX_ICON_FILE}
   FILE_DESCRIPTION "Display WSJT-X Application Version on console"
   )
+# the VOACAP engine used by the Conditions window
+add_subdirectory (contrib/voacapl)
+add_dependencies (wsjtx voacapl)
+
 add_executable (wsjtx_app_version AppVersion/AppVersion.cpp ${wsjtx_app_version_VERSION_RESOURCES})
 target_link_libraries (wsjtx_app_version wsjt_qt)
 
