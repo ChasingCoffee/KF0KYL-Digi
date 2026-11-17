@@ -30,6 +30,10 @@
 #include <QMouseEvent>
 #include <QWheelEvent>
 #include <QProcess>
+#include <QPointer>
+#include <QtEndian>
+#include <memory>
+#include <cstring>
 #include <QScrollArea>
 #include <QStandardPaths>
 #include <QDirIterator>
@@ -341,12 +345,78 @@ namespace
   // which beacon is on band b (0 = 14.100) in this ten-second slot
   int beacon_on (int slot, int band) {return ((slot - band) % 18 + 18) % 18;}
 
+  // coastlines, borders and state lines (Natural Earth 50 m, public
+  // domain) as lines of longitude/latitude, and the land as polygons, so
+  // the map stays sharp however far in it's zoomed
+  struct MapVectors
+  {
+    QVector<QPolygonF> lines[3];       // coast, country borders, states and provinces
+    QPainterPath land;                 // in degrees: x longitude, y latitude
+  };
+  MapVectors const& map_vectors ()
+  {
+    static MapVectors v;
+    static bool loaded = false;
+    if (loaded) return v;
+    loaded = true;
+    auto read_u32 = [] (QByteArray const& b, int& at) {
+      quint32 n = 0;
+      if (at + 4 <= b.size ()) memcpy (&n, b.constData () + at, 4);
+      at += 4;
+      return qFromLittleEndian (n);
+    };
+    auto read_pt = [] (QByteArray const& b, int& at) {
+      qint16 xy[2] = {0, 0};
+      if (at + 4 <= b.size ()) memcpy (xy, b.constData () + at, 4);
+      at += 4;
+      return QPointF {qFromLittleEndian (xy[0]) / 100., qFromLittleEndian (xy[1]) / 100.};
+    };
+    QFile lf {":/map_lines.bin"};
+    if (lf.open (QIODevice::ReadOnly))
+      {
+        auto const b = lf.readAll ();
+        int at = 4;
+        quint32 const sets = read_u32 (b, at);
+        for (quint32 s = 0; s < sets && s < 3; ++s)
+          {
+            quint32 const n = read_u32 (b, at);
+            for (quint32 i = 0; i < n && at < b.size (); ++i)
+              {
+                quint32 const m = read_u32 (b, at);
+                QPolygonF line;
+                line.reserve (m);
+                for (quint32 k = 0; k < m; ++k) line << read_pt (b, at);
+                v.lines[s] << line;
+              }
+          }
+      }
+    QFile pf {":/map_land.bin"};
+    if (pf.open (QIODevice::ReadOnly))
+      {
+        auto const b = pf.readAll ();
+        int at = 4;
+        quint32 const rings = read_u32 (b, at);
+        v.land.setFillRule (Qt::OddEvenFill);
+        for (quint32 i = 0; i < rings && at < b.size (); ++i)
+          {
+            quint32 const m = read_u32 (b, at);
+            QPolygonF ring;
+            ring.reserve (m);
+            for (quint32 k = 0; k < m; ++k) ring << read_pt (b, at);
+            v.land.addPolygon (ring);
+            v.land.closeSubpath ();
+          }
+      }
+    return v;
+  }
+
   // the colours for VOACAP reliability, 0 to 1
   QColor VoacapGrid_colour (double v)
   {
     struct Stop {double at; QColor c;};
-    static Stop const stops[] = {{0., QColor {60, 40, 90}}, {0.3, QColor {60, 110, 220}}, {0.55, QColor {40, 190, 130}},
-                                 {0.75, QColor {240, 200, 60}}, {1., QColor {250, 90, 60}}};
+    // strong, saturated colours: violet, blue, green, yellow, red
+    static Stop const stops[] = {{0., QColor {110, 40, 255}}, {0.3, QColor {0, 120, 255}}, {0.55, QColor {0, 230, 110}},
+                                 {0.75, QColor {255, 225, 0}}, {1., QColor {255, 40, 40}}};
     v = qBound (0., v, 1.);
     for (int i = 0; i < 4; ++i)
       {
@@ -416,11 +486,16 @@ public:
   explicit ConditionsMap (QWidget * parent)
     : QWidget {parent}
     , land_ {QImage {":/map_land.png"}.convertToFormat (QImage::Format_Grayscale8)}
-    , borders_ {QImage {":/map_borders.png"}.convertToFormat (QImage::Format_Grayscale8)}
+    , net_ {new QNetworkAccessManager {this}}
+    , detail_timer_ {new QTimer {this}}
   {
     setMinimumSize (360, 180);
     setSizePolicy (QSizePolicy::Expanding, QSizePolicy::Expanding);
     setMouseTracking (true);
+    // when zoomed in, sharper pictures for just the part in view
+    detail_timer_->setSingleShot (true);
+    detail_timer_->setInterval (450);
+    QObject::connect (detail_timer_, &QTimer::timeout, [this] {request_detail ();});
     for (auto const& b : ncdxf)
       {
         double lat, lon;
@@ -458,9 +533,10 @@ public:
   // something under the stations changed: build the picture again
   void changed ()
   {
-    composite_ = scaled_ = projected_ = QImage {};
+    composite_ = scaled_ = projected_ = overlay_ = QImage {};
     scaled_key_.clear ();
     projected_key_.clear ();
+    if (detail_timer_) detail_timer_->start ();
     grid_key_.clear ();
     update ();
   }
@@ -500,12 +576,13 @@ public:
     QColor const sea = dark ? window.darker (150) : QColor {"#BFD7EA"};
     QColor const land_color = dark ? mix (QColor {"#2B3442"}, accent, 0.38) : QColor {"#E8E3C8"};
     QColor const border_color = dark ? mix (accent, QColor {"#FFFFFF"}, 0.45) : QColor {"#8A8466"};
+    sea_color_ = sea;
+    land_color_ = land_color;
+    border_color_ = border_color;
     countries_ = QImage {land_.size (), QImage::Format_ARGB32_Premultiplied};
     countries_.fill (sea);
     QPainter p {&countries_};
     p.drawImage (0, 0, tinted (land_, land_color));
-    p.drawImage (0, 0, tinted (borders_, border_color));
-    border_lines_ = tinted (borders_, Qt::white);
     rebuild_base ();
   }
 
@@ -582,6 +659,7 @@ protected:
     scaled_key_.clear ();
     projected_key_.clear ();
     grid_key_.clear ();
+    if (detail_timer_) detail_timer_->start ();
     update ();
   }
 
@@ -660,6 +738,50 @@ protected:
     QWidget::mouseReleaseEvent (e);
   }
 
+  // the flat map: the picture (sharper where there is one for the
+  // view), the overlays, then the lines
+  void draw_flat (QPainter& p, bool quick)
+  {
+    QRectF const world = world_rect ();
+    QRectF const vis = world & QRectF {rect ()};
+    auto from_rect = [&world, &vis] (QImage const& img) {
+      return QRectF {(vis.left () - world.left ()) / world.width () * img.width (),
+          (vis.top () - world.top ()) / world.height () * img.height (),
+          vis.width () / world.width () * img.width (),
+          vis.height () / world.height () * img.height ()};
+    };
+    p.setRenderHint (QPainter::SmoothPixmapTransform, !quick);
+    if (Countries == style)
+      {
+        // land and sea drawn as shapes: sharp at any zoom
+        p.fillRect (vis, sea_color_);
+        double const s = flat_scale ();
+        QTransform t;
+        t.translate (width () / 2. - clon_ * s, height () / 2. + clat_ * s);
+        t.scale (s, -s);
+        p.save ();
+        p.setRenderHint (QPainter::Antialiasing, !quick);
+        p.setTransform (t, true);
+        p.setPen (Qt::NoPen);
+        p.setBrush (land_color_);
+        p.drawPath (map_vectors ().land);
+        p.restore ();
+      }
+    else
+      {
+        p.drawImage (vis, base_, from_rect (base_));
+        if (detail_.style == style && !detail_.image.isNull ())
+          {
+            auto const tl = to_point (detail_.lat1, detail_.lon0);
+            auto const br = to_point (detail_.lat0, detail_.lon1);
+            p.drawImage (QRectF {tl, br}, detail_.image);
+          }
+      }
+    auto const& ov = overlay ();
+    p.drawImage (vis, ov, from_rect (ov));
+    draw_lines (p, quick);
+  }
+
   // + - and Fit buttons in the top right corner
   void draw_zoom_buttons (QPainter& p)
   {
@@ -702,31 +824,25 @@ protected:
     if (Flat == projection)
       {
         auto const key = QString {"%1/%2/%3/%4x%5"}.arg (zoom_).arg (clon_).arg (clat_).arg (width ()).arg (height ());
-        if (dragging_ || scaled_key_ != key)
+        if (dragging_)
           {
-            // the part of the world in view, scaled once per view
-            auto const& src = composite ();
-            QRectF const world = world_rect ();
-            QRectF const vis = world & QRectF {rect ()};
-            QRectF const from {(vis.left () - world.left ()) / world.width () * src.width (),
-                (vis.top () - world.top ()) / world.height () * src.height (),
-                vis.width () / world.width () * src.width (),
-                vis.height () / world.height () * src.height ()};
-            if (dragging_)
+            draw_flat (p, true);                 // quick while the map is moving
+          }
+        else
+          {
+            if (scaled_key_ != key)
               {
-                p.drawImage (vis, src, from);       // quick while the map is moving
-              }
-            else
-              {
-                scaled_ = QImage {size (), QImage::Format_ARGB32_Premultiplied};
+                // the view drawn once, then reused until something changes
+                scaled_ = QImage {size () * devicePixelRatioF (), QImage::Format_ARGB32_Premultiplied};
+                scaled_.setDevicePixelRatio (devicePixelRatioF ());
                 scaled_.fill (Qt::transparent);
                 QPainter sp {&scaled_};
-                sp.setRenderHint (QPainter::SmoothPixmapTransform);
-                sp.drawImage (vis, src, from);
+                sp.setRenderHint (QPainter::Antialiasing);
+                draw_flat (sp, false);
                 scaled_key_ = key;
               }
+            p.drawImage (0, 0, scaled_);
           }
-        if (!dragging_) p.drawImage (0, 0, scaled_);
       }
     else
       {
@@ -741,6 +857,7 @@ protected:
             if (projected_key_ != key) {project (); projected_key_ = key; projected_pan_ = az_pan_;}
             p.drawImage (0, 0, projected_);
           }
+        if (!dragging_) draw_lines (p, false);
       }
     if (grid != NoGrid) draw_grid (p, r);
 
@@ -1125,21 +1242,11 @@ private:
       case Terrain:
         if (terrain_.isNull ()) {base_ = countries_; break;}
         base_ = terrain_.convertToFormat (QImage::Format_ARGB32_Premultiplied);
-        {
-          QPainter p {&base_};
-          p.setOpacity (0.35);
-          p.drawImage (base_.rect (), border_lines_);
-        }
         break;
 
       case Satellite:
         if (day_.isNull ()) {base_ = countries_; break;}
         base_ = day_.convertToFormat (QImage::Format_ARGB32_Premultiplied);
-        {
-          QPainter p {&base_};
-          p.setOpacity (0.45);
-          p.drawImage (base_.rect (), border_lines_);
-        }
         break;
 
       case DayNight:
@@ -1163,26 +1270,24 @@ private:
                 }
             }
           base_ = base_.convertToFormat (QImage::Format_ARGB32_Premultiplied);
-          QPainter p {&base_};
-          p.setRenderHint (QPainter::SmoothPixmapTransform);
-          p.setOpacity (0.4);
-          p.drawImage (base_.rect (), border_lines_);
         }
         break;
       }
+    if (DayNight == style && detail_.style == DayNight) blend_detail ();    // the gray line has moved
     changed ();
   }
 
-  // the flat picture with the shading, rain and aurora on it
-  QImage const& composite ()
+  // the shading, rain, propagation and aurora on a clear picture of the
+  // whole world, drawn over whichever map is under it
+  QImage const& overlay ()
   {
-    if (composite_.isNull ())
+    if (overlay_.isNull ())
       {
-        composite_ = base_.convertToFormat (QImage::Format_ARGB32_Premultiplied);
-        if (composite_.constBits () == base_.constBits ()) composite_ = base_.copy ();
-        QPainter p {&composite_};
+        overlay_ = QImage {2048, 1024, QImage::Format_ARGB32_Premultiplied};
+        overlay_.fill (Qt::transparent);
+        QPainter p {&overlay_};
         p.setRenderHint (QPainter::SmoothPixmapTransform);
-        auto const all = composite_.rect ();
+        auto const all = overlay_.rect ();
         // the day/night picture already shows the night side
         if (gray_line && style != DayNight)
           {
@@ -1195,7 +1300,247 @@ private:
         if (show_prop && !prop_.isNull ()) p.drawImage (all, prop_);
         if (show_aurora && !aurora_.isNull ()) p.drawImage (all, aurora_);
       }
+    return overlay_;
+  }
+
+  // the whole world: map and overlays together
+  QImage const& composite ()
+  {
+    if (composite_.isNull ())
+      {
+        composite_ = base_.convertToFormat (QImage::Format_ARGB32_Premultiplied);
+        if (composite_.constBits () == base_.constBits ()) composite_ = base_.copy ();
+        QPainter p {&composite_};
+        p.setRenderHint (QPainter::SmoothPixmapTransform);
+        p.drawImage (composite_.rect (), overlay ());
+      }
     return composite_;
+  }
+
+  // ---- sharper pictures when zoomed in: NASA GIBS (public) ----
+  struct Detail
+  {
+    QImage image;
+    double lon0 {0}, lat0 {0}, lon1 {0}, lat1 {0};
+    int style {-1};
+    double ppd {0};                    // pixels per degree
+  };
+
+  // the longitudes and latitudes in view, or false when the whole world is
+  bool view_bounds (double& lon0, double& lat0, double& lon1, double& lat1) const
+  {
+    if (Flat == projection)
+      {
+        double const s = flat_scale ();
+        lon0 = qMax (-180., clon_ - width () / 2. / s);
+        lon1 = qMin (180., clon_ + width () / 2. / s);
+        lat0 = qMax (-90., clat_ - height () / 2. / s);
+        lat1 = qMin (90., clat_ + height () / 2. / s);
+        return true;
+      }
+    // centred: look at points over the widget
+    lon0 = lat0 = 1e9;
+    lon1 = lat1 = -1e9;
+    int const n = 24;
+    for (int i = 0; i <= n; ++i)
+      {
+        for (int j = 0; j <= n; ++j)
+          {
+            double lat, lon;
+            if (!from_point (QPointF {width () * i / double (n), height () * j / double (n)}, lat, lon)) continue;
+            lon0 = qMin (lon0, lon); lon1 = qMax (lon1, lon);
+            lat0 = qMin (lat0, lat); lat1 = qMax (lat1, lat);
+          }
+      }
+    if (lon1 <= lon0 || lat1 <= lat0) return false;
+    // round a pole or across the date line: take every longitude
+    if (lon1 - lon0 > 200.) {lon0 = -180.; lon1 = 180.;}
+    return true;
+  }
+
+  double view_ppd () const
+  {
+    double const dpr = devicePixelRatioF ();
+    return (Flat == projection ? flat_scale () : az_radius () / 180.) * dpr;
+  }
+
+  QString gibs_url (QString const& layer, double lon0, double lat0, double lon1, double lat1, int w, int h) const
+  {
+    QUrlQuery q;
+    q.addQueryItem ("SERVICE", "WMS");
+    q.addQueryItem ("REQUEST", "GetMap");
+    q.addQueryItem ("VERSION", "1.3.0");
+    q.addQueryItem ("LAYERS", layer);
+    q.addQueryItem ("STYLES", "");
+    q.addQueryItem ("CRS", "EPSG:4326");
+    // WMS 1.3.0 with EPSG:4326 takes latitude first
+    q.addQueryItem ("BBOX", QString {"%1,%2,%3,%4"}.arg (lat0, 0, 'f', 4).arg (lon0, 0, 'f', 4).arg (lat1, 0, 'f', 4).arg (lon1, 0, 'f', 4));
+    q.addQueryItem ("WIDTH", QString::number (w));
+    q.addQueryItem ("HEIGHT", QString::number (h));
+    q.addQueryItem ("FORMAT", "image/jpeg");
+    QUrl url {"https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi"};
+    url.setQuery (q);
+    return url.toString ();
+  }
+
+  void request_detail ()
+  {
+    if (Countries == style || zoom_ < 1.6)
+      {
+        // the whole world's pictures are sharp enough
+        if (!detail_.image.isNull ()) {detail_ = Detail {}; view_changed_keep_detail ();}
+        return;
+      }
+    double lon0, lat0, lon1, lat1;
+    if (!view_bounds (lon0, lat0, lon1, lat1)) return;
+    double const v_lon0 = lon0, v_lon1 = lon1, v_lat0 = lat0, v_lat1 = lat1;
+    // a margin round the view so a little panning needs nothing new
+    double const mx = (lon1 - lon0) * 0.15, my = (lat1 - lat0) * 0.15;
+    lon0 = qMax (-180., lon0 - mx); lon1 = qMin (180., lon1 + mx);
+    lat0 = qMax (-90., lat0 - my); lat1 = qMin (90., lat1 + my);
+    double use_ppd = view_ppd ();
+    int w = qRound ((lon1 - lon0) * use_ppd), h = qRound ((lat1 - lat0) * use_ppd);
+    int const biggest = 4096;
+    if (qMax (w, h) > biggest)
+      {
+        use_ppd *= double (biggest) / qMax (w, h);
+        w = qRound ((lon1 - lon0) * use_ppd);
+        h = qRound ((lat1 - lat0) * use_ppd);
+      }
+    // already have it?
+    if (detail_.style == style && !detail_.image.isNull () && detail_.ppd >= use_ppd * 0.85
+        && detail_.lon0 <= v_lon0 && detail_.lon1 >= v_lon1 && detail_.lat0 <= v_lat0 && detail_.lat1 >= v_lat1) return;
+    if (w < 16 || h < 16) return;
+    QStringList layers;
+    if (Terrain == style) layers << "BlueMarble_ShadedRelief_Bathymetry";
+    else layers << "BlueMarble_NextGeneration";
+    if (DayNight == style) layers << "VIIRS_Black_Marble";
+    for (auto& r : detail_replies_) if (r) r->abort ();
+    detail_replies_.clear ();
+    auto pending = std::make_shared<QVector<QImage>> (layers.size ());
+    auto left = std::make_shared<int> (layers.size ());
+    int const for_style = style;
+    for (int i = 0; i < layers.size (); ++i)
+      {
+        QNetworkRequest req {QUrl {gibs_url (layers[i], lon0, lat0, lon1, lat1, w, h)}};
+        req.setRawHeader ("User-Agent", http_user_agent ().toUtf8 ());
+        auto * reply = net_->get (req);
+        detail_replies_ << reply;
+        QObject::connect (reply, &QNetworkReply::finished, this, [=] {
+            reply->deleteLater ();
+            if (QNetworkReply::NoError == reply->error ()) (*pending)[i].loadFromData (reply->readAll ());
+            if (--*left) return;
+            if (for_style != style) return;
+            for (auto const& img : *pending) if (img.isNull ()) return;     // offline: keep the whole-world pictures
+            detail_ = Detail {};
+            detail_.lon0 = lon0; detail_.lon1 = lon1; detail_.lat0 = lat0; detail_.lat1 = lat1;
+            detail_.style = for_style;
+            detail_.ppd = use_ppd;
+            detail_day_ = (*pending)[0].convertToFormat (QImage::Format_RGB32);
+            detail_night_ = pending->size () > 1 ? (*pending)[1].convertToFormat (QImage::Format_RGB32) : QImage {};
+            if (DayNight == for_style) blend_detail ();
+            else detail_.image = detail_day_.convertToFormat (QImage::Format_ARGB32_Premultiplied);
+            view_changed_keep_detail ();
+          });
+      }
+  }
+
+  // day and night pictures of the part in view, blended across the gray line
+  void blend_detail ()
+  {
+    if (detail_day_.isNull () || detail_night_.isNull () || shade_.isEmpty ()) return;
+    int const W = detail_day_.width (), H = detail_day_.height ();
+    auto const night = detail_night_.scaled (W, H);
+    QImage out {W, H, QImage::Format_RGB32};
+    for (int y = 0; y < H; ++y)
+      {
+        double const lat = detail_.lat1 - (y + 0.5) / H * (detail_.lat1 - detail_.lat0);
+        int const sy = qBound (0, static_cast<int> (90. - lat), 179);
+        auto const * d = reinterpret_cast<QRgb const *> (detail_day_.constScanLine (y));
+        auto const * n = reinterpret_cast<QRgb const *> (night.constScanLine (y));
+        auto * o = reinterpret_cast<QRgb *> (out.scanLine (y));
+        for (int x = 0; x < W; ++x)
+          {
+            double const lon = detail_.lon0 + (x + 0.5) / W * (detail_.lon1 - detail_.lon0);
+            int const sx = qBound (0, static_cast<int> (lon + 180.), 359);
+            double const f = shade_[sy * 360 + sx];
+            o[x] = qRgb (static_cast<int> (qRed (d[x]) * (1 - f) + qRed (n[x]) * f),
+                         static_cast<int> (qGreen (d[x]) * (1 - f) + qGreen (n[x]) * f),
+                         static_cast<int> (qBlue (d[x]) * (1 - f) + qBlue (n[x]) * f));
+          }
+      }
+    detail_.image = out.convertToFormat (QImage::Format_ARGB32_Premultiplied);
+  }
+
+  void view_changed_keep_detail ()
+  {
+    scaled_key_.clear ();
+    projected_key_.clear ();
+    update ();
+  }
+
+  // coastlines, borders and (zoomed in) state lines, sharp at any zoom
+  void draw_lines (QPainter& p, bool quick)
+  {
+    auto const& v = map_vectors ();
+    bool const plain = Countries == style;
+    QColor const coast = plain ? border_color_ : QColor {255, 255, 255, 120};
+    QColor border = plain ? border_color_ : QColor {255, 255, 255, 150};
+    QColor state = plain ? border_color_ : QColor {255, 255, 255, 90};
+    if (plain) state.setAlphaF (0.45);
+    bool const states = zoom_ >= 2.5;
+    p.save ();
+    p.setRenderHint (QPainter::Antialiasing, !quick);
+    p.setBrush (Qt::NoBrush);
+    if (Flat == projection)
+      {
+        double const s = flat_scale ();
+        QTransform t;
+        t.translate (width () / 2. - clon_ * s, height () / 2. + clat_ * s);
+        t.scale (s, -s);
+        p.setTransform (t, true);
+        auto pen_for = [] (QColor const& c, double w) {QPen pen {c, w}; pen.setCosmetic (true); return pen;};
+        p.setPen (pen_for (coast, 0.9));
+        for (auto const& l : v.lines[0]) p.drawPolyline (l);
+        p.setPen (pen_for (border, 1.0));
+        for (auto const& l : v.lines[1]) p.drawPolyline (l);
+        if (states)
+          {
+            p.setPen (pen_for (state, 0.7));
+            for (auto const& l : v.lines[2]) p.drawPolyline (l);
+          }
+      }
+    else
+      {
+        auto const key = QString {"%1/%2,%3/%4x%5/%6,%7/%8"}.arg (zoom_).arg (az_pan_.x ()).arg (az_pan_.y ())
+          .arg (width ()).arg (height ()).arg (centre_lat ()).arg (centre_lon ()).arg (states);
+        if (key != az_lines_key_)
+          {
+            az_lines_key_ = key;
+            for (int k = 0; k < 3; ++k)
+              {
+                az_lines_[k] = QPainterPath {};
+                if (2 == k && !states) continue;
+                for (auto const& l : v.lines[k])
+                  {
+                    QVector<QPointF> pts;
+                    pts.reserve (l.size ());
+                    for (auto const& pt : l) pts << to_point (pt.y (), pt.x ());
+                    add_line (az_lines_[k], pts);
+                  }
+              }
+          }
+        p.setPen (QPen {coast, 0.9});
+        p.drawPath (az_lines_[0]);
+        p.setPen (QPen {border, 1.0});
+        p.drawPath (az_lines_[1]);
+        if (states)
+          {
+            p.setPen (QPen {state, 0.7});
+            p.drawPath (az_lines_[2]);
+          }
+      }
+    p.restore ();
   }
 
   double centre_lat () const {return qIsNaN (my_lat_) ? 0. : my_lat_;}
@@ -1205,16 +1550,15 @@ private:
   // pixel goes where is worked out once for each size
   void project ()
   {
-    auto const& src = composite ();
-    int const W = src.width (), H = src.height ();
     int const w = width (), h = height ();
-    auto const lut_key = QString {"%1/%2,%3/%4x%5/%6,%7/%8x%9"}.arg (zoom_).arg (az_pan_.x ()).arg (az_pan_.y ())
-      .arg (w).arg (h).arg (centre_lat ()).arg (centre_lon ()).arg (W).arg (H);
+    auto const lut_key = QString {"%1/%2,%3/%4x%5/%6,%7"}.arg (zoom_).arg (az_pan_.x ()).arg (az_pan_.y ())
+      .arg (w).arg (h).arg (centre_lat ()).arg (centre_lon ());
     if (lut_key_ != lut_key)
       {
-        // which source pixel goes where, worked out once for each view
+        // where on Earth each pixel is, worked out once for each view
         lut_key_ = lut_key;
-        lut_.resize (w * h);
+        lut_lat_.resize (w * h);
+        lut_lon_.resize (w * h);
         double const p0 = rad (centre_lat ()), l0 = rad (centre_lon ());
         double const sp0 = std::sin (p0), cp0 = std::cos (p0);
         auto const c = az_centre ();
@@ -1225,28 +1569,60 @@ private:
               {
                 double const dx = (x + 0.5 - c.x ()) / R, dy = (y + 0.5 - c.y ()) / R;
                 double const rho = std::sqrt (dx * dx + dy * dy);
-                if (rho > 1.) {lut_[y * w + x] = -1; continue;}
-                double const cc_ = rho * pi, az = std::atan2 (dx, -dy);
-                double const sc = std::sin (cc_), cc = std::cos (cc_);
+                if (rho > 1.) {lut_lat_[y * w + x] = 999.f; continue;}
+                double const ang = rho * pi, az = std::atan2 (dx, -dy);
+                double const sc = std::sin (ang), cc = std::cos (ang);
                 double const lat = std::asin (qBound (-1., sp0 * cc + cp0 * sc * std::cos (az), 1.));
-                double lon = l0 + std::atan2 (std::sin (az) * sc * cp0, cc - sp0 * std::sin (lat));
-                double lon_deg = std::fmod (deg (lon) + 540., 360.) - 180.;
-                int const sx = qBound (0, static_cast<int> ((lon_deg + 180.) / 360. * W), W - 1);
-                int const sy = qBound (0, static_cast<int> ((90. - deg (lat)) / 180. * H), H - 1);
-                lut_[y * w + x] = sy * W + sx;
+                double const lon = l0 + std::atan2 (std::sin (az) * sc * cp0, cc - sp0 * std::sin (lat));
+                lut_lat_[y * w + x] = static_cast<float> (deg (lat));
+                lut_lon_[y * w + x] = static_cast<float> (std::fmod (deg (lon) + 540., 360.) - 180.);
               }
           }
       }
+    auto const& base = base_;
+    auto const& ov = overlay ();
+    bool const sharp = detail_.style == style && !detail_.image.isNull ();
+    int const BW = base.width (), BH = base.height ();
+    int const OW = ov.width (), OH = ov.height ();
+    int const DW = sharp ? detail_.image.width () : 0, DH = sharp ? detail_.image.height () : 0;
     projected_ = QImage {w, h, QImage::Format_ARGB32_Premultiplied};
     projected_.fill (Qt::transparent);
-    auto const * in = reinterpret_cast<QRgb const *> (src.constBits ());
+    auto const * bin = reinterpret_cast<QRgb const *> (base.constBits ());
+    auto const * oin = reinterpret_cast<QRgb const *> (ov.constBits ());
+    auto const * din = sharp ? reinterpret_cast<QRgb const *> (detail_.image.constBits ()) : nullptr;
     for (int y = 0; y < h; ++y)
       {
         auto * out = reinterpret_cast<QRgb *> (projected_.scanLine (y));
         for (int x = 0; x < w; ++x)
           {
-            int const i = lut_[y * w + x];
-            if (i >= 0) out[x] = in[i];
+            float const lat = lut_lat_[y * w + x];
+            if (lat > 900.f) continue;
+            float const lon = lut_lon_[y * w + x];
+            QRgb c;
+            if (din && lon >= detail_.lon0 && lon < detail_.lon1 && lat > detail_.lat0 && lat <= detail_.lat1)
+              {
+                int const sx = qBound (0, static_cast<int> ((lon - detail_.lon0) / (detail_.lon1 - detail_.lon0) * DW), DW - 1);
+                int const sy = qBound (0, static_cast<int> ((detail_.lat1 - lat) / (detail_.lat1 - detail_.lat0) * DH), DH - 1);
+                c = din[sy * DW + sx];
+              }
+            else
+              {
+                int const sx = qBound (0, static_cast<int> ((lon + 180.f) / 360.f * BW), BW - 1);
+                int const sy = qBound (0, static_cast<int> ((90.f - lat) / 180.f * BH), BH - 1);
+                c = bin[sy * BW + sx];
+              }
+            // the overlays on top (premultiplied "over")
+            int const ox = qBound (0, static_cast<int> ((lon + 180.f) / 360.f * OW), OW - 1);
+            int const oy = qBound (0, static_cast<int> ((90.f - lat) / 180.f * OH), OH - 1);
+            QRgb const o = oin[oy * OW + ox];
+            int const a = qAlpha (o);
+            if (a)
+              {
+                int const ia = 255 - a;
+                c = qRgba (qRed (o) + qRed (c) * ia / 255, qGreen (o) + qGreen (c) * ia / 255,
+                           qBlue (o) + qBlue (c) * ia / 255, 255);
+              }
+            out[x] = c | 0xFF000000u;
           }
       }
   }
@@ -1478,9 +1854,7 @@ private:
   }
 
   QImage land_;
-  QImage borders_;
   QImage countries_;
-  QImage border_lines_;
   QImage day_;
   QImage night_lights_;
   QImage day_small_;
@@ -1493,8 +1867,21 @@ private:
   QImage projected_;
   QString projected_key_;
   QPointF projected_pan_;
-  QVector<int> lut_;
+  QVector<float> lut_lat_;
+  QVector<float> lut_lon_;
   QString lut_key_;
+  QImage overlay_;
+  QColor sea_color_;
+  QColor land_color_;
+  QColor border_color_;
+  QNetworkAccessManager * net_;
+  QTimer * detail_timer_;
+  Detail detail_;
+  QImage detail_day_;
+  QImage detail_night_;
+  QVector<QPointer<QNetworkReply>> detail_replies_;
+  QString az_lines_key_;
+  QPainterPath az_lines_[3];
   double zoom_ {1.};
   double clon_ {0.};
   double clat_ {12.};
@@ -3008,7 +3395,7 @@ void ConditionsWindow::request (QString const& url, void (ConditionsWindow::*han
           update_bands ();
           schedule_voacap ();             // the solar flux sets VOACAP's sunspot number
           QString text = tr ("Space weather and aurora: NOAA Space Weather Prediction Center, updated %1 UTC. "
-                             "Sun: NASA SDO. Maps: NASA Blue Marble and Black Marble, Natural Earth; rain and snow: NASA GIBS.")
+                             "Sun: NASA SDO. Maps: NASA Blue Marble and Black Marble, NASA GIBS when zoomed, Natural Earth; rain and snow: NASA GIBS.")
             .arg (updated_.toString ("hh:mm"));
           if (overlay_status_.size ()) text += ' ' + overlay_status_;
           if (failed_) text += ' ' + tr ("(%n item(s) couldn't be reached; will try again in 15 minutes)", "", failed_);
@@ -3360,7 +3747,8 @@ void ConditionsWindow::run_area ()
   map_->prop_label = tr ("Working out %1 m\u2026").arg (VoacapGrid::band_name (prop_band_));
   map_->update ();
   int const band = prop_band_;
-  QString const label = tr ("%1 m from you \u00B7 %2 W %3 \u00B7 %4 UTC").arg (VoacapGrid::band_name (band)).arg (watts)
+  QString const label = tr ("%1 m %2 \u00B7 %3 W %4 \u00B7 %5 UTC").arg (VoacapGrid::band_name (band))
+    .arg (long_path ? tr ("long path") : tr ("from you")).arg (watts)
     .arg (voacap_mode_->currentText ()).arg (hour % 24, 2, 10, QChar {'0'});
   area_process_ = new QProcess {this};
   area_process_->setWorkingDirectory (root + "/run");
@@ -3395,6 +3783,7 @@ void ConditionsWindow::on_area (QString const& path, QString const& label)
   int const rel_end = header.indexOf ("   REL") + 6;
   if (rel_end < 6) return;
   int const N = 121;
+  double best = 0.;
   QImage img {N, N, QImage::Format_ARGB32_Premultiplied};
   img.fill (Qt::transparent);
   while (!file.atEnd ())
@@ -3408,13 +3797,16 @@ void ConditionsWindow::on_area (QString const& path, QString const& label)
       if (!ok1 || !ok2 || !ok3) continue;
       int const x = qBound (0, qRound ((lon + 180.) / 360. * (N - 1)), N - 1);
       int const y = qBound (0, qRound ((90. - lat) / 180. * (N - 1)), N - 1);
-      if (rel < 0.03) continue;
+      if (rel < 0.02) continue;
       QColor c = VoacapGrid_colour (rel);
-      c.setAlphaF (0.12 + 0.42 * rel);
+      c.setAlphaF (qMin (0.82, 0.42 + 0.45 * rel));     // bright and solid, the map still showing a little
+      best = qMax (best, rel);
       img.setPixel (x, y, qPremultiply (c.rgba ()));
     }
-  map_->prop_label = label;
-  map_->set_prop (img);
+  // say how good the best of it is: long path is often weak everywhere
+  map_->prop_label = label + tr (" \u00B7 best %1%").arg (qRound (best * 100));
+  // smoothed so the edges are soft rather than blocky
+  map_->set_prop (img.scaled (N * 4, N * 4, Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
 }
 
 QString ConditionsWindow::voacap_root ()
