@@ -78,6 +78,13 @@ public:
   void setColours(QVector<QColor> const& cl);
   void setTimestamp(int n);
   void setBars(bool b);
+  // how the waterfall is drawn: 0 Classic, 1 SDR (big spectrum over the
+  // waterfall), 2 3D (rows of peaks going back in time)
+  void setDisplayStyle (int style);
+  int displayStyle () const {return m_displayStyle;}
+  // the line across the waterfall at the start of each period
+  void setPeriodLines (bool on) {m_periodLines = on;}
+  bool periodLines () const {return m_periodLines;}
   void showFreq(bool b);
   void setFlatten(bool b1, bool b2);
   void setTol(int n);
@@ -212,6 +219,16 @@ private:
 
 private slots:
   void leaveEvent(QEvent *event) override;
+
+private:
+  void paint_sdr (QPainter&, QRect const& panel);
+  void paint_3d (QPainter&);
+  int m_displayStyle {0};
+  bool m_periodLines {true};
+  QVector<float> m_specY;              // the spectrum now, for SDR
+  QVector<float> m_peakY;              // its slowly falling peaks
+  struct Row3D {QVector<uchar> v; int floor; int marker; QString stamp;};
+  QList<Row3D> m_rows3D;               // newest first, for 3D
 
 };
 

@@ -568,6 +568,14 @@ MainWindow::MainWindow(QDir const& temp_directory, bool multiple,
   m_useDarkStyle {false}
 {
   ui->setupUi(this);
+  // panel titles in small capitals, like the cards in the Conditions window
+  for (auto * title : {ui->lh_decodes_title_label, ui->rh_decodes_title_label})
+    {
+      auto f = title->font ();
+      f.setCapitalization (QFont::AllUppercase);
+      f.setLetterSpacing (QFont::PercentageSpacing, 108);
+      title->setFont (f);
+    }
   setUnifiedTitleAndToolBarOnMac (true);
   createStatusBar();
   add_child_to_event_filter (this);

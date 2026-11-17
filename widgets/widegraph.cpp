@@ -1,4 +1,5 @@
 #include "widegraph.h"
+#include <QComboBox>
 
 #include <algorithm>
 #include <QApplication>
@@ -74,6 +75,30 @@ WideGraph::WideGraph(QSettings * settings, QWidget *parent) :
     row->addWidget (m_fitBand);
     ui->verticalLayout_3->insertLayout (index < 0 ? 0 : index, row);
   }
+  // how the waterfall is drawn, next to the palette
+  m_displayStyle = new QComboBox {ui->controls_widget};
+  m_displayStyle->setObjectName ("displayStyleComboBox");
+  m_displayStyle->addItem (tr ("Classic"));
+  m_displayStyle->addItem (tr ("SDR"));
+  m_displayStyle->addItem (tr ("3D"));
+  m_displayStyle->setToolTip (tr ("<p>How the waterfall is drawn:</p>"
+                                  "<p><b>Classic:</b> the waterfall with the spectrum under it.</p>"
+                                  "<p><b>SDR:</b> a big spectrum with a grid and peak hold, the waterfall under it. "
+                                  "The Spec % setting sets how tall the spectrum is.</p>"
+                                  "<p><b>3D:</b> signals stand up as peaks, newest in front, older rows going back in time.</p>"));
+  ui->horizontalLayout->insertWidget (0, m_displayStyle);
+  ui->adjust_palette_push_button->setMaximumWidth (QWIDGETSIZE_MAX);   // room for its text with the rounder buttons
+  // the line across the waterfall at the start of each period
+  m_periodLines = new QCheckBox {tr ("Lines"), ui->controls_widget};
+  m_periodLines->setObjectName ("cbPeriodLines");
+  m_periodLines->setToolTip (tr ("Draw a line across the waterfall at the start of each period (red after you transmitted)"));
+  ui->horizontalLayout_2->addWidget (m_periodLines);
+  connect (m_displayStyle, static_cast<void (QComboBox::*) (int)> (&QComboBox::currentIndexChanged), this, [this] (int i) {
+      ui->widePlot->setDisplayStyle (i);
+    });
+  connect (m_periodLines, &QCheckBox::toggled, this, [this] (bool on) {
+      ui->widePlot->setPeriodLines (on);
+    });
   m_fitTimer = new QTimer {this};
   m_fitTimer->setSingleShot (true);
   m_fitTimer->setInterval (150);
@@ -148,6 +173,10 @@ WideGraph::WideGraph(QSettings * settings, QWidget *parent) :
     setRxRange ();
     m_controlsScroll->setVisible(!m_settings->value("HideControls",false).toBool());
     m_fitBand->setChecked (m_settings->value ("FitBand", true).toBool ());
+    m_displayStyle->setCurrentIndex (qBound (0, m_settings->value ("DisplayStyle", 0).toInt (), 2));
+    ui->widePlot->setDisplayStyle (m_displayStyle->currentIndex ());
+    m_periodLines->setChecked (m_settings->value ("PeriodLines", true).toBool ());
+    ui->widePlot->setPeriodLines (m_periodLines->isChecked ());
     ui->bppSpinBox->setEnabled (!m_fitBand->isChecked ());
     ui->cbControls->setChecked(!m_settings->value("HideControls",false).toBool());
   }
@@ -206,6 +235,8 @@ void WideGraph::saveSettings()                                           //saveS
   m_settings->setValue ("HideControls", m_controlsScroll->isHidden ());
   m_settings->setValue ("FitBand", m_fitBand->isChecked ());
   m_settings->setValue ("Timestamp",m_timestamp);
+  m_settings->setValue ("DisplayStyle", m_displayStyle->currentIndex ());
+  m_settings->setValue ("PeriodLines", m_periodLines->isChecked ());
   m_settings->setValue ("Bars", m_bars);
   m_settings->setValue ("Freq", m_freq);
   m_settings->setValue ("FminPerBand", m_fMinPerBand);

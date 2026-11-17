@@ -46,6 +46,9 @@ public:
   static QString controlBackground ();  // normal button face
   static QString controlBorder ();      // normal button border
   static QString inputBackground ();    // line edit / combo face
+  // any colour of the scheme in use: bg, layer, card, ctrl, ctrl_hover,
+  // border, border_strong, text, text_secondary, accent, accent_text, input
+  static QString token (QString const& name);
 
 protected:
   bool eventFilter (QObject *, QEvent *) override;

@@ -933,6 +933,12 @@ set (PALETTE_FILES
   Palettes/Yellow1.pal
   Palettes/Yellow2.pal
   Palettes/ZL1FZ.pal
+  Palettes/Ocean.pal
+  Palettes/Inferno.pal
+  Palettes/Aurora.pal
+  Palettes/NightVision.pal
+  Palettes/Mono.pal
+  Palettes/Violet.pal
 )
 
 if (APPLE)

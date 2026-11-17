@@ -109,6 +109,8 @@ private:
 
   QScopedPointer<Ui::WideGraph> ui;
   QScrollArea * m_controlsScroll {nullptr};
+  class QComboBox * m_displayStyle;
+  QCheckBox * m_periodLines;
   QCheckBox * m_fitBand {nullptr};
   QTimer * m_fitTimer {nullptr};
 

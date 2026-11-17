@@ -9,6 +9,7 @@
 #include <QPointF>
 #include <QString>
 #include <QColor>
+#include <QStringList>
 #include <QtNumeric>
 #include <functional>
 
@@ -23,6 +24,11 @@ class QMenu;
 class QVBoxLayout;
 class XRayGraph;
 class SunImage;
+class CallSign;
+class QButtonGroup;
+class QProgressBar;
+class QAbstractButton;
+class QLabel;
 
 //
 // ConditionsWindow - a separate window with space weather and band
@@ -62,6 +68,8 @@ public:
   // uses the same colours as Band Activity
   void set_highlight_colors (QColor const& cq, QColor const& my_call, QColor const& tx);
 
+  Q_SIGNAL void call_colors_changed ();
+
   // double-clicking a dot on the map
   Q_SIGNAL void station_double_clicked (QString const& call, Qt::KeyboardModifiers);
 
@@ -78,6 +86,12 @@ private:
   QWidget * build_map_bar ();
   // a box that can be switched on and off from the Boxes menu
   QFrame * make_box (QString const& key, QString const& title, QVBoxLayout *& body);
+  QLabel * box_title (QString const& title, QWidget * parent);
+  QAbstractButton * make_chip (QString const& text, QString const& tip, QWidget * parent);
+  QWidget * make_segments (QStringList const& labels, QStringList const& tips, QButtonGroup *& group, QWidget * parent);
+  void show_call_colors ();
+  void save_call_colors ();
+  void apply_call_colors ();
   void add_box_action (QString const& key, QString const& text);
   void update_containers ();
   void fetch_sun ();
@@ -109,7 +123,11 @@ private:
   struct Tile {QLabel * value; QLabel * caption; QLabel * note;};
   QHash<QString, Tile> tiles_;
   QLabel * band_cells_[4][2] {};
-  QLabel * call_label_;
+  CallSign * call_label_;
+  bool call_auto_ {true};
+  QColor call_first_;
+  QColor call_second_;
+  bool call_gradient_ {true};
   QLabel * utc_clock_;
   QLabel * utc_date_;
   QLabel * local_clock_;
@@ -117,7 +135,9 @@ private:
   QLabel * dx_info_;
   XRayGraph * xray_graph_;
   SunImage * sun_image_;
-  class QComboBox * sun_channel_;
+  QButtonGroup * sun_group_;
+  QStringList sun_channels_;
+  QProgressBar * beacon_bar_;
   QTimer * sun_timer_;
   QLabel * beacon_rows_[5] {};
   QLabel * beacon_next_;
@@ -129,13 +149,13 @@ private:
   QWidget * left_column_;
   QLabel * status_;
   QTimer * overlay_timer_ {nullptr};
-  class QComboBox * style_box_;
-  class QCheckBox * gray_box_;
-  class QComboBox * projection_box_;
+  QButtonGroup * style_group_;
+  QAbstractButton * gray_box_;
+  QButtonGroup * projection_group_;
   class QComboBox * grid_box_;
-  class QCheckBox * beacons_box_;
-  class QCheckBox * aurora_box_;
-  class QCheckBox * rain_box_;
+  QAbstractButton * beacons_box_;
+  QAbstractButton * aurora_box_;
+  QAbstractButton * rain_box_;
   class QCheckBox * show_cq_;
   class QCheckBox * show_me_;
   class QCheckBox * show_called_;

@@ -7,6 +7,12 @@
 #include <QEvent>
 #include <QWidget>
 #include <QHash>
+#include <QLabel>
+#include <QDir>
+#include <QFile>
+#include <QImage>
+#include <QPainter>
+#include <QRegularExpression>
 
 #ifdef Q_OS_WIN
 #include <QLibrary>
@@ -45,17 +51,17 @@ namespace
   };
 
   Tokens const dark_tokens {
-    "#202020", "#1C1C1C", "#2B2B2B", "#2D2D2D", "#373737", "#272727",
-    "#3A3A3A", "#4D4D4D", "#FFFFFF", "#C5C5C5", "#7A7A7A",
-    "#60CDFF", "#5AB9E6", "#4FA6CE", "#000000",
-    "#1F1F1F", "#6E6E6E", "#0F5A84"
+    "#0F1115", "#13161B", "#181B21", "#20242C", "#282D37", "#1B1F26",
+    "#2A2F39", "#3A404C", "#E9ECF1", "#8A93A3", "#5A6170",
+    "#4CC2FF", "#6BCDFF", "#3AA9E6", "#06121C",
+    "#1C2027", "#3A404C", "#1D4A66"
   };
 
   Tokens const light_tokens {
-    "#F3F3F3", "#EBEBEB", "#FFFFFF", "#FBFBFB", "#F5F5F5", "#EDEDED",
-    "#E1E1E1", "#C6C6C6", "#1B1B1B", "#5C5C5C", "#A3A3A3",
-    "#005FB8", "#1A70C4", "#2F7FCB", "#FFFFFF",
-    "#FFFFFF", "#9A9A9A", "#CDE4F7"
+    "#EEF1F5", "#E6EAF0", "#FFFFFF", "#F4F6F9", "#E9EDF3", "#DFE4EC",
+    "#E2E6EC", "#C9D0DA", "#16191F", "#6B7484", "#A6ADB9",
+    "#0A6CFF", "#2B80FF", "#0858D1", "#FFFFFF",
+    "#FFFFFF", "#B8C0CC", "#CFE0FF"
   };
 
   // more colour schemes, same token order as above
@@ -116,18 +122,85 @@ namespace
   // Parts of the main window set their own colours with fixed values
   // written for the plain Light and Dark schemes. In the other schemes
   // those values are swapped for the scheme's own as they are applied.
-  QString remap_sheet (QString sheet)
+  // softer versions of the strong colours the program sets for states
+  // (transmitting, alerts and so on), so they sit well with the cards
+  QString soften (QString sheet)
   {
-    if (current_scheme <= 1) return sheet;
-    auto const& t = current_tokens ();
     QList<QPair<QString, QString>> const map {
-      {"#3A3A3A", t.ctrl}, {"#4D4D4D", t.border_strong}, {"#F0F0F0", t.text},
-      {"#1F1F1F", t.input}, {"#2D2D2D", t.ctrl}, {"#373737", t.ctrl_hover},
-      {"#202020", t.bg}, {"#2B2B2B", t.card},
-      {"#e1e1e1", t.ctrl}, {"#adadad", t.border_strong},
+      {"#ff0000", "#E5484D"}, {"background-color: red", "background-color: #E5484D"},
+      {"background-color:red", "background-color:#E5484D"},
+      {"#ffff00", "#F5C542"}, {"background-color: yellow", "background-color: #F5C542"},
+      {"#6CCB5F", "#3FB950"}, {"#00ffff", "#4CD6E8"}, {"#66ffff", "#4CD6E8"},
+      {"#99ffff", "#7FDCEB"}, {"background-color: cyan", "background-color: #4CD6E8"},
     };
     for (auto const& p : map) sheet.replace (p.first, p.second, Qt::CaseInsensitive);
     return sheet;
+  }
+
+  QString remap_sheet (QString sheet, QWidget * w = nullptr)
+  {
+    auto const& t = current_tokens ();
+    // rounder corners, no old 3D outset borders
+    sheet.replace (QRegularExpression {"border-radius:\\s*\\d+px"}, "border-radius: 9px");
+    sheet.replace (QRegularExpression {"border-style:\\s*outset;?"}, "");
+    sheet.replace (QRegularExpression {"border-color:\\s*black;?"}, "border-color: transparent;");
+    sheet = soften (sheet);
+    // the selected band button takes the scheme's accent colour
+    if (w && QRegularExpression {"^pb\\d+$"}.match (w->objectName ()).hasMatch () && sheet.contains ("#3FB950"))
+      {
+        sheet.replace ("#3FB950", t.accent).replace ("#000000", t.accent_text);
+      }
+    // the dial frequency and clock displays get rounded corners
+    if (w && (w->objectName () == "labDialFreq" || w->objectName () == "labUTC"))
+      {
+        sheet += " QLabel {border-radius: 12px; padding: 2px 10px;}";
+      }
+    // coloured labels in the status bar become pills
+    if (w && qobject_cast<QLabel *> (w) && w->parentWidget () && w->parentWidget ()->inherits ("QStatusBar")
+        && sheet.contains ("background-color"))
+      {
+        sheet += " QLabel {border-radius: 9px; padding: 1px 10px; font-weight: 600;}";
+      }
+    QList<QPair<QString, QString>> const map {
+      {"#3A3A3A", t.ctrl}, {"#4D4D4D", t.border}, {"#F0F0F0", t.text},
+      {"#1F1F1F", t.input}, {"#2D2D2D", t.ctrl}, {"#373737", t.ctrl_hover},
+      {"#202020", t.bg}, {"#2B2B2B", t.card},
+      {"#e1e1e1", t.ctrl}, {"#adadad", t.border},
+    };
+    for (auto const& p : map) sheet.replace (p.first, p.second, Qt::CaseInsensitive);
+    return sheet;
+  }
+
+  // check boxes are drawn as sliding switches; the pictures are made for
+  // the scheme in use, as its accent colour changes
+  QString switch_image (Tokens const& t, bool on, bool disabled)
+  {
+    static int const W = 60, H = 34;      // twice size, for sharp screens
+    QDir const dir {QDir::tempPath () + "/kf0kyldigi-theme"};
+    dir.mkpath (".");
+    auto const name = dir.filePath (QString {"switch_%1_%2_%3_%4.png"}
+                                    .arg (QString {t.accent}.mid (1)).arg (QString {t.border_strong}.mid (1))
+                                    .arg (on ? "on" : "off").arg (disabled ? "dis" : "en"));
+    if (!QFile::exists (name))
+      {
+        QImage img {W, H, QImage::Format_ARGB32_Premultiplied};
+        img.fill (Qt::transparent);
+        QPainter p {&img};
+        p.setRenderHint (QPainter::Antialiasing);
+        QColor track = on ? QColor {t.accent} : QColor {t.border_strong};
+        QColor knob = on ? QColor {t.accent_text} : QColor {t.text_secondary};
+        if (on) knob = QColor {"#FFFFFF"};
+        if (disabled) {track.setAlpha (90); knob.setAlpha (120);}
+        p.setPen (Qt::NoPen);
+        p.setBrush (track);
+        p.drawRoundedRect (QRectF {1, 1, W - 2., H - 2.}, (H - 2) / 2., (H - 2) / 2.);
+        p.setBrush (knob);
+        double const d = H - 10.;
+        p.drawEllipse (QRectF {on ? W - 5. - d : 5., 5., d, d});
+        p.end ();
+        img.save (name);
+      }
+    return QString {name}.replace ('\\', '/');
   }
 
   // %1 style tokens are replaced by name, see fill() below
@@ -141,44 +214,40 @@ QWidget {
 QWidget:disabled { color: @text_disabled; }
 QLabel, QCheckBox, QRadioButton { background: transparent; }
 
-QMainWindow::separator { background: @bg; width: 6px; height: 6px; }
+QMainWindow::separator { background: @bg; width: 8px; height: 8px; }
 
 /* ---- menus ---- */
-QMenuBar { background: @bg; padding: 2px 4px; }
-QMenuBar::item { background: transparent; padding: 5px 10px; border-radius: 5px; }
-QMenuBar::item:selected { background: @ctrl_hover; }
-QMenuBar::item:pressed { background: @ctrl_press; }
+QMenuBar { background: @bg; padding: 4px 6px; color: @text_secondary; }
+QMenuBar::item { background: transparent; padding: 5px 11px; border-radius: 8px; color: @text_secondary; }
+QMenuBar::item:selected { background: @ctrl; color: @text; }
+QMenuBar::item:pressed { background: @ctrl_hover; color: @text; }
 QMenu {
   background: @card;
   border: 1px solid @border;
-  border-radius: 8px;
-  padding: 4px;
+  border-radius: 12px;
+  padding: 6px;
 }
-QMenu::item { padding: 6px 28px 6px 24px; border-radius: 4px; background: transparent; }
+QMenu::item { padding: 7px 28px 7px 26px; border-radius: 8px; background: transparent; }
 QMenu::item:selected { background: @ctrl_hover; }
 QMenu::item:disabled { color: @text_disabled; }
-QMenu::separator { height: 1px; background: @border; margin: 4px 6px; }
+QMenu::separator { height: 1px; background: @border; margin: 5px 8px; }
 
-/* ---- buttons ---- */
+/* ---- buttons: soft rounded, no hard bottom edge ---- */
 QPushButton, QToolButton {
   background-color: @ctrl;
   color: @text;
   border: 1px solid @border;
-  border-bottom-color: @border_strong;
-  border-radius: 5px;
-  padding: 4px 6px;
+  border-radius: 9px;
+  padding: 5px 10px;
   min-height: 18px;
 }
-QPushButton:hover, QToolButton:hover { background-color: @ctrl_hover; }
-QPushButton:pressed, QToolButton:pressed {
-  background-color: @ctrl_press;
-  color: @text_secondary;
-  border-bottom-color: @border;
-}
+QPushButton:hover, QToolButton:hover { background-color: @ctrl_hover; border-color: @border_strong; }
+QPushButton:pressed, QToolButton:pressed { background-color: @ctrl_press; color: @text_secondary; }
 QPushButton:checked, QToolButton:checked {
   background-color: @accent;
   color: @accent_text;
-  border: 1px solid @accent_press;
+  border: 1px solid @accent;
+  font-weight: 600;
 }
 QPushButton:checked:hover, QToolButton:checked:hover { background-color: @accent_hover; }
 QPushButton:disabled, QToolButton:disabled {
@@ -187,24 +256,29 @@ QPushButton:disabled, QToolButton:disabled {
   border-color: @border;
 }
 QPushButton:default { border: 1px solid @accent; }
-QToolButton { padding: 3px 6px; }
+QToolButton { padding: 4px 9px; }
+QToolButton::menu-indicator { image: url(:/win11/down_@theme.png); width: 9px; height: 9px; subcontrol-position: right center; right: 6px; }
+QToolButton[popupMode="2"] { padding-right: 22px; }
+/* Halt Tx always reads as a stop button */
+QPushButton#stopTxButton { color: #FF6B6B; border: 1px solid rgba(229, 72, 77, 150); background-color: rgba(229, 72, 77, 28); }
+QPushButton#stopTxButton:hover { background-color: rgba(229, 72, 77, 60); }
+QLabel#lh_decodes_title_label, QLabel#rh_decodes_title_label { color: @text_secondary; font-weight: 600; }
 
 /* ---- text inputs ---- */
 QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QDateTimeEdit, QDateEdit, QTimeEdit {
   background-color: @input;
   color: @text;
   border: 1px solid @border;
-  border-bottom: 1px solid @border_strong;
-  border-radius: 4px;
-  padding: 2px 4px;
+  border-radius: 8px;
+  padding: 3px 7px;
   min-height: 20px;
 }
 QLineEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover, QComboBox:hover,
-QDateTimeEdit:hover { background-color: @ctrl_hover; }
+QDateTimeEdit:hover { border-color: @border_strong; }
 QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus,
 QDateTimeEdit:focus {
   background-color: @input;
-  border-bottom: 2px solid @accent;
+  border: 1px solid @accent;
 }
 QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabled {
   color: @text_disabled;
@@ -213,7 +287,7 @@ QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabl
 QComboBox QAbstractItemView {
   background: @card;
   border: 1px solid @border;
-  border-radius: 6px;
+  border-radius: 10px;
   padding: 4px;
   outline: 0;
   selection-background-color: @ctrl_hover;
@@ -225,172 +299,168 @@ QSpinBox, QDoubleSpinBox, QDateTimeEdit, QDateEdit, QTimeEdit { padding-right: 2
 QAbstractSpinBox::up-button {
   subcontrol-origin: border; subcontrol-position: top right;
   width: 18px; border: none; background: transparent;
-  margin: 2px 2px 0 0; border-radius: 3px;
+  margin: 2px 3px 0 0; border-radius: 5px;
 }
 QAbstractSpinBox::down-button {
   subcontrol-origin: border; subcontrol-position: bottom right;
   width: 18px; border: none; background: transparent;
-  margin: 0 2px 2px 0; border-radius: 3px;
+  margin: 0 3px 2px 0; border-radius: 5px;
 }
 QAbstractSpinBox::up-button:hover, QAbstractSpinBox::down-button:hover { background: @ctrl_hover; }
 QAbstractSpinBox::up-arrow { image: url(:/win11/up_@theme.png); width: 10px; height: 10px; }
 QAbstractSpinBox::down-arrow { image: url(:/win11/down_@theme.png); width: 10px; height: 10px; }
 QAbstractSpinBox::up-arrow:disabled, QAbstractSpinBox::up-arrow:off,
 QAbstractSpinBox::down-arrow:disabled, QAbstractSpinBox::down-arrow:off { image: none; }
-QComboBox { padding-right: 16px; }
+QComboBox { padding-right: 18px; }
 QComboBox::drop-down {
   subcontrol-origin: padding; subcontrol-position: top right;
-  width: 16px; border: none; background: transparent;
+  width: 18px; border: none; background: transparent;
 }
 QComboBox::down-arrow { image: url(:/win11/down_@theme.png); width: 10px; height: 10px; }
 
-/* ---- check boxes and radio buttons ---- */
-QCheckBox, QRadioButton { spacing: 6px; }
-QCheckBox::indicator {
-  width: 16px; height: 16px;
-  border: 1px solid @border_strong; border-radius: 4px;
-  background: @input;
-}
-QCheckBox::indicator:hover { background: @ctrl_hover; }
-QCheckBox::indicator:checked, QCheckBox::indicator:indeterminate {
-  background: @accent; border-color: @accent;
-  image: url(:/win11/check_@theme.png);
-}
-QCheckBox::indicator:checked:hover { background: @accent_hover; border-color: @accent_hover; }
-QCheckBox::indicator:disabled { background: @ctrl_press; border-color: @border; }
-QCheckBox::indicator:checked:disabled { background: @text_disabled; border-color: @text_disabled; }
+/* ---- check boxes are sliding switches ---- */
+QCheckBox, QRadioButton { spacing: 7px; }
+QCheckBox::indicator { width: 30px; height: 17px; border: none; background: transparent; image: url(@switch_off); }
+QCheckBox::indicator:checked, QCheckBox::indicator:indeterminate { image: url(@switch_on); }
+QCheckBox::indicator:disabled { image: url(@switch_dis_off); }
+QCheckBox::indicator:checked:disabled { image: url(@switch_dis_on); }
 QRadioButton::indicator {
   width: 16px; height: 16px;
-  border: 1px solid @border_strong; border-radius: 9px;
-  background: @input;
+  border: 2px solid @border_strong; border-radius: 10px;
+  background: transparent;
 }
-QRadioButton::indicator:hover { background: @ctrl_hover; }
+QRadioButton::indicator:hover { border-color: @text_secondary; }
 QRadioButton::indicator:checked {
   width: 8px; height: 8px;
-  border: 5px solid @accent; border-radius: 9px;
+  border: 6px solid @accent; border-radius: 10px;
   background: @accent_text;
 }
 QRadioButton::indicator:disabled { border-color: @border; }
 
-/* ---- text areas, lists, tables ---- */
+/* ---- text areas, lists, tables: cards ---- */
 QTextEdit, QPlainTextEdit, QTextBrowser, QListView, QListWidget, QTreeView,
 QTableView, QTableWidget {
   background-color: @card;
   color: @text;
   border: 1px solid @border;
-  border-radius: 8px;
-  padding: 2px;
+  border-radius: 12px;
+  padding: 4px;
 }
 QHeaderView::section {
-  background-color: @layer;
+  background-color: @card;
   color: @text_secondary;
   border: none;
   border-bottom: 1px solid @border;
-  border-right: 1px solid @border;
-  padding: 4px 6px;
+  padding: 5px 7px;
+  font-weight: 600;
 }
-QTableCornerButton::section { background: @layer; border: none; }
+QTableCornerButton::section { background: @card; border: none; }
 
-/* ---- tabs ---- */
+/* ---- tabs: pills ---- */
 QTabWidget::pane {
   background: @card;
   border: 1px solid @border;
-  border-radius: 8px;
-  top: -1px;
+  border-radius: 12px;
+  top: 4px;
 }
 QTabBar { background: transparent; }
 QTabBar::tab {
   background: transparent;
   color: @text_secondary;
   padding: 6px 14px;
-  margin-right: 2px;
+  margin: 2px 3px 2px 0;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-radius: 9px;
 }
-QTabBar::tab:hover { color: @text; background: @ctrl_hover; border-top-left-radius: 5px; border-top-right-radius: 5px; }
-QTabBar::tab:selected { color: @text; border-bottom: 2px solid @accent; }
+QTabBar::tab:hover { color: @text; background: @ctrl; }
+QTabBar::tab:selected { color: @accent_text; background: @accent; font-weight: 600; }
 
-/* ---- grouping ---- */
+/* ---- grouping: cards ---- */
 QGroupBox {
   background-color: @card;
   border: 1px solid @border;
-  border-radius: 8px;
-  margin-top: 16px;
-  padding: 10px 6px 6px 6px;
+  border-radius: 14px;
+  margin-top: 20px;
+  padding: 12px 8px 8px 8px;
 }
 QGroupBox::title {
   subcontrol-origin: margin;
   subcontrol-position: top left;
-  left: 10px;
+  left: 12px;
   padding: 0 4px;
   color: @text_secondary;
   background: transparent;
+  font-weight: 600;
 }
 QFrame[frameShape="4"], QFrame[frameShape="5"] { color: @border; }  /* HLine / VLine */
 
-/* ---- scroll bars (thin, Windows 11 style) ---- */
-QScrollBar:vertical { background: transparent; width: 12px; margin: 2px; }
-QScrollBar:horizontal { background: transparent; height: 12px; margin: 2px; }
-QScrollBar::handle:vertical { background: @scroll_thumb; min-height: 28px; border-radius: 4px; margin: 0 2px; }
-QScrollBar::handle:horizontal { background: @scroll_thumb; min-width: 28px; border-radius: 4px; margin: 2px 0; }
+/* ---- scroll bars: thin ---- */
+QScrollBar:vertical { background: transparent; width: 10px; margin: 3px; }
+QScrollBar:horizontal { background: transparent; height: 10px; margin: 3px; }
+QScrollBar::handle:vertical { background: @scroll_thumb; min-height: 28px; border-radius: 3px; margin: 0 1px; }
+QScrollBar::handle:horizontal { background: @scroll_thumb; min-width: 28px; border-radius: 3px; margin: 1px 0; }
 QScrollBar::handle:hover { background: @text_secondary; }
 QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; border: none; background: none; }
 QScrollBar::add-page, QScrollBar::sub-page { background: none; }
 
 /* ---- sliders ---- */
-QSlider::groove:horizontal { height: 4px; background: @border_strong; border-radius: 2px; }
-QSlider::groove:vertical { width: 4px; background: @border_strong; border-radius: 2px; }
+QSlider::groove:horizontal { height: 4px; background: @border; border-radius: 2px; }
+QSlider::groove:vertical { width: 4px; background: @border; border-radius: 2px; }
 QSlider::sub-page:horizontal { background: @accent; border-radius: 2px; }
 QSlider::add-page:vertical { background: @accent; border-radius: 2px; }
 QSlider::handle:horizontal {
-  background: @accent; border: 4px solid @ctrl;
-  width: 10px; height: 10px; margin: -7px 0; border-radius: 9px;
+  background: #FFFFFF; border: 1px solid @border_strong;
+  width: 14px; height: 14px; margin: -6px 0; border-radius: 8px;
 }
 QSlider::handle:vertical {
-  background: @accent; border: 4px solid @ctrl;
-  width: 10px; height: 10px; margin: 0 -7px; border-radius: 9px;
+  background: #FFFFFF; border: 1px solid @border_strong;
+  width: 14px; height: 14px; margin: 0 -6px; border-radius: 8px;
 }
-QSlider::handle:hover { border-width: 3px; }
+QSlider::handle:hover { border-color: @accent; }
 
-/* ---- progress ---- */
+/* ---- progress: slim gradient bar ---- */
 QProgressBar {
-  background-color: @border;
+  background-color: @ctrl;
   color: @text;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   text-align: center;
-  min-height: 14px;
+  min-height: 12px;
 }
-QProgressBar::chunk { background-color: @accent; border-radius: 4px; }
+QProgressBar::chunk { background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 @accent, stop:1 #7C5CFF); border-radius: 6px; }
 
 /* ---- splitters ---- */
 QSplitter::handle { background: transparent; border-radius: 3px; }
 QSplitter::handle:vertical { height: 8px; image: url(:/win11/grip_h_@theme.png); }
 QSplitter::handle:horizontal { width: 8px; image: url(:/win11/grip_v_@theme.png); }
-QSplitter::handle:hover { background: @border_strong; }
+QSplitter::handle:hover { background: @border; }
 QSplitter::handle:pressed { background: @accent; }
 
 /* ---- status bar & tooltips ---- */
-QStatusBar { background: @layer; border-top: 1px solid @border; }
+QStatusBar { background: @bg; border: none; }
 QStatusBar::item { border: none; }
-QStatusBar QLabel { padding: 0 6px; }
+QStatusBar QLabel { padding: 1px 8px; }
 QToolTip {
   background-color: @card;
   color: @text;
-  border: 1px solid @border;
-  border-radius: 4px;
-  padding: 4px 6px;
+  border: 1px solid @border_strong;
+  border-radius: 10px;
+  padding: 6px 9px;
 }
 
 /* ---- dialogs ---- */
 QDialog { background-color: @bg; }
-QDialogButtonBox QPushButton { min-width: 72px; }
+QDialogButtonBox QPushButton { min-width: 76px; }
 )QSS";
 
   QString fill (Tokens const& t, QString const& theme)
   {
     QString s {qss_template};
     s.replace ("@theme", theme);
+    s.replace ("@switch_dis_off", switch_image (t, false, true));
+    s.replace ("@switch_dis_on", switch_image (t, true, true));
+    s.replace ("@switch_off", switch_image (t, false, false));
+    s.replace ("@switch_on", switch_image (t, true, false));
     // longest names first so that e.g. @accent_text is not clobbered by @accent
     QList<QPair<QString, QString>> const map {
       {"@border_strong", t.border_strong},
@@ -511,7 +581,7 @@ void Win11Theme::applyScheme (int scheme, QFont const& font, QString const& extr
       auto const original = w->property ("w11_original").toString ();
       if (!original.isEmpty ())
         {
-          auto const mapped = remap_sheet (original);
+          auto const mapped = remap_sheet (original, w);
           w->setProperty ("w11_applied", mapped);
           w->setStyleSheet (mapped);
         }
@@ -547,6 +617,24 @@ void Win11Theme::updateTitleBar (QWidget * w)
 #endif
 }
 
+QString Win11Theme::token (QString const& name)
+{
+  auto const& t = current_tokens ();
+  if (name == "bg") return t.bg;
+  if (name == "layer") return t.layer;
+  if (name == "card") return t.card;
+  if (name == "ctrl") return t.ctrl;
+  if (name == "ctrl_hover") return t.ctrl_hover;
+  if (name == "border") return t.border;
+  if (name == "border_strong") return t.border_strong;
+  if (name == "text") return t.text;
+  if (name == "text_secondary") return t.text_secondary;
+  if (name == "accent") return t.accent;
+  if (name == "accent_text") return t.accent_text;
+  if (name == "input") return t.input;
+  return t.text;
+}
+
 QString Win11Theme::controlBackground ()
 {
   return current_tokens ().ctrl;
@@ -564,30 +652,20 @@ QString Win11Theme::inputBackground ()
 
 bool Win11Theme::eventFilter (QObject * obj, QEvent * e)
 {
-  if (e->type () == QEvent::StyleChange && current_scheme > 1)
+  if (e->type () == QEvent::StyleChange)
     {
-      if (auto * w = qobject_cast<QWidget *> (obj))
+      auto * w = qobject_cast<QWidget *> (obj);
+      // widgets that style themselves fully (the Conditions window) opt out
+      if (w && !w->property ("w11_keep").toBool () && w->window ()->objectName () != "ConditionsWindow")
         {
           auto const sheet = w->styleSheet ();
           if (!sheet.isEmpty () && sheet != w->property ("w11_applied").toString ())
             {
-              // a new sheet from the program: keep the original, apply the remapped one
+              // a new sheet from the program: keep the original, apply the modern one
               w->setProperty ("w11_original", sheet);
-              auto const mapped = remap_sheet (sheet);
+              auto const mapped = remap_sheet (sheet, w);
               w->setProperty ("w11_applied", mapped);
               if (mapped != sheet) w->setStyleSheet (mapped);
-            }
-        }
-    }
-  else if (e->type () == QEvent::StyleChange)
-    {
-      if (auto * w = qobject_cast<QWidget *> (obj))
-        {
-          auto const sheet = w->styleSheet ();
-          if (!sheet.isEmpty () && sheet != w->property ("w11_applied").toString ())
-            {
-              w->setProperty ("w11_original", sheet);
-              w->setProperty ("w11_applied", sheet);
             }
         }
     }

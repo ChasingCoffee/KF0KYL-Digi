@@ -1,4 +1,9 @@
 #include "plotter.h"
+#include <algorithm>
+#include <QPainterPath>
+#include <QPolygonF>
+#include <QLinearGradient>
+#include <QFontMetricsF>
 #include <math.h>
 #include <QAction>
 #include <QMenu>
@@ -129,9 +134,22 @@ void CPlotter::paintEvent(QPaintEvent *)                                // paint
   if(m_paintEventBusy) return;
   m_paintEventBusy=true;
   QPainter painter(this);
+  if (2 == m_displayStyle) {
+    paint_3d (painter);
+    m_lastPaintedX = m_lastMouseX;
+    m_paintEventBusy=false;
+    return;
+  }
   painter.drawPixmap(0,0,m_ScalePixmap);
-  painter.drawPixmap(0,30,m_WaterfallPixmap);
-  painter.drawPixmap(0,m_h1,m_2DPixmap);
+  if (1 == m_displayStyle) {
+    // SDR: a big spectrum under the scale, the waterfall below it
+    int const sh = qBound (60, m_h2, qMax (60, m_h - 60));
+    paint_sdr (painter, QRect {0, 30, m_w, sh});
+    painter.drawPixmap(0, 30 + sh, m_WaterfallPixmap);
+  } else {
+    painter.drawPixmap(0,30,m_WaterfallPixmap);
+    painter.drawPixmap(0,m_h1,m_2DPixmap);
+  }
   int x = XfromFreq(m_rxFreq);
   if (m_bars) {
     painter.drawPixmap(0,30,m_DialOverlayPixmap);
@@ -203,14 +221,33 @@ void CPlotter::draw(float swide[], bool bScroll, bool bRed)
     plotsave_(swide,&m_w,&m_h1,&irow);
   }
   ymin = 0;
+  bool const marker = swide[0] > 1.e29;
+  Row3D row3d;
+  row3d.marker = marker ? (swide[0] > 1.4e30 ? 2 : 1) : 0;
+  row3d.floor = 0;
+  if (!m_bReplot && bScroll) row3d.v.resize (iz);
   for(int i=0; i<iz; i++) {
     y=swide[i];
     int y1 = 10.0*gain*y + m_plotZero;
     if (y1<0) y1=0;
     if (y1>254) y1=254;
+    if (!marker && row3d.v.size ()) row3d.v[i] = static_cast<uchar> (y1);
+    if (marker && !m_periodLines) continue;      // the period line is switched off
     if (swide[i]<1.e29) painter1.setPen(g_ColorTbl[y1]);
     painter1.drawPoint(i,m_j);
   }
+  if (row3d.v.size ())
+    {
+      // the noise level of the row, so the 3D peaks stand on a flat floor
+      if (!marker)
+        {
+          auto copy = row3d.v;
+          std::nth_element (copy.begin (), copy.begin () + copy.size () / 2, copy.end ());
+          row3d.floor = copy[copy.size () / 2];
+        }
+      m_rows3D.prepend (row3d);
+      while (m_rows3D.size () > 160) m_rows3D.removeLast ();
+    }
   m_line++;
 
   float y2min=1.e30;
@@ -253,6 +290,11 @@ void CPlotter::draw(float swide[], bool bScroll, bool bRed)
     }
     LineBuf[j].setX(i);
     LineBuf[j].setY(int(0.9*m_h2-y2*m_h2/70.0));
+    if (bScroll && !m_bReplot) {
+      if (m_specY.size () != iz) {m_specY.fill (0.f, iz); m_peakY.fill (0.f, iz);}
+      m_specY[i] = y2;
+      m_peakY[i] = qMax (y2, m_peakY[i] - 0.35f);    // peaks fall slowly
+    }
     if(y2<y2min) y2min=y2;
     if(y2>y2max) y2max=y2;
     j++;
@@ -279,6 +321,8 @@ void CPlotter::draw(float swide[], bool bScroll, bool bRed)
     QRect rect{5, 0, m_w-10, painter1.fontMetrics().height()};
     QRect boundingRect;
     painter1.drawText(rect, m_timestamp==2?0x0082:0x0081,t, &boundingRect);
+    // the same label on the period's line in 3D
+    for (auto& r : m_rows3D) if (r.marker) {r.stamp = t; break;}
   }
 
   if(m_mode=="JT4" or (m_mode=="Q65" and m_nSubMode>=3)) {
@@ -1069,6 +1113,167 @@ void CPlotter::restartTotalPower()
 void CPlotter::setTimestamp(int n)
 {
     m_timestamp=n;
+}
+
+void CPlotter::setDisplayStyle (int style)
+{
+  m_displayStyle = qBound (0, style, 2);
+  update ();
+}
+
+void CPlotter::paint_sdr (QPainter& p, QRect const& panel)
+{
+  p.save ();
+  p.setClipRect (panel);
+  p.fillRect (panel, QColor {14, 16, 22});
+  p.setRenderHint (QPainter::Antialiasing);
+  QColor const grid {40, 44, 54};
+  p.setPen (QPen {grid, 1});
+  for (int k = 1; k < 5; ++k) {
+    double const y = panel.top () + panel.height () * k / 5.;
+    p.drawLine (QPointF {double (panel.left ()), y}, QPointF {double (panel.right ()), y});
+  }
+  int const step = 500;
+  for (int f = (m_startFreq / step + 1) * step; f < m_fMax; f += step) {
+    int const x = XfromFreq (f);
+    p.drawLine (x, panel.top (), x, panel.bottom ());
+  }
+  int const n = qMin (m_specY.size (), m_w);
+  if (n > 1) {
+    auto y_of = [&panel] (float y2) {
+      return qBound (double (panel.top () + 2), panel.top () + 0.9 * panel.height () - y2 * panel.height () / 70.0,
+                     double (panel.bottom ()));
+    };
+    QPolygonF line, peak;
+    line.reserve (n);
+    peak.reserve (n);
+    for (int i = 0; i < n; ++i) {
+      line << QPointF {double (i), y_of (m_specY[i])};
+      peak << QPointF {double (i), y_of (m_peakY[i])};
+    }
+    QPolygonF area = line;
+    area << QPointF {double (n - 1), double (panel.bottom ())} << QPointF {0., double (panel.bottom ())};
+    QLinearGradient fill {QPointF {0., double (panel.top ())}, QPointF {0., double (panel.bottom ())}};
+    fill.setColorAt (0, QColor {76, 194, 255, 120});
+    fill.setColorAt (1, QColor {76, 194, 255, 15});
+    p.setPen (Qt::NoPen);
+    p.setBrush (fill);
+    p.drawPolygon (area);
+    p.setBrush (Qt::NoBrush);
+    p.setPen (QPen {QColor {255, 170, 60, 200}, 1.});
+    p.drawPolyline (peak);
+    p.setPen (QPen {QColor {235, 240, 250}, 1.2});
+    p.drawPolyline (line);
+  }
+  p.restore ();
+}
+
+void CPlotter::paint_3d (QPainter& p)
+{
+  // newest row in front, older rows going back toward the horizon
+  QColor const bg {4, 6, 14};
+  p.fillRect (rect (), bg);
+  p.setRenderHint (QPainter::Antialiasing);
+  int const step = 2;                  // every other row
+  int const depth_rows = 64;
+  double const cx = m_w / 2.;
+  double const base = m_h - 18.;
+  double const depth = m_h * 0.55;
+  double const shrink = 0.45;
+  double const tall = m_h * 0.42;
+  auto X = [&] (double x, double z) {return cx + (x - cx) * (1. - shrink * z);};
+  QColor const floor_color {30, 40, 70};
+  p.setPen (QPen {floor_color, 1});
+  for (int k = 0; k <= 8; ++k) {
+    double const z = k / 8.;
+    double const y = base - z * depth;
+    p.drawLine (QPointF {X (0, z), y}, QPointF {X (m_w, z), y});
+  }
+  auto font = p.font ();
+  font.setPointSizeF (8.);
+  p.setFont (font);
+  for (int f = (m_startFreq / 500 + 1) * 500; f < m_fMax; f += 500) {
+    double const x = XfromFreq (f);
+    p.setPen (QPen {floor_color, 1});
+    p.drawLine (QPointF {X (x, 0), base}, QPointF {X (x, 1), base - depth});
+    p.setPen (QColor {110, 120, 150});
+    p.drawText (QPointF {x - 12, base + 13}, QString::number (f));
+  }
+  int const rows = qMin (depth_rows, m_rows3D.size () / step);
+  struct Label {double x; double y; QString text; int marker;};
+  QVector<Label> labels;
+  for (int k = rows - 1; k >= 0; --k) {
+    // a period line falls on one row; don't skip it when skipping rows
+    int idx = k * step;
+    for (int j = 0; j < step && k * step + j < m_rows3D.size (); ++j) {
+      if (m_rows3D[k * step + j].marker) {idx = k * step + j; break;}
+    }
+    auto const& row = m_rows3D[idx];
+    double const z = double (k) / depth_rows;
+    double const y = base - z * depth;
+    double const fade = 1. - 0.55 * z;
+    if (row.marker) {
+      if (m_periodLines) {
+        p.setPen (QPen {row.marker == 2 ? QColor {229, 72, 77, 200} : QColor {150, 160, 190, 200}, 1.2});
+        p.drawLine (QPointF {X (0, z), y}, QPointF {X (m_w, z), y});
+      }
+      // the time stamp is kept on the line, found among the next rows too
+      QString stamp = row.stamp;
+      if (m_timestamp && stamp.size ()) labels << Label {m_timestamp == 2 ? X (m_w, z) : X (0, z), y, stamp, row.marker};
+      continue;
+    }
+    if (row.v.isEmpty ()) continue;
+    int const n = qMin (row.v.size (), m_w);
+    double const scale = tall * (1. - 0.4 * z) / qMax (40, 254 - row.floor);
+    QPolygonF pts;
+    pts.reserve (n / 2 + 3);
+    for (int i = 0; i < n; i += 2) {
+      int const v = row.v[i];
+      pts << QPointF {X (i, z), y - qMax (0, v - row.floor - 12) * scale};
+    }
+    QPolygonF shape = pts;
+    shape << QPointF {X (n - 1, z), y + 1} << QPointF {X (0, z), y + 1};
+    p.setPen (Qt::NoPen);
+    p.setBrush (bg);
+    p.drawPolygon (shape);
+    // the floor line in the palette's quiet colour, signals in theirs
+    QColor quiet = g_ColorTbl.value (qMin (254, row.floor + 30), QColor {40, 50, 90});
+    quiet.setAlphaF (0.55 * fade);
+    p.setBrush (Qt::NoBrush);
+    p.setPen (QPen {quiet, 1});
+    p.drawPolyline (pts);
+    for (int i = 0, j = 0; i + 2 < n; i += 2, ++j) {
+      int const v = qMax (row.v[i], row.v[i + 2]);
+      if (v < row.floor + 24) continue;
+      QColor c = g_ColorTbl.value (qMin (254, v + 30), Qt::white);
+      c = QColor::fromRgbF (c.redF () * fade + 0.0, c.greenF () * fade, c.blueF () * fade);
+      p.setPen (QPen {c, 1.5});
+      p.drawLine (pts[j], pts[j + 1]);
+    }
+  }
+  // Rx and Tx markers running back through the rows
+  for (auto const& m : {qMakePair (XfromFreq (m_rxFreq), QColor {63, 185, 80}), qMakePair (XfromFreq (m_txFreq), QColor {229, 72, 77})}) {
+    p.setPen (QPen {m.second, 1.5});
+    p.drawLine (QPointF {X (m.first, 0), base}, QPointF {X (m.first, 1), base - depth});
+  }
+  // time stamps on top of everything so peaks never cover them
+  auto bold = font;
+  bold.setBold (true);
+  bold.setPointSizeF (8.5);
+  p.setFont (bold);
+  QFontMetricsF fm {bold};
+  for (auto const& l : labels) {
+    double const w = fm.boundingRect (l.text).width ();
+    double const x = m_timestamp == 2 ? qMin (l.x - w - 4, m_w - w - 4.) : qMax (l.x + 4, 4.);
+    QPainterPath path;
+    path.addText (QPointF {x, l.y - 4}, bold, l.text);
+    p.setPen (QPen {QColor {0, 0, 0, 200}, 3});
+    p.setBrush (Qt::NoBrush);
+    p.drawPath (path);
+    p.setPen (Qt::NoPen);
+    p.setBrush (QColor {230, 232, 240});
+    p.drawPath (path);
+  }
 }
 
 void CPlotter::setBars(bool b)
