@@ -186,6 +186,7 @@ private:
   QButtonGroup * projection_group_;
   class QComboBox * grid_box_;
   QAbstractButton * beacons_box_;
+  QAbstractButton * cities_box_;
   QAbstractButton * aurora_box_;
   QAbstractButton * rain_box_;
   class QCheckBox * show_cq_;

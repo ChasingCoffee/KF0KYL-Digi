@@ -415,11 +415,13 @@ namespace
   QColor VoacapGrid_colour (double v)
   {
     struct Stop {double at; QColor c;};
-    // strong, saturated colours: violet, blue, green, yellow, red
-    static Stop const stops[] = {{0., QColor {110, 40, 255}}, {0.3, QColor {0, 120, 255}}, {0.55, QColor {0, 230, 110}},
-                                 {0.75, QColor {255, 225, 0}}, {1., QColor {255, 40, 40}}};
+    // green is a sure thing (100%), fading through yellow and blue down
+    // to red for no chance (0%)
+    static Stop const stops[] = {{0., QColor {255, 40, 40}}, {0.33, QColor {0, 120, 255}},
+                                 {0.66, QColor {255, 225, 0}}, {1., QColor {0, 230, 70}}};
+    int const last = sizeof stops / sizeof stops[0] - 1;
     v = qBound (0., v, 1.);
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < last; ++i)
       {
         if (v <= stops[i + 1].at)
           {
@@ -430,11 +432,11 @@ namespace
                                      a.blueF () + (b.blueF () - a.blueF ()) * t);
           }
       }
-    return stops[4].c;
+    return stops[last].c;
   }
 
   // places for the names shown when you point at the map
-  struct City {QString name; double lat; double lon;};
+  struct City {QString name; double lat; double lon; QString label; bool capital;};
   QVector<City> const& cities ()
   {
     static QVector<City> list;
@@ -454,7 +456,7 @@ namespace
                 QString name = parts[0];
                 if (parts[1].size () && parts[1] != parts[0]) name += ", " + parts[1];
                 name += ", " + parts[2];
-                list << City {name, parts[3].toDouble (), parts[4].toDouble ()};
+                list << City {name, parts[3].toDouble (), parts[4].toDouble (), parts[0], parts.size () > 6 && parts[6] == "1"};
               }
           }
       }
@@ -515,6 +517,7 @@ public:
   bool show_aurora {false};
   bool show_rain {false};
   bool show_beacons {false};
+  bool show_cities {false};
   bool show_prop {false};
   QString prop_label;                // what the propagation layer shows
   bool show_cq {true};
@@ -868,6 +871,7 @@ protected:
     p.setBrush (QColor {"#FFD54A"});
     p.drawEllipse (sun, 7, 7);
 
+    if (show_cities) draw_cities (p);
     if (show_beacons) draw_beacons (p);
 
     // great circle to the station being worked
@@ -1786,6 +1790,50 @@ private:
               }
           }
       }
+  }
+
+  // city names, biggest first; a name is left out where it would run into
+  // one already drawn, so zooming in shows more of them
+  void draw_cities (QPainter& p)
+  {
+    auto f = font ();
+    f.setPointSizeF (qMax (6.5, f.pointSizeF () * 0.82));
+    QFontMetricsF const fm {f};
+    QRectF const area = QRectF {rect ()}.adjusted (2, 2, -2, -2);
+    QVector<QRectF> used;
+    p.save ();
+    p.setRenderHint (QPainter::Antialiasing);
+    for (auto const& c : cities ())
+      {
+        if (used.size () >= 400) break;
+        auto pt = to_point (c.lat, c.lon);
+        if (Flat == projection)
+          {
+            // the flat map repeats east and west
+            double const span = 360. * flat_scale ();
+            while (pt.x () < area.left ()) pt.rx () += span;
+            while (pt.x () > area.right ()) pt.rx () -= span;
+          }
+        else
+          {
+            double dist, bearing;
+            path_to (centre_lat (), centre_lon (), c.lat, c.lon, dist, bearing);
+            if (dist > pi * 0.995) continue;
+          }
+        if (!area.contains (pt)) continue;
+        QRectF const box {pt.x () - 5, pt.y () - fm.ascent () / 2. - 3, fm.horizontalAdvance (c.label) + 15, fm.height () + 6};
+        if (!area.contains (box)) continue;
+        bool clash = false;
+        for (auto const& u : used) if (u.intersects (box)) {clash = true; break;}
+        if (clash) continue;
+        used << box;
+        p.setPen (QPen {QColor {0, 0, 0, 200}, 1.2});
+        p.setBrush (c.capital ? QColor {"#FFD54A"} : QColor {"#FFFFFF"});
+        if (c.capital) p.drawRect (QRectF {pt.x () - 2.6, pt.y () - 2.6, 5.2, 5.2});
+        else p.drawEllipse (pt, 2.4, 2.4);
+        outlined_text (p, pt + QPointF {6, fm.ascent () / 2. - 1}, c.label, f, QColor {"#FFFFFF"});
+      }
+    p.restore ();
   }
 
   void draw_beacons (QPainter& p)
@@ -2945,7 +2993,7 @@ void ConditionsWindow::build_ui ()
     auto * settings_row = new QHBoxLayout;
     settings_row->setSpacing (4);
     voacap_power_ = new QComboBox {voacap_box};
-    for (int w : {5, 10, 25, 50, 100, 200, 500, 1000, 1500}) voacap_power_->addItem (QString {"%1 W"}.arg (w), w);
+    for (int w : {5, 10, 15, 20, 25, 50, 100, 200, 500, 1000, 1500}) voacap_power_->addItem (QString {"%1 W"}.arg (w), w);
     voacap_power_->setToolTip (tr ("Your transmitter power"));
     voacap_mode_ = new QComboBox {voacap_box};
     // signal to noise each mode needs, in a 1 Hz bandwidth
@@ -3128,11 +3176,12 @@ QWidget * ConditionsWindow::build_map_bar ()
   gray_box_ = make_chip (tr ("Gray line"), tr ("Shade the night side of the Earth"), bar);
   aurora_box_ = make_chip (tr ("Aurora"), tr ("NOAA's 30-minute aurora forecast. Strong aurora can absorb or reflect HF and VHF signals near the poles."), bar);
   rain_box_ = make_chip (tr ("Rain"), tr ("Where it's raining or snowing over the last half hour or so, from NASA satellites"), bar);
+  cities_box_ = make_chip (tr ("Cities"), tr ("Names of cities. Zoom in to see more of them. Capitals have a square."), bar);
   beacons_box_ = make_chip (tr ("Beacons"), tr ("The 18 NCDXF/IARU beacons. The ones sending now are filled in the color of their band."), bar);
   prop_box_ = make_chip (tr ("Propagation"), tr ("<p>VOACAP's map for one band from you: how likely it is to reach each part of the world "
                                                   "this hour, at the power, mode and take-off angle set in the VOACAP box.</p>"
                                                   "<p>Click a band in the VOACAP box to choose it.</p>"), bar);
-  for (auto * b : {gray_box_, aurora_box_, rain_box_, beacons_box_, prop_box_}) row2->addWidget (b);
+  for (auto * b : {gray_box_, aurora_box_, rain_box_, cities_box_, beacons_box_, prop_box_}) row2->addWidget (b);
   row2->addStretch ();
   row1->addStretch ();
   auto * boxes = new QToolButton {bar};
@@ -3164,6 +3213,7 @@ QWidget * ConditionsWindow::build_map_bar ()
   aurora_box_->setChecked (settings_->value ("Aurora", false).toBool ());
   rain_box_->setChecked (settings_->value ("Rain", false).toBool ());
   beacons_box_->setChecked (settings_->value ("Beacons", false).toBool ());
+  cities_box_->setChecked (settings_->value ("Cities", false).toBool ());
   prop_band_ = qBound (0, settings_->value ("PropBand", 4).toInt (), VoacapGrid::bands - 1);     // 20 m
   prop_box_->setChecked (settings_->value ("Propagation", false).toBool ());
   show_cq_->setChecked (settings_->value ("ShowCQ", true).toBool ());
@@ -3179,6 +3229,7 @@ QWidget * ConditionsWindow::build_map_bar ()
     map_->show_aurora = aurora_box_->isChecked ();
     map_->show_rain = rain_box_->isChecked ();
     map_->show_beacons = beacons_box_->isChecked ();
+    map_->show_cities = cities_box_->isChecked ();
     map_->show_prop = prop_box_->isChecked ();
     voacap_grid_->selected = prop_box_->isChecked () ? prop_band_ : -1;
     voacap_grid_->update ();
@@ -3198,7 +3249,7 @@ QWidget * ConditionsWindow::build_map_bar ()
       connect (group, static_cast<void (QButtonGroup::*) (QAbstractButton *)> (&QButtonGroup::buttonClicked), this, apply);
     }
   connect (grid_box_, static_cast<void (QComboBox::*) (int)> (&QComboBox::currentIndexChanged), this, apply);
-  for (auto * box : {gray_box_, beacons_box_, static_cast<QAbstractButton *> (show_cq_), static_cast<QAbstractButton *> (show_me_),
+  for (auto * box : {gray_box_, cities_box_, beacons_box_, static_cast<QAbstractButton *> (show_cq_), static_cast<QAbstractButton *> (show_me_),
                      static_cast<QAbstractButton *> (show_called_), static_cast<QAbstractButton *> (show_others_)})
     {
       connect (box, &QAbstractButton::toggled, this, apply);
@@ -3230,6 +3281,7 @@ void ConditionsWindow::save_map_options ()
   settings_->setValue ("Aurora", aurora_box_->isChecked ());
   settings_->setValue ("Rain", rain_box_->isChecked ());
   settings_->setValue ("Beacons", beacons_box_->isChecked ());
+  settings_->setValue ("Cities", cities_box_->isChecked ());
   settings_->setValue ("Propagation", prop_box_->isChecked ());
   settings_->setValue ("PropBand", prop_band_);
   settings_->setValue ("ShowCQ", show_cq_->isChecked ());
@@ -4012,7 +4064,7 @@ void ConditionsWindow::on_area (QString const& path, QString const& label)
           double const sx = fx, sy = fy;
           double const v = (field[y0 * N + x0] * (1 - sx) + field[y0 * N + x0 + 1] * sx) * (1 - sy)
             + (field[(y0 + 1) * N + x0] * (1 - sx) + field[(y0 + 1) * N + x0 + 1] * sx) * sy;
-          double const a = qBound (0., v / 0.12, 1.) * qMin (0.82, 0.42 + 0.45 * v);
+          double const a = qMin (0.82, 0.30 + 0.52 * v);   // red stays visible where the band is closed
           if (a < 0.004) {out[x] = 0; continue;}
           QColor c = VoacapGrid_colour (v);
           c.setAlphaF (a);
