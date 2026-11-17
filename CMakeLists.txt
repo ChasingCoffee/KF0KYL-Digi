@@ -899,6 +899,8 @@ set (TOP_LEVEL_RESOURCES
   artwork/map_borders.png
   artwork/map_day.jpg
   artwork/map_night.jpg
+  artwork/map_terrain.jpg
+  artwork/map_cities.txt
   )
 
 set (PALETTE_FILES

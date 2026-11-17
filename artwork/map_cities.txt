@@ -1,0 +1,1767 @@
+# Natural Earth populated places (public domain): name, region, country, lat, lon
+Sakarya	Sakarya	Turkey	40.767	30.400
+Umuahia	Abia	Nigeria	5.532	7.486
+Uyo	Akwa Ibom	Nigeria	5.008	7.850
+Shah Alam	Selangor	Malaysia	3.067	101.550
+Zagazig	Ash Sharqiyah	Egypt	30.583	31.517
+Damaturu	Yobe	Nigeria	11.749	11.966
+Dahuk	Dihok	Iraq	36.867	43.000
+Taoyuan	Taoyuan	Taiwan	24.989	121.311
+Glendale	Arizona	United States of America	33.582	-112.196
+Mesa	Arizona	United States of America	33.424	-111.736
+Berkeley	California	United States of America	37.874	-122.271
+Riverside	California	United States of America	33.942	-117.398
+San Mateo	California	United States of America	37.557	-122.313
+Aurora	Colorado	United States of America	39.696	-104.808
+Kansas City	Kansas	United States of America	39.114	-94.630
+Metairie	Louisiana	United States of America	29.984	-90.153
+McAllen	Texas	United States of America	26.203	-98.230
+Pasadena	Texas	United States of America	29.661	-95.148
+Arlington	Texas	United States of America	32.685	-97.020
+Barinas	Barinas	Venezuela	8.600	-70.250
+Cabimas	Trujillo	Venezuela	10.430	-71.450
+Stamford	Connecticut	United States of America	41.053	-73.539
+Springfield	Massachusetts	United States of America	42.120	-72.580
+Salem	Massachusetts	United States of America	42.522	-70.883
+Melbourne	Florida	United States of America	28.083	-80.608
+Sanford	Florida	United States of America	28.790	-81.280
+Miami Beach	Florida	United States of America	25.810	-80.132
+Coral Springs	Florida	United States of America	26.271	-80.271
+Joliet	Illinois	United States of America	41.530	-88.107
+Rockford	Illinois	United States of America	42.270	-89.070
+Evanston	Illinois	United States of America	42.048	-87.700
+Elgin	Illinois	United States of America	42.039	-88.290
+Durham	North Carolina	United States of America	36.000	-78.920
+Barlett	Tennessee	United States of America	35.223	-89.841
+Hampton	Virginia	United States of America	37.030	-76.350
+Allentown	Pennsylvania	United States of America	40.600	-75.500
+Puerto la Cruz	Anzoátegui	Venezuela	10.170	-64.680
+Los Teques	Distrito Capital	Venezuela	10.420	-67.020
+Al Ladhiqiyah	Lattakia (Al Ladhiqiyah)	Syria	35.540	35.780
+Douma	Damascus	Syria	33.583	36.400
+Mykolayiv	Mykolayiv	Ukraine	46.968	31.984
+Chernihiv	Chernihiv	Ukraine	51.505	31.302
+Khmelnytskyy	Khmel'nyts'kyy	Ukraine	49.425	27.002
+Kryvyy Rih	Dnipropetrovs'k	Ukraine	47.928	33.345
+Makiyivka	Donets'k	Ukraine	48.030	37.975
+Horlivka	Donets'k	Ukraine	48.300	38.055
+Sharjah	Sharjah	United Arab Emirates	25.371	55.406
+Qurghonteppa	Khatlon	Tajikistan	37.837	68.771
+Konibodom	Leninabad	Tajikistan	40.292	70.427
+Gijon	Principado de Asturias	Spain	43.530	-5.670
+Vatican City	Lazio	Vatican	41.903	12.453
+Sunderland	Tyne and Wear	United Kingdom	54.920	-1.380
+Southampton	Southampton	United Kingdom	50.900	-1.400
+Bristol	Bristol	United Kingdom	51.450	-2.583
+Bournemouth	Bournemouth	United Kingdom	50.730	-1.900
+Swansea	Swansea	United Kingdom	51.630	-3.950
+Elazig	Elazig	Turkey	38.680	39.230
+Kahramanmaras	K. Maras	Turkey	37.610	36.945
+Icel	Mersin	Turkey	36.800	34.620
+Rize	Rize	Turkey	41.021	40.522
+Cheongju	Chungcheongbuk-do	South Korea	36.644	127.501
+Ansan	Gyeonggi-do	South Korea	37.348	126.860
+Iksan	Jeollabuk-do	South Korea	35.941	126.945
+Changwon	Gyeongsangnam-do	South Korea	35.219	128.584
+Southend-on-Sea	Southend-on-Sea	United Kingdom	51.550	0.720
+Reading	Oxfordshire	United Kingdom	51.470	-0.980
+Leicester	Leicester	United Kingdom	52.630	-1.133
+Bradford	West Yorkshire	United Kingdom	53.800	-1.750
+Sheffield	South Yorkshire	United Kingdom	53.367	-1.500
+Galati	Galati	Romania	45.456	28.046
+San Lorenzo	Asunción	Paraguay	-25.340	-57.520
+Encarnacion	Itapúa	Paraguay	-27.347	-55.874
+Braga	Braga	Portugal	41.555	-8.421
+Yanbu al Bahr	Al Madinah	Saudi Arabia	24.094	38.049
+At Taif	Makkah	Saudi Arabia	21.262	40.382
+Eindhoven	Noord-Brabant	Netherlands	51.430	5.500
+Najran	Najran	Saudi Arabia	17.507	44.132
+Al Hillah	Ar Riyad	Saudi Arabia	23.489	46.756
+Al Mubarraz	Ash Sharqiyah	Saudi Arabia	25.429	49.566
+Al-Qatif	Ash Sharqiyah	Saudi Arabia	26.520	50.012
+Sialkote	Punjab	Pakistan	32.520	74.560
+Sheikhu Pura	Punjab	Pakistan	31.720	73.990
+Gujrat	Punjab	Pakistan	32.580	74.080
+Rahim Yar Khan	Punjab	Pakistan	28.420	70.295
+Kohat	N.W.F.P.	Pakistan	33.603	71.433
+Abbottabad	N.W.F.P.	Pakistan	34.150	73.200
+Mardan	N.W.F.P.	Pakistan	34.200	72.040
+Lalitpur	Bhaktapur	Nepal	27.667	85.333
+Taganrog	Rostov	Russia	47.230	38.920
+Naberezhnyye Chelny	Tatarstan	Russia	55.700	52.320
+Gomez Palacio	Durango	Mexico	25.570	-103.500
+Reynosa	Tamaulipas	Mexico	26.080	-98.300
+Tlaxcala	Tlaxcala	Mexico	19.320	-98.230
+Irapuato	Guanajuato	Mexico	20.670	-101.500
+Celaya	Guanajuato	Mexico	20.530	-100.800
+Nezahualcoyotl	México	Mexico	19.410	-99.030
+Orizaba	Veracruz	Mexico	18.850	-97.130
+Xalapa	Veracruz	Mexico	19.530	-96.920
+Iwo	Osun	Nigeria	7.630	4.180
+Bytom	Silesian	Poland	50.350	18.910
+Kaesong	Kaesong	North Korea	37.964	126.564
+Sunchon	P'yongan-namdo	North Korea	39.424	125.939
+Caserta	Campania	Italy	41.060	14.337
+Irbid	Irbid	Jordan	32.550	35.850
+Az Zarqa	Zarqa	Jordan	32.070	36.100
+Como	Lombardia	Italy	45.810	9.080
+Yumen	Gansu	China	39.830	97.730
+Linxia	Gansu	China	35.600	103.200
+Zhuozhou	Beijing	China	39.540	115.790
+Huizhou	Guangdong	China	23.080	114.400
+Chaozhou	Guangdong	China	23.680	116.630
+Alajuela	Alajuela	Costa Rica	10.020	-84.230
+Spanish Town	Saint Catherine	Jamaica	17.983	-76.950
+Soledad	Atlántico	Colombia	10.920	-74.770
+Valledupar	Cesar	Colombia	10.480	-73.250
+Bielefeld	Nordrhein-Westfalen	Germany	52.030	8.530
+Dortmund	Nordrhein-Westfalen	Germany	51.530	7.450
+Duisburg	Nordrhein-Westfalen	Germany	51.430	6.750
+Wuppertal	Nordrhein-Westfalen	Germany	51.250	7.170
+Essen	Nordrhein-Westfalen	Germany	51.450	7.017
+Karlsruhe	Baden-Württemberg	Germany	49.000	8.400
+Heidelberg	Baden-Württemberg	Germany	49.420	8.700
+Kassel	Hessen	Germany	51.300	9.500
+Augsburg	Bayern	Germany	48.350	10.900
+Chemnitz	Sachsen	Germany	50.830	12.920
+Yangquan	Shanxi	China	37.870	113.570
+Shiyan	Hubei	China	32.570	110.780
+Jingzhou	Hubei	China	30.320	112.230
+Mengzi	Yunnan	China	23.362	103.406
+Chuxiong	Yunnan	China	25.036	101.546
+Hengshui	Hebei	China	37.720	115.700
+Xuanhua	Hebei	China	40.594	115.024
+Luohe	Henan	China	33.570	114.030
+Wafangdian	Liaoning	China	39.626	121.996
+Zhucheng	Shandong	China	35.990	119.380
+Hangu	Tianjin	China	39.232	117.777
+Xinyi	Jiangsu	China	34.380	118.350
+Yangzhou	Jiangsu	China	32.400	119.430
+Linhai	Zhejiang	China	28.850	121.120
+Okayama	Okayama	Japan	34.672	133.917
+Baishan	Jilin	China	41.900	126.430
+Yanji	Jilin	China	42.882	129.513
+Takamatsu	Kagawa	Japan	34.345	134.045
+Tokushima	Tokushima	Japan	34.067	134.553
+Hulan Ergi	Heilongjiang	China	47.210	123.610
+Toyama	Toyama	Japan	36.700	137.230
+Otsu	Shiga	Japan	35.006	135.867
+Maebashi	Gunma	Japan	36.393	139.073
+Kawasaki	Kanagawa	Japan	35.530	139.705
+Kawagoe	Saitama	Japan	35.918	139.491
+Utsunomiya	Tochigi	Japan	36.550	139.870
+Hachioji	Tokyo	Japan	35.658	139.326
+Koriyama	Fukushima	Japan	37.410	140.380
+Sonipat	Haryana	India	29.000	77.020
+Rohtak	Haryana	India	28.900	76.580
+Hisar	Haryana	India	29.170	75.725
+Kalyan	Maharashtra	India	19.250	73.160
+Vina del Mar	Valparaíso	Chile	-33.030	-71.540
+Talcahuano	Bío-Bío	Chile	-36.717	-73.117
+Piraievs	Attiki	Greece	37.950	23.700
+Borujerd	Lorestan	Iran	33.920	48.800
+Az Aubayr	Al-Basrah	Iraq	30.389	47.708
+Ad Diwaniyah	Al-Qadisiyah	Iraq	31.989	44.924
+Zanjan	Zanjan	Iran	36.670	48.500
+Urmia	West Azarbaijan	Iran	37.530	45.000
+Sanandaj	Kordestan	Iran	35.300	47.020
+Ajmer	Rajasthan	India	26.450	74.640
+Firozabad	Uttar Pradesh	India	27.150	78.395
+Mathura	Uttar Pradesh	India	27.500	77.670
+Muzaffarnagar	Uttar Pradesh	India	29.485	77.695
+Ar Ramadi	Al-Anbar	Iraq	33.420	43.300
+Canoas	Rio Grande do Sul	Brazil	-29.920	-51.180
+Sao Jose dos Pinhais	Paraná	Brazil	-25.570	-49.180
+Blumenau	Santa Catarina	Brazil	-26.920	-49.090
+Nova Iguacu	Rio de Janeiro	Brazil	-22.740	-43.470
+Duque de Caxias	Rio de Janeiro	Brazil	-22.770	-43.310
+Niteroi	Rio de Janeiro	Brazil	-22.900	-43.100
+Cabo Frio	Rio de Janeiro	Brazil	-22.890	-42.040
+Oshawa	Ontario	Canada	43.880	-78.850
+London	Ontario	Canada	42.970	-81.250
+Kitchener	Ontario	Canada	43.450	-80.500
+Corrientes	Corrientes	Argentina	-27.490	-58.810
+Parana	Entre Ríos	Argentina	-31.733	-60.533
+Santo Andre	São Paulo	Brazil	-23.653	-46.528
+Jundiai	São Paulo	Brazil	-23.200	-46.880
+Sao Jose dos Campos	São Paulo	Brazil	-23.200	-45.880
+Americana	São Paulo	Brazil	-22.750	-47.330
+Piracicaba	São Paulo	Brazil	-22.710	-47.640
+Itu	São Paulo	Brazil	-23.260	-47.300
+Jaboatao	Pernambuco	Brazil	-8.110	-35.020
+Olinda	Pernambuco	Brazil	-8.000	-34.850
+Gent	East Flanders	Belgium	51.030	3.700
+Ganca	G?nc?	Azerbaijan	40.685	46.350
+Sumqayt	Sumqayit	Azerbaijan	40.580	49.630
+Plovdiv	Plovdiv	Bulgaria	42.154	24.754
+Liege	Liege	Belgium	50.630	5.580
+Al Khalil		Palestine	31.541	35.096
+Zhongli	Taoyuan	Taiwan	24.965	121.217
+Keelung	Keelung City	Taiwan	25.133	121.733
+Lakeville	Minnesota	United States of America	44.650	-93.243
+Everett	Washington	United States of America	47.960	-122.200
+Stockton	California	United States of America	37.958	-121.290
+Oceanside	California	United States of America	33.220	-117.335
+Modesto	California	United States of America	37.655	-120.990
+Irvine	California	United States of America	33.680	-117.830
+Palm Springs	California	United States of America	33.777	-116.533
+Ogden	Utah	United States of America	41.232	-111.968
+Davenport	Iowa	United States of America	41.554	-90.588
+St. Charles	Missouri	United States of America	38.784	-90.506
+Columbia	Missouri	United States of America	38.952	-92.334
+Acarigua	Portuguesa	Venezuela	9.580	-69.200
+New Haven	Connecticut	United States of America	41.330	-72.900
+Lowell	Massachusetts	United States of America	42.634	-71.317
+Worcester	Massachusetts	United States of America	42.270	-71.800
+Naples	Florida	United States of America	26.142	-81.795
+Fort Lauderdale	Florida	United States of America	26.136	-80.142
+Greenville	South Carolina	United States of America	34.853	-82.394
+Aurora	Illinois	United States of America	41.765	-88.300
+Gary	Indiana	United States of America	41.580	-87.330
+Fort Wayne	Indiana	United States of America	41.080	-85.130
+Covington	Kentucky	United States of America	39.084	-84.509
+Winston-Salem	North Carolina	United States of America	36.105	-80.260
+Akron	Ohio	United States of America	41.070	-81.520
+Newark	New Jersey	United States of America	40.700	-74.170
+Barcelona	Anzoátegui	Venezuela	10.130	-64.720
+Maiquetia	Vargas	Venezuela	10.600	-66.970
+Ann Arbor	Michigan	United States of America	42.300	-83.720
+Flint	Michigan	United States of America	43.013	-83.688
+Grand Rapids	Michigan	United States of America	42.964	-85.670
+Malaga	Andalucía	Spain	36.720	-4.420
+Hamah	Hamah	Syria	35.150	36.730
+Dayr az Zawr	Dayr Az Zawr	Syria	35.330	40.130
+Luzern	Lucerne	Switzerland	47.050	8.280
+Simferopol	Crimea	Russia	44.949	34.099
+Kherson	Crimea	Ukraine	46.633	32.601
+Rivne	Rivne	Ukraine	50.617	26.253
+Chernivtsi	Chernivtsi	Ukraine	48.305	25.922
+Cherkasy	Cherkasy	Ukraine	49.435	32.071
+Vinnytsya	Vinnytsya	Ukraine	49.225	28.482
+Luhansk	Luhans'k	Ukraine	48.570	39.334
+Poltava	Poltava	Ukraine	49.574	34.570
+Al Ayn	Abu Dhabi	United Arab Emirates	24.230	55.740
+Shahrisabz	Kashkadarya	Uzbekistan	39.062	66.831
+Qarshi	Kashkadarya	Uzbekistan	38.870	65.800
+Qoqon	Ferghana	Uzbekistan	40.540	70.940
+Nonthaburi	Nonthaburi	Thailand	13.834	100.483
+Samut Prakan	Samut Prakan	Thailand	13.607	100.611
+Viet Tri	Phú Th?	Vietnam	21.330	105.430
+Buon Me Thuot	Dak Lak	Vietnam	12.667	108.050
+Da Lat	Lâm Ð?ng	Vietnam	11.930	108.420
+Quang Ngai	Qu?ng Ngãi	Vietnam	15.150	108.830
+Phan Thiet	Bình Thu?n	Vietnam	10.934	108.100
+Long Xuyen	An Giang	Vietnam	10.380	105.420
+Rach Gia	Kiên Giang	Vietnam	10.015	105.091
+Ca Mau	Cà Mau	Vietnam	9.177	105.150
+Soc Trang	Sóc Trang	Vietnam	9.604	105.980
+San Sebastian	País Vasco	Spain	43.320	-1.980
+Middlesbrough	Stockton-on-Tees	United Kingdom	54.580	-1.230
+Coventry	West Midlands	United Kingdom	52.420	-1.500
+Kingston upon Hull	Kingston upon Hull	United Kingdom	53.750	-0.330
+Blackpool	Lancashire	United Kingdom	53.830	-3.050
+Balikesir	Balikesir	Turkey	39.650	27.890
+Izmit	Kocaeli	Turkey	40.776	29.931
+Denizli	Denizli	Turkey	37.770	29.080
+Malatya	Malatya	Turkey	38.370	38.300
+Tarsus	Mersin	Turkey	36.920	34.880
+Iskenderun	Hatay	Turkey	36.580	36.170
+Sivas	Sivas	Turkey	39.745	37.035
+Erzurum	Erzurum	Turkey	39.920	41.290
+Diyarbakir	Diyarbakir	Turkey	37.920	40.230
+Yeosu	Gwangju	South Korea	34.737	127.746
+Jeju	Jeju	South Korea	33.510	126.522
+Brighton	Brighton and Hove	United Kingdom	50.830	-0.170
+Portsmouth	Portsmouth	United Kingdom	50.800	-1.080
+Nottingham	Nottingham	United Kingdom	52.970	-1.170
+Stoke	Stoke-on-Trent	United Kingdom	53.000	-2.180
+Batman	Batman	Turkey	37.890	41.140
+Van	Van	Turkey	38.495	43.400
+Jinja	Jinja	Uganda	0.440	33.200
+Arua	Arua Municipality	Uganda	3.020	30.900
+Mbale	Bungokho	Uganda	1.090	34.170
+Moshi	Kilimanjaro	Tanzania	-3.340	37.340
+Lausanne	Vaud	Switzerland	46.530	6.650
+Basel	Basel-Stadt	Switzerland	47.580	7.590
+Alicante	Comunidad Valenciana	Spain	38.351	-0.484
+Craiova	Dolj	Romania	44.326	23.826
+Timisoara	Timis	Romania	45.759	21.223
+Brasov	Brasov	Romania	45.648	25.607
+Thies	Thiès	Senegal	14.810	-16.930
+Buraydah	Al Quassim	Saudi Arabia	26.366	43.963
+Hail	Ha'il	Saudi Arabia	27.524	41.700
+Utrecht	Utrecht	Netherlands	52.100	5.120
+Kaunas	Kauno	Lithuania	54.950	23.880
+Al Kharj	Ar Riyad	Saudi Arabia	24.156	47.312
+Ad Damman	Ash Sharqiyah	Saudi Arabia	26.430	50.098
+Kasur	Punjab	Pakistan	31.125	74.455
+Jhang	Punjab	Pakistan	31.280	72.325
+Sargodha	Punjab	Pakistan	32.085	72.675
+Osh	Osh	Kyrgyzstan	40.540	72.790
+Bannu	N.W.F.P.	Pakistan	32.989	70.599
+Butterworth	Pulau Pinang	Malaysia	5.417	100.400
+Sungai Petani	Kedah	Malaysia	5.650	100.479
+Alor Setar	Kedah	Malaysia	6.113	100.373
+Seremban	Negeri Sembilan	Malaysia	2.710	101.940
+Kuala Terengganu	Trengganu	Malaysia	5.330	103.120
+Mbombela	Mpumalanga	South Africa	-25.470	30.980
+Haarlem	Noord-Holland	Netherlands	52.380	4.630
+Ksar El Kebir	Tanger - Tétouan	Morocco	35.020	-5.910
+Kenitra	Gharb - Chrarda - Béni Hssen	Morocco	34.270	-6.580
+Meknes	Meknès - Tafilalet	Morocco	33.900	-5.560
+Matola	Maputo	Mozambique	-25.970	32.460
+Vladikavkaz	North Ossetia	Russia	43.050	44.670
+Dzerzhinsk	Nizhegorod	Russia	56.250	43.460
+Cherepovets	Vologda	Russia	59.140	37.910
+Kaluga	Kaluga	Russia	54.520	36.270
+Podolsk	Moskovsskaya	Russia	55.380	37.530
+Volzhskiy	Volgograd	Russia	48.795	44.774
+Saransk	Mordovia	Russia	54.170	45.180
+Yoshkar Ola	Mariy-El	Russia	56.635	47.875
+Tolyatti	Samara	Russia	53.480	49.530
+Jeonju	Jeollabuk-do	South Korea	35.831	127.140
+Mokpo	Gwangju	South Korea	34.807	126.396
+Cadiz	Negros Occidental	Philippines	10.959	123.309
+Olongapo	Zambales	Philippines	14.830	120.283
+Quezon City	Metropolitan Manila	Philippines	14.650	121.030
+Pasay City	Metropolitan Manila	Philippines	14.550	121.000
+Iligan	Lanao del Norte	Philippines	8.171	124.215
+Tacloban	Leyte	Philippines	11.250	125.000
+Ciudad Obregon	Sonora	Mexico	27.467	-109.925
+Mazatlan	Sonora	Mexico	29.017	-110.133
+Morelia	Michoacán	Mexico	19.733	-101.189
+Uruapan	Michoacán	Mexico	19.420	-102.070
+Tepic	Nayarit	Mexico	21.505	-104.880
+Pachuca	Hidalgo	Mexico	20.170	-98.730
+Toluca	México	Mexico	19.332	-99.672
+Zumpango	México	Mexico	19.810	-99.110
+Coatzacoalcos	Veracruz	Mexico	18.120	-94.420
+Poza Rica de Hidalgo	Veracruz	Mexico	20.550	-97.470
+Aba	Abia	Nigeria	5.100	7.350
+Calabar	Cross River	Nigeria	4.960	8.330
+Abeokuta	Ogun	Nigeria	7.160	3.350
+Akure	Ondo	Nigeria	7.250	5.200
+Ikare	Ondo	Nigeria	7.530	5.760
+Owo	Ondo	Nigeria	7.200	5.590
+Ondo	Ondo	Nigeria	7.090	4.840
+Ado Ekiti	Ekiti	Nigeria	7.630	5.220
+Ife	Osun	Nigeria	7.480	4.560
+Oshogbo	Osun	Nigeria	7.770	4.560
+Oyo	Oyo	Nigeria	7.850	3.930
+Awka	Anambra	Nigeria	6.210	7.070
+Bauchi	Bauchi	Nigeria	10.310	9.840
+Gombe	Gombe	Nigeria	10.290	11.170
+Sapele	Delta	Nigeria	5.890	5.680
+Katsina	Katsina	Nigeria	12.990	7.600
+Gdynia	Pomeranian	Poland	54.520	18.530
+Wroclaw	Lower Silesian	Poland	51.110	17.030
+Szczecin	West Pomeranian	Poland	53.420	14.530
+Poznan	Greater Poland	Poland	52.406	16.900
+Bydgoszcz	Kuyavian-Pomeranian	Poland	53.120	18.010
+Katowice	Silesian	Poland	50.260	19.020
+Gliwice	Silesian	Poland	50.330	18.670
+Bialystok	Podlachian	Poland	53.150	23.170
+Lublin	Lublin	Poland	51.250	22.573
+Kanggye	Chagang-do	North Korea	40.973	126.603
+Binjai	Sumatera Utara	Indonesia	3.620	98.500
+Padangsidempuan	Sumatera Utara	Indonesia	1.389	99.273
+Tebingtinggi	Sumatera Utara	Indonesia	3.330	99.130
+Bukittinggi	Sumatera Barat	Indonesia	-0.303	100.361
+Mataram	Nusa Tenggara Barat	Indonesia	-8.580	116.135
+Bologna	Emilia-Romagna	Italy	44.500	11.340
+Cagliari	Sardegna	Italy	39.222	9.104
+Salerno	Campania	Italy	40.680	14.770
+Bari	Apulia	Italy	41.114	16.873
+Messina	Sicily	Italy	38.200	15.550
+Pescara	Abruzzo	Italy	42.455	14.219
+Verona	Veneto	Italy	45.440	10.990
+Longxi	Gansu	China	35.048	104.639
+Beihai	Guangxi	China	21.480	109.100
+Hechi	Guangxi	China	24.695	108.083
+Changping	Beijing	China	40.225	116.194
+Longyan	Fujian	China	25.180	117.030
+Zhangzhou	Fujian	China	24.520	117.670
+Putian	Fujian	China	25.430	119.020
+Ninde	Fujian	China	26.680	119.530
+Tongling	Anhui	China	30.950	117.780
+Maanshan	Anhui	China	31.730	118.480
+Yangjiang	Guangdong	China	21.850	111.970
+Meizhou	Guangdong	China	24.300	116.120
+Heyuan	Guangdong	China	23.730	114.680
+Qingyuan	Guangdong	China	23.700	113.030
+Zhaoqing	Guangdong	China	23.050	112.450
+Jiangmen	Guangdong	China	22.580	113.080
+Maoming	Guangdong	China	21.920	110.870
+Sukabumi	Jawa Barat	Indonesia	-6.910	106.900
+Cilacap	Jawa Tengah	Indonesia	-7.719	109.015
+Pakalongan	Jawa Tengah	Indonesia	-6.880	109.670
+Bekasi	Jakarta Raya	Indonesia	-6.217	106.972
+Bandar Lampung	Lampung	Indonesia	-5.450	105.300
+Pasuruan	Jawa Timur	Indonesia	-7.630	112.900
+Majene	Sulawesi Barat	Indonesia	-3.534	118.966
+Saint-Etienne	Rhône-Alpes	France	45.430	4.380
+Grenoble	Rhône-Alpes	France	45.180	5.720
+Ambato	Napo	Ecuador	-1.270	-78.620
+Armenia	Quindío	Colombia	4.534	-75.681
+Pereira	Risaralda	Colombia	4.810	-75.680
+Neiva	Huila	Colombia	2.931	-75.330
+Buenaventura	Valle del Cauca	Colombia	3.872	-77.050
+Sincelejo	Sucre	Colombia	9.290	-75.380
+Fort-de-France	Martinique	France	14.610	-61.080
+Tanta	Al Gharbiyah	Egypt	30.790	31.000
+Ismailia	Al Isma`iliyah	Egypt	30.590	32.260
+El Mansura	Ad Daqahliyah	Egypt	31.050	31.380
+Dumyat	Dumyat	Egypt	31.420	31.820
+Damanhur	Al Buhayrah	Egypt	31.050	30.470
+Beni Suef	Bani Suwayf	Egypt	29.080	31.090
+Qena	Qina	Egypt	26.150	32.720
+Sohag	Suhaj	Egypt	26.550	31.700
+Mendefera	Maekel	Eritrea	14.886	38.816
+Bonn	Nordrhein-Westfalen	Germany	50.720	7.080
+Munster	Nordrhein-Westfalen	Germany	51.970	7.620
+Dusseldorf	Nordrhein-Westfalen	Germany	51.220	6.780
+Mannheim	Baden-Württemberg	Germany	49.500	8.470
+Freiburg	Baden-Württemberg	Germany	48.000	7.870
+Wiesbaden	Hessen	Germany	50.080	8.250
+Hannover	Niedersachsen	Germany	52.367	9.717
+Kiel	Schleswig-Holstein	Germany	54.330	10.130
+Koblenz	Rheinland-Pfalz	Germany	50.350	7.600
+Saarbrucken	Saarland	Germany	49.250	6.970
+Brno	Kraj Vysocina	Czechia	49.200	16.610
+Leipzig	Sachsen	Germany	51.335	12.410
+Ostrava	Moravskoslezský	Czechia	49.830	18.250
+Turpan	Xinjiang Uygur	China	42.935	89.165
+Shuozhou	Shanxi	China	39.300	112.420
+Xinzhou	Shanxi	China	38.410	112.720
+Jincheng	Shanxi	China	35.500	112.830
+Changzhi	Shanxi	China	36.184	113.105
+Jingmen	Hubei	China	31.030	112.100
+Jinshi	Hunan	China	29.632	111.852
+Chenzhou	Hunan	China	25.800	113.030
+Xiangtan	Hunan	China	27.850	112.900
+Zigong	Sichuan	China	29.402	104.778
+Yaan	Sichuan	China	29.980	103.080
+Zhanyi	Yunnan	China	25.600	103.817
+Chengde	Hebei	China	40.960	117.930
+Cangzhou	Hebei	China	38.320	116.870
+Baoding	Hebei	China	38.872	115.478
+Xiangtai	Hebei	China	37.050	114.500
+Puyang	Henan	China	35.700	114.980
+Xuchang	Henan	China	34.020	113.820
+Zhoukou	Henan	China	33.630	114.630
+Tieling	Liaoning	China	42.300	123.820
+Chaoyang	Liaoning	China	41.550	120.420
+Zhuanghe	Liaoning	China	39.682	122.962
+Rizhao	Shandong	China	35.430	119.450
+Dezhou	Shandong	China	37.450	116.300
+Jian	Jiangxi	China	27.130	115.000
+Shangrao	Jiangxi	China	28.470	117.970
+Jingdezhen	Jiangxi	China	29.270	117.180
+Taizhou	Jiangsu	China	32.490	119.900
+Shuyang	Jiangsu	China	34.130	118.773
+Lianyungang	Jiangsu	China	34.600	119.170
+Jiaojing	Zhejiang	China	28.680	121.450
+Quzhou	Zhejiang	China	28.970	118.870
+Songyuan	Jilin	China	45.180	124.820
+Kitakyushu	Fukuoka	Japan	33.870	130.820
+Kumamoto	Kumamoto	Japan	32.801	130.701
+Oita	Oita	Japan	33.243	131.598
+Suihua	Heilongjiang	China	46.630	126.980
+Shuangyashan	Heilongjiang	China	46.670	131.350
+Gifu	Gifu	Japan	35.423	136.763
+Tsu	Mie	Japan	34.717	136.517
+Shizuoka	Shizuoka	Japan	34.986	138.385
+Hamamatsu	Shizuoka	Japan	34.718	137.733
+Wakayama	Wakayama	Japan	34.223	135.168
+Mito	Ibaraki	Japan	36.370	140.480
+Iwaki	Fukushima	Japan	37.055	140.890
+Yamagata	Yamagata	Japan	38.270	140.320
+Beni	Nord-Kivu	Congo (Kinshasa)	0.490	29.450
+Tamale	Northern	Ghana	9.400	-0.840
+Pathankot	Himachal Pradesh	India	32.270	75.720
+Panipat	Haryana	India	29.400	76.970
+Tirupati	Andhra Pradesh	India	13.650	79.420
+Rajahmundry	Andhra Pradesh	India	17.030	81.790
+Khammam	Telangana	India	17.280	80.160
+Chirala	Andhra Pradesh	India	15.860	80.340
+Karimnagar	Telangana	India	18.460	79.110
+Nizamabad	Telangana	India	18.670	78.100
+Kollam	Kerala	India	8.900	76.570
+Sambalpur	Orissa	India	21.470	83.970
+Raurkela	Orissa	India	22.230	84.830
+Mandya	Karnataka	India	12.570	76.920
+Shivamogga	Karnataka	India	13.930	75.560
+Raichur	Karnataka	India	16.210	77.355
+Hosapete	Karnataka	India	15.280	76.375
+Bidar	Karnataka	India	17.923	77.518
+Sangli	Maharashtra	India	16.860	74.575
+Parbhani	Maharashtra	India	19.270	76.760
+Malegaon	Maharashtra	India	20.560	74.525
+Shillong	Meghalaya	India	25.570	91.880
+Nantes	Pays de la Loire	France	47.210	-1.590
+Toulon	Provence-Alpes-Côte-d'Azur	France	43.134	5.919
+Montpellier	Languedoc-Roussillon	France	43.610	3.870
+Rouen	Haute-Normandie	France	49.430	1.080
+Nancy	Lorraine	France	48.684	6.200
+Metz	Lorraine	France	49.120	6.180
+Haifa	Haifa	Israel	32.822	34.978
+Karbala	Karbala'	Iraq	32.615	44.024
+Kashan	Esfahan	Iran	33.980	51.580
+Khomeini Shahr	Esfahan	Iran	32.700	51.470
+Gorgan	Golestan	Iran	36.830	54.480
+Sari	Mazandaran	Iran	36.550	53.100
+Karaj	Tehran	Iran	35.802	50.968
+Dezful	Khuzestan	Iran	32.380	48.470
+Khorramabad	Lorestan	Iran	33.480	48.350
+An Nasiriyah	Dhi-Qar	Iraq	31.043	46.268
+Al Amarah	Maysan	Iraq	31.842	47.151
+Al Kut	Wasit	Iraq	32.491	45.830
+Arak	Markazi	Iran	34.080	49.700
+As Sulaymaniyah	As-Sulaymaniyah	Iraq	35.561	45.431
+Baqubah	Diyala	Iraq	33.748	44.657
+Patiala	Punjab	India	30.320	76.385
+Bhilwara	Rajasthan	India	25.350	74.635
+Sikar	Rajasthan	India	27.610	75.140
+Bikaner	Rajasthan	India	28.030	73.330
+Alwar	Rajasthan	India	27.545	76.605
+Jhansi	Uttar Pradesh	India	25.453	78.557
+Shahjahanpur	Uttar Pradesh	India	27.880	79.905
+Rampur	Uttar Pradesh	India	28.815	79.025
+Bareilly	Uttar Pradesh	India	28.347	79.418
+Etawah	Uttar Pradesh	India	26.785	79.015
+Dehra Dun	Uttaranchal	India	30.320	78.050
+Haora	West Bengal	India	22.580	88.330
+Bhatpara	West Bengal	India	22.850	88.520
+Siliguri	West Bengal	India	26.720	88.455
+Muzaffarpur	Bihar	India	26.120	85.380
+Bilaspur	Chhattisgarh	India	22.090	82.160
+Ujjain	Madhya Pradesh	India	23.190	75.790
+Ratlam	Madhya Pradesh	India	23.350	75.030
+Sagar	Madhya Pradesh	India	23.850	78.750
+Rajapalaiyam	Tamil Nadu	India	9.420	77.580
+Tirunelveli	Tamil Nadu	India	8.730	77.690
+Tiruppur	Tamil Nadu	India	11.080	77.330
+Bhuj	Dadra and Nagar Haveli	India	23.250	69.810
+Bhavnagar	Dadra and Nagar Haveli	India	21.778	72.130
+Aizawl	Mizoram	India	23.710	92.720
+Al Hillah	Babil	Iraq	32.472	44.422
+Ipatinga	Minas Gerais	Brazil	-19.480	-42.520
+Novo Hamburgo	Rio Grande do Sul	Brazil	-29.710	-51.140
+Maringa	Paraná	Brazil	-23.410	-51.930
+Cascavel	Paraná	Brazil	-24.960	-53.460
+Foz do Iguacu	Paraná	Brazil	-25.523	-54.530
+Itajai	Santa Catarina	Brazil	-26.900	-48.680
+Crato	Ceará	Brazil	-7.230	-39.420
+Volta Redonda	Rio de Janeiro	Brazil	-22.520	-44.095
+Petropolis	Rio de Janeiro	Brazil	-22.509	-43.200
+Bafoussam	Ouest	Cameroon	5.490	10.410
+Nis	Nišavski	Serbia	43.330	21.900
+Anapolis	Goiás	Brazil	-16.320	-48.960
+La Plata	Ciudad de Buenos Aires	Argentina	-34.910	-57.960
+Sao Jose do Rio Preto	São Paulo	Brazil	-20.800	-49.390
+Limeira	São Paulo	Brazil	-22.550	-47.400
+Taubate	São Paulo	Brazil	-23.020	-45.560
+Charleroi	Charleroi	Belgium	50.420	4.450
+Kondoz	Kunduz	Afghanistan	36.728	68.873
+Jalalabad	Nangarhar	Afghanistan	34.442	70.436
+Mymensingh	Dhaka	Bangladesh	24.750	90.380
+Chlef	Chlef	Algeria	36.170	1.320
+Bejaia	Béjaïa	Algeria	36.760	5.070
+Blida	Blida	Algeria	36.420	2.830
+Varna	Varna	Bulgaria	43.216	27.895
+Graz	Steiermark	Austria	47.078	15.410
+Linz	Oberösterreich	Austria	48.319	14.289
+Mahilyow	Mahilyow	Belarus	53.899	30.325
+Hrodna	Hrodna	Belarus	53.678	23.834
+Comilla	Chittagong	Bangladesh	23.470	91.170
+Cranbourne	Victoria	Australia	-38.100	145.283
+Mawlamyine	Mon	Myanmar	16.500	97.670
+Puch'on	Gyeonggi-do	South Korea	37.501	126.781
+Songnam	Gyeonggi-do	South Korea	37.441	127.136
+Goyang	Gyeonggi-do	South Korea	37.655	126.835
+Mayaguez		Puerto Rico	18.202	-67.140
+San Marino		San Marino	43.936	12.442
+Curepipe		Mauritius	-20.316	57.517
+Vaduz		Liechtenstein	47.134	9.517
+Changhua	Changhua	Taiwan	24.073	120.513
+Chiayi	Chiayi City	Taiwan	23.475	120.435
+Hsinchu	Hsinchu City	Taiwan	24.817	120.977
+Pingtung	Pingtung	Taiwan	22.682	120.482
+Tacoma	Washington	United States of America	47.211	-122.515
+Long Beach	California	United States of America	33.787	-118.158
+Provo	Utah	United States of America	40.249	-111.638
+Little Rock	Arkansas	United States of America	34.736	-92.331
+Wichita	Kansas	United States of America	37.720	-97.330
+Barquisimeto	Lara	Venezuela	10.052	-69.302
+Hartford	Connecticut	United States of America	41.772	-72.682
+Providence	Rhode Island	United States of America	41.823	-71.417
+Birmingham	Alabama	United States of America	33.530	-86.825
+Mobile	Alabama	United States of America	30.680	-88.050
+St. Petersburg	Florida	United States of America	27.771	-82.679
+Greensboro	North Carolina	United States of America	36.070	-79.800
+Dayton	Ohio	United States of America	39.752	-84.202
+Virginia Beach	Virginia	United States of America	36.855	-75.980
+Madison	Wisconsin	United States of America	43.073	-89.401
+Trenton	New Jersey	United States of America	40.217	-74.743
+Maturin	Monagas	Venezuela	9.750	-63.170
+Cumana	Sucre	Venezuela	10.450	-64.180
+Lansing	Michigan	United States of America	42.734	-84.547
+Cadiz	Andalucía	Spain	36.535	-6.225
+Granada	Andalucía	Spain	37.165	-3.585
+Zaporizhzhya	Zaporizhzhya	Ukraine	47.859	35.175
+Fargona	Ferghana	Uzbekistan	40.390	71.780
+Namangan	Namangan	Uzbekistan	41.000	71.670
+Khujand	Leninabad	Tajikistan	40.290	69.620
+Khon Kaen	Khon Kaen	Thailand	16.420	102.830
+Thai Nguyen	Thái Nguyên	Vietnam	21.600	105.830
+Vinh	Ngh? An	Vietnam	18.700	105.680
+San Pedro Sula	Cortés	Honduras	15.500	-88.030
+Murcia	Región de Murcia	Spain	37.980	-1.130
+La Coruna	Galicia	Spain	43.330	-8.420
+Cap-Haitien	Nord	Haiti	19.759	-72.213
+Edinburgh	Edinburgh	United Kingdom	55.948	-3.219
+Newcastle	Tyne and Wear	United Kingdom	55.002	-1.602
+Liverpool	Merseyside	United Kingdom	53.418	-2.920
+Cardiff	Cardiff	United Kingdom	51.500	-3.225
+Adapazari	Sakarya	Turkey	40.800	30.415
+Trabzon	Trabzon	Turkey	40.980	39.720
+Suwon	Gyeonggi-do	South Korea	37.260	127.009
+Leeds	West Yorkshire	United Kingdom	53.832	-1.582
+Sanliurfa	Sanliurfa	Turkey	37.170	38.795
+Pamplona	Comunidad Foral de Navarra	Spain	42.820	-1.650
+Chiclayo	Lambayeque	Peru	-6.763	-79.837
+Callao	Lima	Peru	-12.070	-77.135
+Porto	Porto	Portugal	41.152	-8.622
+Rotterdam	Zuid-Holland	Netherlands	51.922	4.478
+Luxembourg	Luxembourg	Luxembourg	49.612	6.130
+Al Hufuf	Ash Sharqiyah	Saudi Arabia	25.349	49.586
+Faisalabad	Punjab	Pakistan	31.412	73.108
+Rawalpindi	Punjab	Pakistan	33.602	73.038
+Bahawalpur	Punjab	Pakistan	29.390	71.675
+Mirput Khas	Sind	Pakistan	25.532	69.012
+Sukkur	Sind	Pakistan	27.714	68.849
+Saidu	N.W.F.P.	Pakistan	34.750	72.350
+Johor Bahru	Johor	Malaysia	1.482	103.728
+Kelang	Selangor	Malaysia	3.022	101.548
+Benoni	Gauteng	South Africa	-26.148	28.328
+Vereeniging	Gauteng	South Africa	-26.648	27.958
+Kursk	Kursk	Russia	51.740	36.190
+Tula	Tula	Russia	54.200	37.630
+Tambov	Tambov	Russia	52.730	41.430
+Sterlitamak	Bashkortostan	Russia	53.630	55.960
+Kurgan	Kurgan	Russia	55.460	65.345
+Cheboksary	Chuvash	Russia	56.130	47.250
+Prokopyevsk	Kemerovo	Russia	53.900	86.710
+Makhachkala	Dagestan	Russia	42.980	47.500
+Pohang	Daegu	South Korea	36.021	129.372
+Ulsan	Ulsan	South Korea	35.549	129.315
+Daegu	Taegu-gwangyoksi	South Korea	35.869	128.605
+Legazpi	Albay	Philippines	13.170	123.750
+Komsomolsk na Amure	Khabarovsk	Russia	50.555	137.020
+Ensenada	Baja California	Mexico	31.870	-116.620
+Saltillo	Coahuila	Mexico	25.422	-101.007
+Ciudad Juarez	Chihuahua	Mexico	31.692	-106.492
+Durango	Durango	Mexico	24.031	-104.670
+Ciudad Victoria	Tamaulipas	Mexico	23.720	-99.130
+Aguascalientes	Aguascalientes	Mexico	21.881	-102.292
+Villahermosa	Tabasco	Mexico	18.000	-92.900
+Cuernavaca	Morelos	Mexico	18.921	-99.240
+Queretaro	Querétaro	Mexico	20.632	-100.382
+Nampo	Namp'o-si	North Korea	38.769	125.450
+Chongjin	Hamgyong-bukto	North Korea	41.785	129.790
+Hamhung	Hamgyong-namdo	North Korea	39.912	127.543
+Turin	Piemonte	Italy	45.072	7.668
+Liuzhou	Guangxi	China	24.282	109.248
+Xingyi	Guizhou	China	25.092	104.888
+Anshun	Guizhou	China	26.252	105.928
+Zunyi	Guizhou	China	27.702	106.918
+Wanzhou	Chongqing	China	30.820	108.400
+Huaibei	Anhui	China	33.952	116.748
+Wuhu	Anhui	China	31.352	118.368
+Luan	Anhui	China	31.752	116.478
+Bengbu	Anhui	China	32.952	117.328
+Anqing	Anhui	China	30.500	117.050
+Foshan	Guangdong	China	23.032	113.118
+Denpasar	Bali	Indonesia	-8.650	115.220
+Bello	Antioquia	Colombia	6.330	-75.570
+Monteria	Córdoba	Colombia	8.758	-75.890
+Bucaramanga	Santander	Colombia	7.132	-73.128
+Camaguey	Camagüey	Cuba	21.381	-77.917
+Guantanamo	Guantánamo	Cuba	20.145	-75.206
+Holguin	Holguín	Cuba	20.887	-76.263
+Ibague	Tolima	Colombia	4.439	-75.232
+Popayan	Cauca	Colombia	2.420	-76.610
+Santa Marta	Magdalena	Colombia	11.247	-74.202
+Cucuta	Norte de Santander	Colombia	7.920	-72.520
+Villavicencio	Meta	Colombia	4.153	-73.635
+Santa Clara	Villa Clara	Cuba	22.400	-79.967
+El Giza	Al Jizah	Egypt	30.010	31.190
+Stuttgart	Baden-Württemberg	Germany	48.780	9.200
+Bremen	Bremen	Germany	53.080	8.800
+Nurnberg	Bayern	Germany	49.450	11.080
+Korla	Xinjiang Uygur	China	41.730	86.150
+Kuqa	Xinjiang Uygur	China	41.728	82.936
+Shihezi	Xinjiang Uygur	China	44.300	86.030
+Karamay	Xinjiang Uygur	China	45.590	84.860
+Aksu	Xinjiang Uygur	China	41.150	80.250
+Sanya	Hainan	China	18.259	109.504
+Haikou	Hainan	China	20.050	110.320
+Baoji	Shaanxi	China	34.380	107.150
+Tongchuan	Shaanxi	China	35.080	109.030
+Linfen	Shanxi	China	36.082	111.518
+Yuci	Shanxi	China	37.682	112.728
+Datong	Shanxi	China	40.082	113.298
+Jianmen	Hubei	China	30.652	113.158
+Yichang	Hubei	China	30.702	111.278
+Xiantao	Hubei	China	30.372	113.438
+Huangshi	Hubei	China	30.220	115.100
+Zhuzhou	Hunan	China	27.832	113.148
+Yongzhou	Hunan	China	26.232	111.618
+Yiyang	Hunan	China	28.602	112.328
+Changde	Hunan	China	29.032	111.678
+Leshan	Sichuan	China	29.569	103.731
+Panzhihua	Sichuan	China	26.550	101.730
+Guangyuan	Sichuan	China	32.430	105.870
+Luzhou	Sichuan	China	28.882	105.378
+Yibin	Sichuan	China	28.772	104.568
+Zhaotang	Yunnan	China	27.322	103.718
+Yuxi	Yunnan	China	24.380	102.570
+Qinhuangdao	Hebei	China	39.932	119.618
+Langfang	Hebei	China	39.522	116.678
+Zhangjiakou	Hebei	China	40.832	114.928
+Tangshan	Hebei	China	39.626	118.192
+Anyang	Henan	China	36.082	114.348
+Jiaozuo	Henan	China	35.252	113.218
+Kaifeng	Henan	China	34.852	114.348
+Shangqiu	Henan	China	34.452	115.648
+Pingdingshan	Henan	China	33.732	113.298
+Xinyang	Henan	China	32.132	114.068
+Xinxiang	Henan	China	35.322	113.868
+Luoyang	Henan	China	34.682	112.468
+Liaoyang	Liaoning	China	41.282	123.178
+Dandong	Liaoning	China	40.146	124.392
+Yingkow	Liaoning	China	40.672	122.278
+Jinzhou	Liaoning	China	41.122	121.098
+Fuxin	Liaoning	China	42.012	121.658
+Benxi	Liaoning	China	41.332	123.748
+Fushun	Liaoning	China	41.867	123.868
+Jining	Shandong	China	35.402	116.548
+Weifang	Shandong	China	36.722	119.098
+Taian	Shandong	China	36.202	117.118
+Heze	Shandong	China	35.232	115.448
+Laiyang	Shandong	China	36.968	120.708
+Xinyu	Jiangxi	China	27.802	114.928
+Ganzhou	Jiangxi	China	25.920	114.950
+Jiujiang	Jiangxi	China	29.730	115.980
+Changzhou	Jiangsu	China	31.782	119.968
+Zhenjiang	Jiangsu	China	32.222	119.428
+Nantong	Jiangsu	China	32.032	120.823
+Jiaxing	Zhejiang	China	30.772	120.748
+Huzhou	Zhejiang	China	30.872	120.098
+Shaoxing	Zhejiang	China	30.002	120.568
+Jinhua	Zhejiang	China	29.120	119.650
+Liaoyuan	Jilin	China	42.900	125.130
+Siping	Jilin	China	43.170	124.330
+Baicheng	Jilin	China	45.620	122.820
+Kagoshima	Kagoshima	Japan	31.586	130.561
+Matsuyama	Ehime	Japan	33.846	132.766
+Jining	Nei Mongol	China	41.030	113.080
+Qitaihe	Heilongjiang	China	45.800	130.850
+Yichun	Heilongjiang	China	47.702	128.898
+Hegang	Heilongjiang	China	47.400	130.370
+Mudangiang	Heilongjiang	China	44.577	129.588
+Kanazawa	Ishikawa	Japan	36.560	136.640
+Asahikawa	Hokkaido	Japan	43.755	142.380
+Kobe	Hyogo	Japan	34.680	135.170
+Yokohama	Kanagawa	Japan	35.431	139.602
+Akita	Akita	Japan	39.710	140.090
+Aomori	Aomori	Japan	40.825	140.710
+Fukushima	Fukushima	Japan	37.740	140.470
+Morioka	Iwate	Japan	39.720	141.130
+Niigata	Niigata	Japan	37.920	139.040
+Kakinada	Andhra Pradesh	India	16.967	82.238
+Warangal	Telangana	India	18.010	79.580
+Brahmapur	Orissa	India	19.320	84.800
+Vijayapura	Karnataka	India	16.835	75.710
+Bhiwandi	Maharashtra	India	19.352	73.128
+Latur	Maharashtra	India	18.400	76.570
+Ahmednagar	Maharashtra	India	19.110	74.750
+Chandrapur	Maharashtra	India	19.970	79.300
+Amravati	Maharashtra	India	20.950	77.770
+Dhule	Maharashtra	India	20.900	74.770
+Imphal	Manipur	India	24.800	93.950
+Nice	Provence-Alpes-Côte-d'Azur	France	43.717	7.263
+Toulouse	Midi-Pyrénées	France	43.622	1.448
+Lille	Nord-Pas-de-Calais	France	50.652	3.078
+Strasbourg	Alsace	France	48.580	7.750
+Temuco	La Araucanía	Chile	-38.730	-72.580
+Irbil	Arbil	Iraq	36.181	44.007
+Kerman	Kerman	Iran	30.300	57.080
+Udaipur	Rajasthan	India	24.600	73.730
+Gorakhpur	Uttar Pradesh	India	26.750	83.380
+Barddhaman	West Bengal	India	23.250	87.865
+Gaya	Bihar	India	24.800	85.000
+Bakersfield	California	United States of America	35.370	-119.020
+Oakland	California	United States of America	37.769	-122.221
+West Palm Beach	Florida	United States of America	26.745	-80.124
+Sarasota	Florida	United States of America	27.336	-82.531
+Augusta	Georgia	United States of America	33.461	-81.985
+Charleston	South Carolina	United States of America	32.792	-79.992
+Louisville	Kentucky	United States of America	38.227	-85.751
+Lexington	Kentucky	United States of America	38.050	-84.500
+Charlotte	North Carolina	United States of America	35.207	-80.832
+Youngstown	Ohio	United States of America	41.100	-80.650
+Canton	Ohio	United States of America	40.799	-81.379
+Toledo	Ohio	United States of America	41.670	-83.580
+Columbus	Ohio	United States of America	39.982	-82.992
+Chattanooga	Tennessee	United States of America	35.070	-85.250
+Albany	New York	United States of America	42.670	-73.820
+Harrisburg	Pennsylvania	United States of America	40.274	-76.885
+Ciudad Bolivar	Bolívar	Venezuela	8.100	-63.600
+Maracay	Aragua	Venezuela	10.249	-67.598
+Sfax	Sfax	Tunisia	34.750	10.720
+Al Hudaydah	Al Hudaydah	Yemen	14.800	42.951
+Sumy	Sumy	Ukraine	50.924	34.781
+Mariupol	Donets'k	Ukraine	47.096	37.556
+Al Mukalla	Hadramawt	Yemen	14.541	49.126
+Nha Trang	Khánh Hòa	Vietnam	12.250	109.170
+Qui Nhon	Bình Ð?nh	Vietnam	13.780	109.180
+Hue	Th?a Thiên - Hu?	Vietnam	16.470	107.580
+Bien Hoa	Ðông Nam B?	Vietnam	10.970	106.830
+Can Tho	d?ng b?ng sông C?u Long	Vietnam	10.050	105.770
+Ndola	Copperbelt	Zambia	-13.000	28.650
+Governador Valadares	Minas Gerais	Brazil	-18.870	-41.970
+Juiz de Fora	Minas Gerais	Brazil	-21.770	-43.375
+Joinville	Santa Catarina	Brazil	-26.318	-48.842
+Vitoria	Espírito Santo	Brazil	-20.322	-40.368
+Joao Pessoa	Paraíba	Brazil	-7.099	-34.878
+Campina Grande	Paraíba	Brazil	-7.230	-35.880
+Hamilton	Ontario	Canada	43.250	-79.830
+Windsor	Ontario	Canada	42.315	-83.037
+Cochabamba	Cochabamba	Bolivia	-17.410	-66.170
+San Luis	San Luis	Argentina	-33.300	-66.350
+San Salvador de Jujuy	Jujuy	Argentina	-24.183	-65.300
+Antwerpen	Antwerp	Belgium	51.222	4.413
+Eskisehir	Eskisehir	Turkey	39.795	30.530
+Antalya	Antalya	Turkey	36.892	30.698
+Kayseri	Kayseri	Turkey	38.735	35.490
+Homyel	Homyel'	Belarus	52.430	31.000
+Wollongong	New South Wales	Australia	-34.415	150.890
+Gaziantep	Gaziantep	Turkey	37.077	37.383
+Rangpur	Rajshahi	Bangladesh	25.750	89.280
+Bago	Bago	Myanmar	17.320	96.515
+Valladolid	Castilla y León	Spain	41.650	-4.750
+Hims	Homs (Hims)	Syria	34.732	36.718
+Cluj-Napoca	Cluj	Romania	46.788	23.598
+Hat Yai	Songkhla	Thailand	6.996	100.471
+Ubon Ratchathani	Ubon Ratchathani	Thailand	15.250	104.830
+Palma	Islas Baleares	Spain	39.574	2.654
+Medani	Gezira	Sudan	14.400	33.520
+Kosti	White Nile	Sudan	13.170	32.660
+El Fasher	Northern Darfur	Sudan	13.630	25.350
+Chimoio	Manica	Mozambique	-19.120	33.470
+Thohoyandou	Limpopo	South Africa	-22.950	30.480
+Pietermaritzburg	KwaZulu-Natal	South Africa	-29.610	30.390
+Tangier	Tanger - Tétouan	Morocco	35.747	-5.833
+Agadir	Souss - Massa - Draâ	Morocco	30.440	-9.620
+Ivanovo	Ivanovo	Russia	57.010	41.010
+Kostroma	Kostroma	Russia	57.770	40.940
+Lipetsk	Lipetsk	Russia	52.620	39.640
+Orel	Orel	Russia	52.970	36.070
+Belgorod	Belgorod	Russia	50.630	36.600
+Vladimir	Vladimir	Russia	56.130	40.410
+Izhevsk	Udmurt	Russia	56.850	53.230
+Jaffna	Jaffna	Sri Lanka	9.675	80.005
+Bacolod	Negros Occidental	Philippines	10.632	122.982
+Naga	Camarines Sur	Philippines	13.619	123.181
+Angeles	Pampanga	Philippines	15.145	120.545
+Batangas	Batangas	Philippines	13.782	121.022
+Cotabato	Shariff Kabunsuan	Philippines	7.217	124.248
+Cagayan de Oro	Misamis Oriental	Philippines	8.451	124.685
+Ilorin	Kwara	Nigeria	8.492	4.548
+Minna	Niger	Nigeria	9.620	6.550
+Zaria	Kaduna	Nigeria	11.082	7.708
+Jos	Plateau	Nigeria	9.930	8.890
+Lodz	Lódz	Poland	51.777	19.449
+Zaragoza	Aragón	Spain	41.650	-0.890
+Goteborg	Västra Götaland	Sweden	57.750	12.000
+Pematangsiantar	Sumatera Utara	Indonesia	2.961	99.061
+Pekanbaru	Riau	Indonesia	0.567	101.423
+Manado	Sulawesi Utara	Indonesia	1.480	124.850
+Yogyakarta	Yogyakarta	Indonesia	-7.780	110.375
+Palu	Sulawesi Tengah	Indonesia	-0.907	119.833
+Genoa	Liguria	Italy	44.410	8.930
+Nakuru	Rift Valley	Kenya	-0.280	36.070
+Ipoh	Perak	Malaysia	4.600	101.065
+Kota Baharu	Kelantan	Malaysia	6.120	102.230
+Malacca	Melaka	Malaysia	2.206	102.246
+Kuantan	Pahang	Malaysia	3.830	103.320
+Xuanzhou	Anhui	China	30.954	118.753
+Zhuhai	Guangdong	China	22.279	113.566
+Samarinda	Kalimantan Timur	Indonesia	-0.500	117.150
+Tawau	Sabah	Malaysia	4.271	117.896
+Sandakan	Sabah	Malaysia	5.843	118.108
+Kota Kinabalu	Sabah	Malaysia	5.980	116.110
+Kisumu	Nyanza	Kenya	-0.090	34.750
+Antsirabe	Antananarivo	Madagascar	-19.850	47.033
+Cirebon	Jawa Barat	Indonesia	-6.733	108.567
+Tasikmalaya	Jawa Barat	Indonesia	-7.325	108.215
+Bogor	Jawa Barat	Indonesia	-6.568	106.748
+Bengkulu	Bengkulu	Indonesia	-3.800	102.270
+Pontianak	Kalimantan Barat	Indonesia	-0.030	109.320
+Jember	Jawa Timur	Indonesia	-8.173	113.687
+El Minya	Al Minya	Egypt	28.090	30.750
+Kom Ombo	Aswan	Egypt	24.470	32.950
+Cologne	Nordrhein-Westfalen	Germany	50.932	6.948
+Xianyang	Shaanxi	China	34.348	108.713
+Xiangyang	Hubei	China	32.022	112.128
+Suining	Sichuan	China	30.535	105.531
+Lingyuan	Liaoning	China	41.242	119.399
+Weihai	Shandong	China	37.500	122.100
+Yichun	Jiangxi	China	27.835	114.398
+Yancheng	Jiangsu	China	33.388	120.123
+Fuyang	Zhejiang	China	30.055	119.950
+Tshikapa	Kasaï-Occidental	Congo (Kinshasa)	-6.410	20.770
+Bukavu	Sud-Kivu	Congo (Kinshasa)	-2.510	28.840
+Kindu	Maniema	Congo (Kinshasa)	-2.964	25.910
+Likasi	Katanga	Congo (Kinshasa)	-10.970	26.780
+Jambi	Jambi	Indonesia	-1.590	103.610
+Kumasi	Ashanti	Ghana	6.692	-1.632
+Sekondi	Western	Ghana	4.943	-1.704
+Nellore	Andhra Pradesh	India	14.440	79.990
+Kurnool	Andhra Pradesh	India	15.830	78.030
+Guntur	Andhra Pradesh	India	16.330	80.450
+Tumakuru	Karnataka	India	13.330	77.100
+Davangere	Karnataka	India	14.470	75.920
+Ballari	Karnataka	India	15.150	76.915
+Belagavi	Karnataka	India	15.865	74.505
+Tubruq	Al Butnan	Libya	32.080	23.960
+Tarabulus	North Lebanon	Lebanon	34.422	35.868
+Nazret	Addis Ababa	Ethiopia	8.550	39.270
+Abadan	Khuzestan	Iran	30.331	48.280
+Ardabil	Ardebil	Iran	38.250	48.300
+Qom	Qom	Iran	34.652	50.948
+Qazvin	Qazvin	Iran	36.270	50.000
+Kermanshah	Kermanshah	Iran	34.382	47.058
+Rasht	Gilan	Iran	37.300	49.630
+Birjand	South Khorasan	Iran	32.880	59.220
+Zahedan	Sistan and Baluchestan	Iran	29.500	60.830
+Tuticorin	Tamil Nadu	India	8.820	78.130
+Daloa	Haut-Sassandra	Ivory Coast	6.890	-6.450
+Natal	Amazonas	Brazil	-6.984	-60.270
+Crato	Amazonas	Brazil	-7.464	-63.040
+Uberaba	Minas Gerais	Brazil	-19.780	-47.950
+Londrina	Paraná	Brazil	-23.300	-51.180
+Campos	Rio de Janeiro	Brazil	-21.750	-41.320
+Aracaju	Sergipe	Brazil	-10.900	-37.120
+Vila Velha	Amapi	Brazil	3.217	-51.217
+Santiago del Estero	Santiago del Estero	Argentina	-27.783	-64.267
+Resistencia	Chaco	Argentina	-27.460	-58.990
+Santos	São Paulo	Brazil	-23.952	-46.335
+Bauru	São Paulo	Brazil	-22.330	-49.080
+Franca	São Paulo	Brazil	-20.530	-47.390
+Arak	Tamanghasset	Algeria	25.280	3.750
+Setif	SZtif	Algeria	36.180	5.400
+Batna	Batna	Algeria	35.570	6.170
+Vitsyebsk	Vitsyebsk	Belarus	55.189	30.185
+Myeik	Tanintharyi	Myanmar	12.454	98.611
+Palikir		Federated States of Micronesia	6.917	158.150
+Majuro		Marshall Islands	7.103	171.380
+Funafuti		Tuvalu	-8.517	179.217
+Melekeok		Palau	7.487	134.627
+Monaco		Monaco	43.740	7.407
+Tarawa		Kiribati	1.338	173.018
+Moroni		Comoros	-11.704	43.240
+Macau		Macau S.A.R	22.203	113.545
+Andorra		Andorra	42.500	1.516
+Santa Cruz de Tenerife		Spain	28.470	-16.250
+Hualien	Hualien	Taiwan	23.984	121.600
+New Taipei	New Taipei City	Taiwan	25.013	121.465
+Tainan	Tainan City	Taiwan	23.000	120.200
+San Bernardino	California	United States of America	34.122	-117.302
+Bridgeport	Connecticut	United States of America	41.182	-73.202
+Rochester	New York	United States of America	43.172	-77.622
+Manchester	Manchester	United Kingdom	53.502	-2.250
+Gujranwala	Punjab	Pakistan	32.162	74.183
+Incheon	Inch'on-gwangyoksi	South Korea	37.478	126.640
+Benin City	Edo	Nigeria	6.342	5.618
+Xiamen	Fujian	China	24.452	118.078
+Nanchong	Sichuan	China	30.782	106.128
+Neijiang	Sichuan	China	29.582	105.048
+Nanyang	Henan	China	33.002	112.528
+Jinxi	Liaoning	China	40.752	120.828
+Yantai	Shandong	China	37.532	121.398
+Zaozhuang	Shandong	China	34.882	117.568
+Suzhou	Jiangsu	China	31.302	120.618
+Xuzhou	Jiangsu	China	34.282	117.178
+Wuxi	Jiangsu	China	31.582	120.298
+Jilin	Jilin	China	43.852	126.548
+Chandigarh	Chandigarh	India	30.722	76.778
+Jammu	Jammu and Kashmir	India	32.714	74.845
+Sholapur	Maharashtra	India	17.672	75.898
+Aurangabad	Maharashtra	India	19.898	75.318
+Nasik	Maharashtra	India	20.002	73.778
+Jullundur	Punjab	India	31.337	75.567
+Allahabad	Uttar Pradesh	India	25.457	81.838
+Moradabad	Uttar Pradesh	India	28.844	78.755
+Ghaziabad	Uttar Pradesh	India	28.662	77.406
+Agra	Uttar Pradesh	India	27.172	78.013
+Aligarh	Uttar Pradesh	India	27.894	78.060
+Meerut	Uttar Pradesh	India	29.002	77.698
+Dhanbad	Jharkhand	India	23.802	86.418
+Gwalior	Madhya Pradesh	India	26.232	78.178
+Vadodara	Dadra and Nagar Haveli	India	22.312	73.178
+Rajkot	Dadra and Nagar Haveli	India	22.312	70.798
+St. Paul	Minnesota	United States of America	44.944	-93.085
+Spokane	Washington	United States of America	47.670	-117.420
+Vancouver	Washington	United States of America	45.630	-122.640
+Tucson	Arizona	United States of America	32.207	-110.892
+Fresno	California	United States of America	36.748	-119.773
+Colorado Springs	Colorado	United States of America	38.863	-104.792
+Reno	Nevada	United States of America	39.530	-119.820
+Albuquerque	New Mexico	United States of America	35.105	-106.641
+Kansas City	Missouri	United States of America	39.109	-94.606
+Tulsa	Oklahoma	United States of America	36.120	-95.930
+Baton Rouge	Louisiana	United States of America	30.458	-91.140
+Ft. Worth	Texas	United States of America	32.740	-97.340
+Corpus Christi	Texas	United States of America	27.743	-97.402
+Austin	Texas	United States of America	30.269	-97.745
+El Paso	Texas	United States of America	31.782	-106.512
+Laredo	Texas	United States of America	27.506	-99.507
+Merida	Mérida	Venezuela	8.400	-71.130
+Orlando	Florida	United States of America	28.512	-81.382
+Jacksonville	Florida	United States of America	30.332	-81.672
+Columbia	South Carolina	United States of America	34.040	-80.900
+Indianapolis	Indiana	United States of America	39.752	-86.172
+Knoxville	Tennessee	United States of America	35.970	-83.920
+Richmond	Virginia	United States of America	37.552	-77.452
+Baltimore	Maryland	United States of America	39.302	-76.622
+Syracuse	New York	United States of America	43.050	-76.150
+Port-of-Spain	Port of Spain	Trinidad and Tobago	10.652	-61.517
+Sousse	Sousse	Tunisia	35.830	10.625
+Taizz	Ta`izz	Yemen	13.606	44.037
+Lvov	L'viv	Ukraine	49.835	24.030
+Odessa	Odessa	Ukraine	46.492	30.708
+Zhytomyr	Zhytomyr	Ukraine	50.246	28.662
+Dnipro	Dnipropetrovs'k	Ukraine	48.482	34.998
+Donetsk	Donets'k	Ukraine	48.002	37.828
+Kharkiv	Kharkiv	Ukraine	50.002	36.248
+Bukhara	Bukhoro	Uzbekistan	39.780	64.430
+Andijon	Andijon	Uzbekistan	40.790	72.340
+Haiphong	Qu?ng Ninh	Vietnam	20.832	106.678
+Da Nang	Ðà N?ng	Vietnam	16.060	108.250
+Kitwe	Copperbelt	Zambia	-12.810	28.220
+Chitungwiza	Harare	Zimbabwe	-18.000	31.100
+Douala	Littoral	Cameroon	4.062	9.708
+Birmingham	West Midlands	United Kingdom	52.477	-1.922
+Belfast	Belfast	United Kingdom	54.600	-5.960
+Izmir	Izmir	Turkey	38.438	27.150
+Bursa	Bursa	Turkey	40.202	29.068
+Samsun	Samsun	Turkey	41.280	36.344
+Konya	Konya	Turkey	37.877	32.473
+Adana	Adana	Turkey	36.997	35.318
+Kigali	Kigali City	Rwanda	-1.952	30.059
+Cordoba	Andalucía	Spain	37.880	-4.770
+Constanta	Constanta	Romania	44.203	28.610
+Iasi	Iasi	Romania	47.168	27.575
+Chiang Mai	Chiang Mai	Thailand	18.800	98.980
+Nakhon Ratchasima	Nakhon Ratchasima	Thailand	15.000	102.100
+Mbabane	Hhohho	eSwatini	-26.317	31.133
+Piura	Piura	Peru	-5.210	-80.630
+Arequipa	Arequipa	Peru	-16.418	-71.532
+Chimbote	Ancash	Peru	-9.070	-78.570
+Pucallpa	Ucayali	Peru	-8.369	-74.535
+Iquitos	Loreto	Peru	-3.750	-73.250
+Huancayo	Junín	Peru	-12.080	-75.200
+Ciudad del Este	Alto Paran	Paraguay	-25.517	-54.616
+Vigo	Galicia	Spain	42.220	-8.730
+Bilbao	País Vasco	Spain	43.250	-2.930
+Kaolack	Kaolack	Senegal	14.150	-16.100
+Medina	Al Madinah	Saudi Arabia	24.502	39.578
+Tabuk	Tabuk	Saudi Arabia	28.384	36.555
+Omdurman	Khartoum	Sudan	15.617	32.480
+El Obeid	North Kurdufan	Sudan	13.183	30.217
+The Hague	Zuid-Holland	Netherlands	52.080	4.270
+Ljubljana	Osrednjeslovenska	Slovenia	46.055	14.515
+Bratislava	Bratislavský	Slovakia	48.150	17.117
+Doha	Ad Dawhah	Qatar	25.287	51.533
+Quetta	Baluchistan	Pakistan	30.222	67.023
+Larkana	Sind	Pakistan	27.562	68.207
+Nampula	Nampula	Mozambique	-15.136	39.293
+Welkom	Orange Free State	South Africa	-27.970	26.730
+Oujda	Oriental	Morocco	34.690	-1.910
+Safi	Doukkala - Abda	Morocco	32.320	-9.240
+Podgorica	Podgorica	Montenegro	42.466	19.266
+East London	Eastern Cape	South Africa	-32.970	27.870
+Naltchik	Kabardin-Balkar	Russia	43.498	43.618
+Stavropol	Stavropol'	Russia	45.050	41.980
+Kaliningrad	Kaliningrad	Russia	54.700	20.497
+Bryansk	Bryansk	Russia	53.260	34.430
+Smolensk	Smolensk	Russia	54.783	32.047
+Petrozavodsk	Karelia	Russia	61.850	34.280
+Tver	Tver'	Russia	56.860	35.890
+Vologda	Vologda	Russia	59.210	39.920
+Yaroslavl	Yaroslavl'	Russia	57.620	39.870
+Rostov	Rostov	Russia	47.237	39.711
+Sochi	Krasnodar	Russia	43.590	39.730
+Krasnodar	Krasnodar	Russia	45.020	39.000
+Penza	Penza	Russia	53.180	45.000
+Ryazan	Ryazan'	Russia	54.620	39.720
+Voronezh	Voronezh	Russia	51.732	39.268
+Magnitogorsk	Chelyabinsk	Russia	53.423	58.980
+Chelyabinsk	Chelyabinsk	Russia	55.157	61.437
+Kirov	Kirov	Russia	58.590	49.670
+Nizhny Tagil	Sverdlovsk	Russia	57.920	59.975
+Astrakhan	Astrakhan'	Russia	46.349	48.055
+Orenburg	Orenburg	Russia	51.780	55.110
+Saratov	Saratov	Russia	51.582	46.028
+Ulyanovsk	Ul'yanovsk	Russia	54.330	48.410
+Omsk	Omsk	Russia	54.992	73.398
+Tyumen	Tyumen'	Russia	57.140	65.530
+Novokuznetsk	Kemerovo	Russia	53.750	87.115
+Kemerovo	Kemerovo	Russia	55.340	86.090
+Daejeon	Daejeon	South Korea	36.337	127.423
+Gwangju	Kwangju-gwangyoksi	South Korea	35.173	126.908
+Busan	Busan	South Korea	35.097	129.008
+Zamboanga	Zamboanga del Sur	Philippines	6.922	122.078
+Baguio City	Benguet	Philippines	16.430	120.570
+General Santos	South Cotabato	Philippines	6.111	125.175
+Ulan Ude	Buryat	Russia	51.825	107.625
+Khabarovsk	Khabarovsk	Russia	48.455	135.120
+Mexicali	Baja California	Mexico	32.652	-115.482
+Torreon	Coahuila	Mexico	25.572	-103.422
+Culiacan	Sinaloa	Mexico	24.832	-107.382
+Hermosillo	Sonora	Mexico	29.099	-110.954
+San Luis Potosi	San Luis Potosí	Mexico	22.172	-101.002
+Matamoros	Tamaulipas	Mexico	25.880	-97.500
+Nuevo Laredo	Tamaulipas	Mexico	27.500	-99.550
+Oaxaca	Oaxaca	Mexico	17.083	-96.670
+Leon	Guanajuato	Mexico	21.152	-101.702
+Maiduguri	Borno	Nigeria	11.852	13.158
+Port Harcourt	Rivers	Nigeria	4.812	7.008
+Makurdi	Benue	Nigeria	7.730	8.530
+Ibadan	Oyo	Nigeria	7.382	3.928
+Ogbomosho	Oyo	Nigeria	8.132	4.238
+Warri	Delta	Nigeria	5.520	5.760
+Kaduna	Kaduna	Nigeria	10.522	7.438
+Gdansk	Pomeranian	Poland	54.360	18.640
+Krakow	Lesser Poland	Poland	50.062	19.958
+Wonsan	Kangwon-do	North Korea	39.160	127.431
+Sinuiju	P'yongan-bukto	North Korea	40.086	124.421
+Mwanza	Mwanza	Tanzania	-2.520	32.930
+Morogoro	Morogoro	Tanzania	-6.820	37.660
+Arusha	Arusha	Tanzania	-3.360	36.670
+Bern	Bern	Switzerland	46.917	7.467
+Malmo	Skåne	Sweden	55.583	13.033
+Ambon	Maluku	Indonesia	-3.717	128.200
+Florence	Toscana	Italy	43.780	11.250
+Catania	Sicily	Italy	37.500	15.080
+Pristina	Pristina	Kosovo	42.667	21.166
+Eldoret	Rift Valley	Kenya	0.520	35.270
+Banda Aceh	Aceh	Indonesia	5.550	95.320
+George Town	Pulau Pinang	Malaysia	5.414	100.329
+Wuwei	Gansu	China	37.928	102.641
+Tianshui	Gansu	China	34.602	105.918
+Yulin	Guangxi	China	22.632	110.148
+Wuzhou	Guangxi	China	23.480	111.320
+Liupanshui	Guizhou	China	26.596	104.831
+Quanzhou	Fujian	China	24.902	118.578
+Hefei	Anhui	China	31.852	117.278
+Suzhou	Anhui	China	33.638	116.977
+Zhanjiang	Guangdong	China	21.202	110.378
+Shaoguan	Guangdong	China	24.800	113.580
+Balikpapan	Kalimantan Timur	Indonesia	-1.250	116.830
+Kuching	Sarawak	Malaysia	1.530	110.330
+Surakarta	Jawa Tengah	Indonesia	-7.565	110.825
+Bandar Lampung	Lampung	Indonesia	-5.428	105.268
+Malang	Jawa Timur	Indonesia	-7.978	112.608
+Kupang	Nusa Tenggara Timur	Indonesia	-10.179	123.583
+Cuenca	Azuay	Ecuador	-2.900	-79.000
+Santiago de Cuba	Santiago de Cuba	Cuba	20.025	-75.821
+Santiago	Santiago	Dominican Republic	19.500	-70.670
+Manizales	Caldas	Colombia	5.060	-75.520
+Pasto	Nariño	Colombia	1.214	-77.281
+Barranquilla	Atlántico	Colombia	10.962	-74.802
+Roseau	Saint George	Dominica	15.301	-61.387
+Mbandaka	Équateur	Congo (Kinshasa)	0.040	18.260
+Suez	As Suways	Egypt	30.005	32.550
+Bur Said	Bur Sa`id	Egypt	31.260	32.290
+El Faiyum	Al Fayyum	Egypt	29.310	30.840
+Aswan	Aswan	Egypt	24.088	32.899
+Asyut	Asyut	Egypt	27.190	31.180
+Kisangani	Orientale	Congo (Kinshasa)	0.520	25.220
+Djibouti	Djibouti	Djibouti	11.595	43.148
+Dresden	Sachsen	Germany	51.050	13.750
+Shache	Xinjiang Uygur	China	38.426	77.250
+Yining	Xinjiang Uygur	China	43.900	81.350
+Ankang	Shaanxi	China	32.680	109.020
+Yueyang	Hunan	China	29.382	113.098
+Hengyang	Hunan	China	26.882	112.588
+Mianyang	Sichuan	China	31.472	104.768
+Xichang	Sichuan	China	27.880	102.300
+Baoshan	Yunnan	China	25.120	99.150
+Shijiazhuang	Hebei	China	38.052	114.478
+Handan	Hebei	China	36.582	114.478
+Anshan	Liaoning	China	41.117	122.938
+Dalian	Liaoning	China	38.925	121.628
+Qingdao	Shandong	China	36.092	120.328
+Linyi	Shandong	China	35.082	118.328
+Huaiyin	Jiangsu	China	33.582	119.028
+Wenzhou	Zhejiang	China	28.022	120.648
+Ningbo	Zhejiang	China	29.882	121.548
+Fukuoka	Fukuoka	Japan	33.597	130.408
+Miyazaki	Miyazaki	Japan	31.918	131.418
+Naha	Okinawa	Japan	26.207	127.673
+Kochi	Kochi	Japan	33.562	133.538
+Gorontalo	Gorontalo	Indonesia	0.550	123.070
+Tongliao	Nei Mongol	China	43.622	122.268
+Hohhot	Nei Mongol	China	40.822	111.658
+Chifeng	Nei Mongol	China	42.272	118.948
+Jiamusi	Heilongjiang	China	46.832	130.348
+Daqing	Heilongjiang	China	46.582	124.998
+Jixi	Heilongjiang	China	45.302	130.968
+Nagoya	Aichi	Japan	35.157	136.913
+Nagano	Nagano	Japan	36.650	138.170
+Hakodate	Hokkaido	Japan	41.795	140.740
+Kyoto	Kyoto	Japan	35.032	135.748
+Sendai	Miyagi	Japan	38.289	141.020
+Kananga	Kasaï-Occidental	Congo (Kinshasa)	-5.888	22.398
+Mbuji-Mayi	Kasaï-Oriental	Congo (Kinshasa)	-6.148	23.598
+Butembo	Nord-Kivu	Congo (Kinshasa)	0.130	29.280
+Blantyre	Blantyre	Malawi	-15.790	34.990
+Quetzaltenango	Quezaltenango	Guatemala	14.830	-91.520
+Banjul	Banjul	The Gambia	13.454	-16.592
+Faridabad	Haryana	India	28.435	77.315
+Srinagar	Jammu and Kashmir	India	34.102	74.813
+Vijayawada	Andhra Pradesh	India	16.522	80.628
+Thiruvananthapuram	Kerala	India	8.502	76.948
+Kochi	Kerala	India	10.017	76.222
+Cuttack	Orissa	India	20.470	85.890
+Hubballi	Karnataka	India	15.362	75.123
+Mangaluru	Karnataka	India	12.900	74.850
+Mysuru	Karnataka	India	12.312	76.658
+Kalaburagi	Karnataka	India	17.350	76.820
+Kolhapur	Maharashtra	India	16.700	74.220
+Nanded	Maharashtra	India	19.170	77.300
+Akola	Maharashtra	India	20.710	77.010
+Guwahati	Assam	India	26.162	91.768
+Bordeaux	Aquitaine	France	44.852	-0.597
+Marseille	Provence-Alpes-Côte-d'Azur	France	43.292	5.373
+Skopje	Centar	North Macedonia	42.000	21.433
+Misratah	Misratah	Libya	32.380	15.100
+Kirkuk	At-Ta'mim	Iraq	35.472	44.392
+Mosul	Ninawa	Iraq	36.347	43.143
+An Najaf	An-Najaf	Iraq	32.000	44.335
+Dire Dawa	Dire Dawa	Ethiopia	9.590	41.860
+Tampere	Pirkanmaa	Finland	61.500	23.750
+Aqtobe	Aqtöbe	Kazakhstan	50.280	57.170
+Qyzylorda	Qyzylorda	Kazakhstan	44.800	65.465
+Pavlodar	Pavlodar	Kazakhstan	52.300	76.950
+Semey	East Kazakhstan	Kazakhstan	50.435	80.275
+Oskemen	East Kazakhstan	Kazakhstan	49.990	82.615
+Yazd	Yazd	Iran	31.920	54.370
+Ahvaz	Khuzestan	Iran	31.282	48.718
+Basra	Al-Basrah	Iraq	30.515	47.812
+Bandar-e-Abbas	Hormozgan	Iran	27.204	56.272
+Hamadan	Hamadan	Iran	34.796	48.515
+Tabriz	East Azarbaijan	Iran	38.088	46.299
+Ludhiana	Punjab	India	30.930	75.870
+Kota	Rajasthan	India	25.182	75.833
+Jodhpur	Rajasthan	India	26.294	73.015
+Shymkent	South Kazakhstan	Kazakhstan	42.320	69.595
+Taraz	Zhambyl	Kazakhstan	42.900	71.365
+Lucknow	Uttar Pradesh	India	26.857	80.913
+Saharanpur	Uttar Pradesh	India	29.970	77.550
+Ranchi	Jharkhand	India	23.372	85.328
+Bhagalpur	Bihar	India	25.230	86.980
+Raipur	Chhattisgarh	India	21.237	81.633
+Jabalpur	Madhya Pradesh	India	23.177	79.953
+Indore	Madhya Pradesh	India	22.717	75.863
+Salem	Tamil Nadu	India	11.672	78.178
+Tiruchirappalli	Tamil Nadu	India	10.812	78.688
+Pointe-Noire	Kouilou	Congo (Brazzaville)	-4.770	11.880
+Bouake	Vallée du Bandama	Ivory Coast	7.690	-5.030
+Rio Branco	Acre	Brazil	-9.967	-67.800
+Sao Luis	Maranhão	Brazil	-2.514	-44.268
+Porto Velho	Rondônia	Brazil	-8.750	-63.900
+Belo Horizonte	Minas Gerais	Brazil	-19.913	-43.917
+Montes Claros	Minas Gerais	Brazil	-16.720	-43.860
+Uberlandia	Minas Gerais	Brazil	-18.900	-48.280
+Cuiaba	Mato Grosso	Brazil	-15.568	-56.087
+Pelotas	Rio Grande do Sul	Brazil	-31.750	-52.330
+Caxias do Sul	Rio Grande do Sul	Brazil	-29.180	-51.170
+Ponta Grossa	Paraná	Brazil	-25.090	-50.160
+Teresina	Piauí	Brazil	-5.093	-42.782
+Maceio	Alagoas	Brazil	-9.618	-35.732
+Vitoria da Conquista	Bahia	Brazil	-14.850	-40.840
+Vila Velha	Espírito Santo	Brazil	-20.368	-40.318
+Natal	Rio Grande do Norte	Brazil	-5.778	-35.242
+Venice	Veneto	Italy	45.439	12.335
+San Juan	San Juan	Argentina	-31.550	-68.520
+Salta	Salta	Argentina	-24.783	-65.417
+Tucuman	Tucumán	Argentina	-26.814	-65.219
+Santa Fe	Santa Fe	Argentina	-31.624	-60.690
+Rosario	Santa Fe	Argentina	-32.949	-60.668
+Campinas	São Paulo	Brazil	-22.898	-47.102
+Sorocaba	São Paulo	Brazil	-23.490	-47.470
+Ribeirao Preto	São Paulo	Brazil	-21.170	-47.830
+Petrolina	Pernambuco	Brazil	-9.380	-40.510
+Bamenda	Nord-Ouest	Cameroon	5.960	10.150
+Garoua	Nord	Cameroon	9.300	13.390
+Herat	Hirat	Afghanistan	34.330	62.170
+Mazar-e Sharif	Balkh	Afghanistan	36.700	67.100
+Bridgetown	Saint Michael	Barbados	13.102	-59.617
+Annaba	Annaba	Algeria	36.920	7.760
+Porto-Novo	Ouémé	Benin	6.483	2.617
+Constantine	Constantine	Algeria	36.360	6.600
+Brest	Brest	Belarus	52.100	23.700
+Khulna	Khulna	Bangladesh	22.842	89.558
+Gold Coast	Queensland	Australia	-28.082	153.448
+Bobo Dioulasso	Houet	Burkina Faso	11.180	-4.290
+Rajshahi	Rajshahi	Bangladesh	24.377	88.603
+Mandalay	Mandalay	Myanmar	21.972	96.083
+Bujumbura	Bujumbura Mairie	Burundi	-3.376	29.360
+Kingstown		Saint Vincent and the Grenadines	13.148	-61.212
+Castries		Saint Lucia	14.002	-61.000
+Basseterre		Saint Kitts and Nevis	17.302	-62.717
+Las Palmas		Spain	28.100	-15.430
+Port Louis		Mauritius	-20.167	57.500
+Gaza		Palestine	31.530	34.445
+Saint George's		Grenada	12.053	-61.742
+Manama		Bahrain	26.236	50.583
+Saint John's		Antigua and Barbuda	17.118	-61.850
+Taichung	Taichung City	Taiwan	24.152	120.682
+Manukau	Auckland	New Zealand	-37.000	174.885
+Amaravati	Andhra Pradesh	India	16.534	80.524
+Kozhikode	Kerala	India	11.252	75.768
+Bhubaneshwar	Orissa	India	20.272	85.825
+Jamshedpur	Jharkhand	India	22.789	86.196
+Montevideo	Montevideo	Uruguay	-34.856	-56.173
+Boise	Idaho	United States of America	43.609	-116.227
+San Jose	California	United States of America	37.302	-121.852
+Sacramento	California	United States of America	38.577	-121.472
+Las Vegas	Nevada	United States of America	36.212	-115.222
+Portland	Oregon	United States of America	45.522	-122.682
+Salt Lake City	Utah	United States of America	40.777	-111.932
+Des Moines	Iowa	United States of America	41.580	-93.620
+Omaha	Nebraska	United States of America	41.240	-96.010
+Oklahoma City	Oklahoma	United States of America	35.472	-97.521
+San Antonio	Texas	United States of America	29.489	-98.509
+San Cristobal	Táchira	Venezuela	7.770	-72.250
+Valencia	Carabobo	Venezuela	10.232	-67.982
+Jackson	Mississippi	United States of America	32.299	-90.185
+Raleigh	North Carolina	United States of America	35.819	-78.645
+Cleveland	Ohio	United States of America	41.472	-81.697
+Cincinnati	Ohio	United States of America	39.164	-84.459
+Nashville	Tennessee	United States of America	36.172	-86.782
+Memphis	Tennessee	United States of America	35.122	-90.002
+Norfolk	Virginia	United States of America	36.850	-76.280
+Milwaukee	Wisconsin	United States of America	43.055	-87.922
+Buffalo	New York	United States of America	42.882	-78.882
+Pittsburgh	Pennsylvania	United States of America	40.432	-80.002
+Ciudad Guayana	Bolívar	Venezuela	8.370	-62.620
+Lome	Maritime	Togo	6.134	1.221
+Tunis	Tunis	Tunisia	36.803	10.180
+Sevastapol	Crimea	Russia	44.600	33.465
+Abu Dhabi	Abu Dhabi	United Arab Emirates	24.467	54.367
+Ashgabat	Ahal	Turkmenistan	37.950	58.383
+Samarqand	Samarkand	Uzbekistan	39.670	66.945
+Lusaka	Lusaka	Zambia	-15.415	28.281
+Harare	Harare	Zimbabwe	-17.816	31.043
+Bulawayo	Bulawayo	Zimbabwe	-20.170	28.580
+Dili	Dili	East Timor	-8.559	125.579
+Port Vila	Shefa	Vanuatu	-17.733	168.317
+Tegucigalpa	Francisco Morazán	Honduras	14.104	-87.219
+Georgetown	East Berbice-Corentyne	Guyana	6.802	-58.167
+Reykjavik	Suðurnes	Iceland	64.150	-21.950
+Port-au-Prince	Ouest	Haiti	18.543	-72.338
+Glasgow	Glasgow	United Kingdom	55.876	-4.253
+Kampala	Kampala	Uganda	0.319	32.581
+Aden	`Adan	Yemen	12.780	45.009
+Paramaribo	Paramaribo	Suriname	5.835	-55.167
+Seville	Andalucía	Spain	37.405	-5.980
+Niamey	Niamey	Niger	13.519	2.115
+Port Sudan	Red Sea	Sudan	19.616	37.216
+Dushanbe	Tadzhikistan Territories	Tajikistan	38.560	68.774
+Cusco	Cusco	Peru	-13.525	-71.972
+Tacna	Tacna	Peru	-18.000	-70.250
+Trujillo	La Libertad	Peru	-8.120	-79.020
+Ica	Ica	Peru	-14.068	-75.725
+Asuncion	Asunción	Paraguay	-25.294	-57.643
+Managua	Managua	Nicaragua	12.155	-86.270
+Freetown	Western	Sierra Leone	8.472	-13.236
+Niyala	South Darfur	Sudan	12.060	24.890
+Kassala	Kassala	Sudan	15.460	36.390
+Islamabad	F.C.T.	Pakistan	33.702	73.165
+Multan	Punjab	Pakistan	30.202	71.453
+Hyderabad	Sind	Pakistan	25.382	68.373
+Peshawar	N.W.F.P.	Pakistan	34.007	71.533
+Kathmandu	Bhaktapur	Nepal	27.719	85.315
+Bloemfontein	Orange Free State	South Africa	-29.120	26.230
+Pretoria	Gauteng	South Africa	-25.705	28.227
+Port Moresby	Central	Papua New Guinea	-9.465	147.193
+Honiara	Guadalcanal	Solomon Islands	-9.438	159.950
+Panama City	Panama	Panama	8.970	-79.535
+Fez	Fès - Boulemane	Morocco	34.057	-5.002
+Rabat	Rabat - Salé - Zemmour - Zaer	Morocco	34.025	-6.836
+Marrakesh	Marrakech - Tensift - Al Haouz	Morocco	31.632	-8.002
+Chisinau	Chisinau	Moldova	47.005	28.858
+Beira	Sofala	Mozambique	-19.820	34.870
+Port Elizabeth	Eastern Cape	South Africa	-33.968	25.598
+Maputo	Maputo	Mozambique	-25.953	32.587
+Tomsk	Tomsk	Russia	56.495	84.975
+Murmansk	Murmansk	Russia	68.970	33.100
+Archangel	Arkhangel'sk	Russia	64.575	40.545
+Nizhny Novgorod	Nizhegorod	Russia	56.335	43.998
+Volgograd	Volgograd	Russia	48.712	44.498
+Ufa	Bashkortostan	Russia	54.792	56.038
+Yekaterinburg	Sverdlovsk	Russia	56.852	60.598
+Samara	Samara	Russia	53.197	50.149
+Kazan	Tatarstan	Russia	55.752	49.124
+Surgut	Khanty-Mansiy	Russia	61.260	73.425
+Barnaul	Altay	Russia	53.355	83.745
+Novosibirsk	Novosibirsk	Russia	55.032	82.958
+Mogadishu	Banaadir	Somalia	2.069	45.365
+Muscat	Muscat	Oman	23.613	58.593
+Colombo	Colombo	Sri Lanka	6.932	79.858
+Cebu	Cebu	Philippines	10.322	123.898
+Iloilo	Iloilo	Philippines	10.705	122.545
+Davao	Davao Del Sur	Philippines	7.112	125.628
+Irkutsk	Irkutsk	Russia	52.320	104.245
+Krasnoyarsk	Krasnoyarsk	Russia	56.016	92.864
+Chita	Chita	Russia	52.055	113.465
+Vladivostok	Primor'ye	Russia	43.130	131.910
+Tijuana	Baja California	Mexico	32.502	-117.082
+Chihuahua	Chihuahua	Mexico	28.647	-106.087
+Mazatlan	Sinaloa	Mexico	23.221	-106.420
+Tampico	Tamaulipas	Mexico	22.300	-97.870
+Acapulco	Guerrero	Mexico	16.850	-99.916
+Veracruz	Veracruz	Mexico	19.177	-96.160
+Tuxtla Gutierrez	Chiapas	Mexico	16.750	-93.150
+Cancun	Quintana Roo	Mexico	21.170	-86.830
+Merida	Yucatán	Mexico	20.969	-89.619
+Enugu	Enugu	Nigeria	6.450	7.500
+Sokoto	Sokoto	Nigeria	13.060	5.240
+Perm	Perm'	Russia	58.002	56.248
+Ulaanbaatar	Ulaanbaatar	Mongolia	47.919	106.915
+Mbeya	Mbeya	Tanzania	-8.890	33.430
+Windhoek	Khomas	Namibia	-22.570	17.084
+Zanzibar	Zanzibar West	Tanzania	-6.160	39.200
+Valencia	Comunidad Valenciana	Spain	39.487	-0.402
+Abuja	Federal Capital Territory	Nigeria	9.085	7.531
+Padang	Sumatera Barat	Indonesia	-0.958	100.358
+Bissau	Bissau	Guinea Bissau	11.865	-15.598
+Palermo	Sicily	Italy	38.127	13.348
+Amman	Amman	Jordan	31.952	35.931
+Vilnius	Vilniaus	Lithuania	54.683	25.317
+Riga	Riga	Latvia	56.950	24.100
+Bishkek	Bishkek	Kyrgyzstan	42.875	74.583
+Xining	Gansu	China	36.622	101.768
+Guilin	Guangxi	China	25.282	110.278
+Huainan	Anhui	China	32.632	116.978
+Shantou	Guangdong	China	23.372	116.668
+Mombasa	Coast	Kenya	-4.038	39.688
+Maseru	Maseru	Lesotho	-29.317	27.483
+Antananarivo	Antananarivo	Madagascar	-18.915	47.515
+Semarang	Jawa Tengah	Indonesia	-6.965	110.418
+Palembang	Sumatera Selatan	Indonesia	-2.978	104.748
+Bandjarmasin	Kalimantan Selatan	Indonesia	-3.330	114.580
+Makassar	Sulawesi Selatan	Indonesia	-5.138	119.430
+Lyon	Rhône-Alpes	France	45.772	4.828
+Quito	Pichincha	Ecuador	-0.213	-78.502
+San Jose	San José	Costa Rica	9.937	-84.086
+San Salvador	San Salvador	El Salvador	13.712	-89.205
+Kingston	Kingston	Jamaica	17.977	-76.767
+Cartagena	Bolívar	Colombia	10.402	-75.516
+Ndjamena	Hadjer-Lamis	Chad	12.115	15.047
+Malabo	Bioko Norte	Equatorial Guinea	3.750	8.783
+Luxor	Qina	Egypt	25.700	32.650
+Asmara	Anseba	Eritrea	15.333	38.933
+Zagreb	Grad Zagreb	Croatia	45.800	16.000
+Tallinn	Harju	Estonia	59.434	24.728
+Hami	Xinjiang Uygur	China	42.827	93.515
+Hotan	Xinjiang Uygur	China	37.100	79.927
+Kashgar	Xinjiang Uygur	China	39.476	75.970
+Yinchuan	Ningxia Hui	China	38.470	106.271
+Pingxiang	Jiangxi	China	27.622	113.848
+Nagasaki	Nagasaki	Japan	32.765	129.885
+Qiqihar	Heilongjiang	China	47.347	123.988
+Kikwit	Bandundu	Congo (Kinshasa)	-5.030	18.850
+Kolwezi	Katanga	Congo (Kinshasa)	-10.717	25.472
+Lubumbashi	Katanga	Congo (Kinshasa)	-11.678	27.478
+Lilongwe	Lilongwe	Malawi	-13.983	33.783
+Guatemala	Guatemala	Guatemala	14.623	-90.529
+Libreville	Estuaire	Gabon	0.385	9.458
+Vishakhapatnam	Andhra Pradesh	India	17.732	83.303
+Suva	Central	Fiji	-18.133	178.442
+Antofagasta	Antofagasta	Chile	-23.650	-70.400
+Valparaiso	Valparaíso	Chile	-33.046	-71.623
+Concepcion	Bío-Bío	Chile	-36.830	-73.050
+Nouakchott	Nouakchott	Mauritania	18.086	-15.975
+Bamako	Bamako	Mali	12.652	-8.002
+Banghazi	Benghazi	Libya	32.119	20.065
+Thessaloniki	Kentriki Makedonia	Greece	40.698	22.883
+Beirut	Beirut	Lebanon	33.874	35.508
+Tbilisi	Tbilisi	Georgia	41.727	44.789
+Astana	Aqmola	Kazakhstan	51.181	71.428
+Qaraghandy	Qaraghandy	Kazakhstan	49.885	73.115
+Almaty	Almaty	Kazakhstan	43.327	76.913
+Isfahan	Esfahan	Iran	32.702	51.698
+Shiraz	Fars	Iran	29.632	52.568
+Amritsar	Punjab	India	31.642	74.868
+Varanasi	Uttar Pradesh	India	25.332	82.998
+Asansol	West Bengal	India	23.685	86.981
+Bhilai	Chhattisgarh	India	21.219	81.431
+Bhopal	Madhya Pradesh	India	23.252	77.408
+Madurai	Tamil Nadu	India	9.922	78.118
+Coimbatore	Tamil Nadu	India	11.002	76.948
+Vientiane	Vientiane [prefecture]	Laos	17.967	102.600
+Brazzaville	Pool	Congo (Brazzaville)	-4.257	15.283
+Conakry	Conakry	Guinea	9.533	-13.682
+Yamoussoukro	Lacs	Ivory Coast	6.818	-5.276
+Manaus	Amazonas	Brazil	-3.098	-60.002
+Campo Grande	Mato Grosso do Sul	Brazil	-20.448	-54.619
+Florianopolis	Santa Catarina	Brazil	-27.578	-48.522
+Feira de Santana	Bahia	Brazil	-12.250	-38.970
+Winnipeg	Manitoba	Canada	49.883	-97.166
+Calgary	Alberta	Canada	51.085	-114.082
+Victoria	British Columbia	Canada	48.433	-123.350
+Macapa	Amapá	Brazil	0.033	-51.050
+Ottawa	Ontario	Canada	45.419	-75.702
+Quebec	Québec	Canada	46.840	-71.246
+Halifax	Nova Scotia	Canada	44.650	-63.600
+Belgrade	Grad Beograd	Serbia	44.821	20.466
+Bandar Seri Begawan	Brunei and Muara	Brunei	4.883	114.933
+Mendoza	Mendoza	Argentina	-32.881	-68.819
+Sucre	Chuquisaca	Bolivia	-19.041	-65.260
+Bahia Blanca	Ciudad de Buenos Aires	Argentina	-38.740	-62.265
+Mar del Plata	Ciudad de Buenos Aires	Argentina	-38.000	-57.580
+Cordoba	Córdoba	Argentina	-31.398	-64.184
+Posadas	Misiones	Argentina	-27.358	-55.885
+Belmopan	Cayo	Belize	17.252	-88.767
+Bangui	Bangui	Central African Republic	4.367	18.558
+Maroua	Extrême-Nord	Cameroon	10.596	14.325
+Yaounde	Centre	Cameroon	3.869	11.515
+Tirana	Durrës	Albania	41.328	19.819
+Yerevan	Erevan	Armenia	40.183	44.512
+Baku	Baki	Azerbaijan	40.397	49.860
+Kandahar	Kandahar	Afghanistan	31.610	65.695
+Phnom Penh	Phnom Penh	Cambodia	11.552	104.915
+Huambo	Huambo	Angola	-12.748	15.758
+La Paz	La Paz	Bolivia	-16.496	-68.152
+Santa Cruz	Santa Cruz	Bolivia	-17.752	-63.228
+Oran	Oran	Algeria	35.712	-0.622
+Cotonou	Ouémé	Benin	6.402	2.518
+Sofia	Grad Sofiya	Bulgaria	42.685	23.315
+Minsk	Minsk	Belarus	53.902	27.565
+Thimphu	Thimphu	Bhutan	27.473	89.639
+Gaborone	South-East	Botswana	-24.646	25.912
+Canberra	Australian Capital Territory	Australia	-35.283	149.129
+Newcastle	New South Wales	Australia	-32.845	151.815
+Adelaide	South Australia	Australia	-34.933	138.598
+Brisbane	Queensland	Australia	-27.453	153.033
+Ouagadougou	Kadiogo	Burkina Faso	12.372	-1.527
+Sarajevo	Sarajevo	Bosnia and Herzegovina	43.850	18.383
+Naypyidaw	Mandalay	Myanmar	19.769	96.117
+San Juan		Puerto Rico	18.440	-66.130
+Hamilton		Bermuda	32.294	-64.784
+Nukualofa		Tonga	-21.139	-175.221
+Hargeysa		Somaliland	9.560	44.065
+Victoria		Seychelles	-4.617	55.450
+Sao Tome		Sao Tome and Principe	0.333	6.733
+Apia		Samoa	-13.842	-171.739
+Valletta		Malta	35.900	14.515
+Male		Maldives	4.167	73.500
+Jerusalem	Jerusalem	Israel	31.778	35.207
+Praia		Cape Verde	14.917	-23.517
+Nassau		The Bahamas	25.083	-77.350
+Nicosia		Cyprus	35.167	33.367
+Kaohsiung	Kaohsiung City	Taiwan	22.633	120.267
+Wellington	Manawatu-Wanganui	New Zealand	-41.300	174.783
+Christchurch	Canterbury	New Zealand	-43.535	172.630
+Shenzhen	Guangdong	China	22.554	114.120
+Zibo	Shandong	China	36.802	118.048
+Minneapolis	Minnesota	United States of America	44.982	-93.254
+Honolulu	Hawaii	United States of America	21.309	-157.860
+Seattle	Washington	United States of America	47.572	-122.342
+Phoenix	Arizona	United States of America	33.542	-112.072
+San Diego	California	United States of America	32.822	-117.182
+St. Louis	Missouri	United States of America	38.637	-90.242
+New Orleans	Louisiana	United States of America	29.997	-90.042
+Dallas	Texas	United States of America	32.822	-96.842
+Maracaibo	Zulia	Venezuela	10.732	-71.662
+Boston	Massachusetts	United States of America	42.332	-71.072
+Tampa	Florida	United States of America	27.949	-82.461
+Philadelphia	Pennsylvania	United States of America	40.002	-75.172
+Detroit	Michigan	United States of America	42.332	-83.082
+Anchorage	Alaska	United States of America	61.220	-149.900
+Hanoi	Thái Nguyên	Vietnam	21.035	105.848
+Ho Chi Minh City	H? Chí Minh city	Vietnam	10.782	106.693
+Ankara	Ankara	Turkey	39.929	32.862
+Budapest	Budapest	Hungary	47.502	19.081
+Sanaa	Amanat Al Asimah	Yemen	15.357	44.205
+Barcelona	Cataluña	Spain	41.385	2.181
+Bucharest	Bucharest	Romania	44.435	26.098
+Aleppo	Aleppo (Halab)	Syria	36.232	37.168
+Damascus	Damascus	Syria	33.502	36.298
+Zurich	Zürich	Switzerland	47.382	8.548
+Lisbon	Lisboa	Portugal	38.725	-9.147
+Khartoum	Khartoum	Sudan	15.590	32.532
+Jeddah	Makkah	Saudi Arabia	21.519	39.217
+Makkah	Makkah	Saudi Arabia	21.432	39.818
+Oslo	Oslo	Norway	59.919	10.748
+Lahore	Punjab	Pakistan	31.562	74.348
+Karachi	Sind	Pakistan	24.872	66.988
+Durban	KwaZulu-Natal	South Africa	-29.863	30.978
+St. Petersburg	City of St. Petersburg	Russia	59.941	30.314
+Guadalajara	Jalisco	Mexico	20.672	-103.332
+Puebla	Puebla	Mexico	19.052	-98.202
+Kano	Kano	Nigeria	12.002	8.518
+Warsaw	Masovian	Poland	52.252	20.998
+Pyongyang	P'yongyang	North Korea	39.021	125.753
+Dar es Salaam	Dar-Es-Salaam	Tanzania	-6.798	39.266
+Medan	Sumatera Utara	Indonesia	3.582	98.648
+Dublin	Dublin	Ireland	53.335	-6.251
+Monrovia	Montserrado	Liberia	6.315	-10.800
+Naples	Campania	Italy	40.842	14.243
+Milan	Lombardia	Italy	45.472	9.203
+Kuala Lumpur	Selangor	Malaysia	3.169	101.698
+Lanzhou	Gansu	China	36.058	103.790
+Nanning	Guangxi	China	22.822	108.318
+Guiyang	Guizhou	China	26.582	106.718
+Chongqing	Chongqing	China	29.567	106.593
+Fuzhou	Fujian	China	26.082	119.298
+Guangzhou	Guangdong	China	23.147	113.323
+Dongguan	Guangdong	China	23.051	113.743
+Bandung	Jawa Barat	Indonesia	-6.948	107.568
+Surabaya	Jawa Timur	Indonesia	-7.247	112.749
+Guayaquil	Guayas	Ecuador	-2.218	-79.922
+Medellin	Antioquia	Colombia	6.277	-75.577
+Cali	Valle del Cauca	Colombia	3.402	-76.502
+Havana	Ciudad de la Habana	Cuba	23.134	-82.366
+Alexandria	Al Iskandariyah	Egypt	31.202	29.948
+Frankfurt	Hessen	Germany	50.100	8.675
+Hamburg	Hamburg	Germany	53.552	9.998
+Munich	Bayern	Germany	48.132	11.573
+Prague	Prague	Czechia	50.085	14.464
+Kuwait City	Al Kuwayt	Kuwait	29.372	47.976
+Xian	Shaanxi	China	34.277	108.893
+Taiyuan	Shanxi	China	37.877	112.543
+Wuhan	Hubei	China	30.582	114.268
+Changsha	Hunan	China	28.202	112.968
+Kunming	Yunnan	China	25.072	102.678
+Zhengzhou	Henan	China	34.757	113.663
+Shenyeng	Liaoning	China	41.807	123.448
+Jinan	Shandong	China	36.677	116.993
+Tianjin	Tianjin	China	39.132	117.198
+Nanchang	Jiangxi	China	28.682	115.878
+Nanjing	Jiangsu	China	32.052	118.778
+Hangzhou	Zhejiang	China	30.252	120.168
+Hiroshima	Hiroshima	Japan	34.390	132.441
+Changchun	Jilin	China	43.867	125.338
+Baotou	Nei Mongol	China	40.654	109.820
+Harbin	Heilongjiang	China	45.752	126.648
+Sapporo	Hokkaido	Japan	43.077	141.338
+Santo Domingo	Distrito Nacional	Dominican Republic	18.472	-69.902
+Accra	Greater Accra	Ghana	5.552	-0.219
+Delhi	Delhi	India	28.672	77.228
+Hyderabad	Telangana	India	17.402	78.478
+Pune	Maharashtra	India	18.532	73.848
+Nagpur	Maharashtra	India	21.172	79.088
+Tripoli	Tajura' wa an Nawahi al Arba	Libya	32.892	13.180
+Tel Aviv-Yafo	Tel Aviv	Israel	32.082	34.768
+Helsinki	Southern Finland	Finland	60.178	24.932
+Mashhad	Razavi Khorasan	Iran	36.272	59.568
+Jaipur	Rajasthan	India	26.923	75.808
+Kanpur	Uttar Pradesh	India	26.462	80.318
+Patna	Bihar	India	25.627	85.128
+Chennai	Tamil Nadu	India	13.092	80.278
+Ahmedabad	Dadra and Nagar Haveli	India	23.032	72.578
+Surat	Dadra and Nagar Haveli	India	21.202	72.838
+Kobenhavn	Hovedstaden	Denmark	55.681	12.562
+Abidjan	Lagunes	Ivory Coast	5.322	-4.042
+Belem	Pará	Brazil	-1.448	-48.482
+Brasilia	Distrito Federal	Brazil	-15.781	-47.918
+Porto Alegre	Rio Grande do Sul	Brazil	-30.048	-51.202
+Curitiba	Paraná	Brazil	-25.418	-49.322
+Fortaleza	Ceará	Brazil	-3.748	-38.582
+Salvador	Bahia	Brazil	-12.968	-38.482
+Edmonton	Alberta	Canada	53.552	-113.502
+Montreal	Québec	Canada	45.502	-73.585
+Goiania	Goiás	Brazil	-16.718	-49.302
+Recife	Pernambuco	Brazil	-8.074	-34.918
+Brussels	Brussels	Belgium	50.835	4.331
+Dhaka	Dhaka	Bangladesh	23.725	90.407
+Luanda	Luanda	Angola	-8.836	13.232
+Algiers	Alger	Algeria	36.765	3.049
+Chattogram	Chittagong	Bangladesh	22.332	91.798
+Perth	Western Australia	Australia	-31.953	115.838
+Rangoon	Yangon	Myanmar	16.785	96.165
+San Francisco	California	United States of America	37.769	-122.417
+Denver	Colorado	United States of America	39.741	-104.986
+Houston	Texas	United States of America	29.822	-95.342
+Miami	Florida	United States of America	25.790	-80.226
+Atlanta	Georgia	United States of America	33.832	-84.402
+Chicago	Illinois	United States of America	41.832	-87.752
+Caracas	Distrito Capital	Venezuela	10.503	-66.919
+Kiev	Kiev	Ukraine	50.435	30.515
+Dubai	Dubay	United Arab Emirates	25.232	55.278
+Tashkent	Tashkent	Uzbekistan	41.314	69.293
+Madrid	Comunidad de Madrid	Spain	40.402	-3.685
+Geneva	Genève	Switzerland	46.210	6.140
+Stockholm	Stockholm	Sweden	59.353	18.095
+Bangkok	Bangkok Metropolis	Thailand	13.752	100.515
+Lima	Lima	Peru	-12.046	-77.052
+Dakar	Dakar	Senegal	14.718	-17.475
+Johannesburg	Gauteng	South Africa	-26.168	28.028
+Amsterdam	Noord-Holland	Netherlands	52.352	4.915
+Casablanca	Grand Casablanca	Morocco	33.602	-7.618
+Seoul	Seoul	South Korea	37.568	126.998
+Manila	Metropolitan Manila	Philippines	14.606	120.980
+Monterrey	Nuevo León	Mexico	25.672	-100.332
+Berlin	Berlin	Germany	52.524	13.400
+Urumqi	Xinjiang Uygur	China	43.807	87.573
+Chengdu	Sichuan	China	30.672	104.068
+Osaka	Osaka	Japan	34.752	135.458
+Kinshasa	Kinshasa City	Congo (Kinshasa)	-4.328	15.313
+New Delhi	Delhi	India	28.600	77.200
+Bengaluru	Karnataka	India	12.972	77.558
+Athens	Attiki	Greece	37.985	23.731
+Baghdad	Baghdad	Iraq	33.341	44.392
+Addis Ababa	Addis Ababa	Ethiopia	9.035	38.698
+Tehran	Tehran	Iran	35.674	51.422
+Vancouver	British Columbia	Canada	49.275	-123.124
+Toronto	Ontario	Canada	43.702	-79.422
+Buenos Aires	Ciudad de Buenos Aires	Argentina	-34.601	-58.399
+Kabul	Kabul	Afghanistan	34.519	69.181
+Vienna	Wien	Austria	48.202	16.365
+Melbourne	Victoria	Australia	-37.818	144.973
+Taipei	Taipei City	Taiwan	25.036	121.568
+Auckland	Auckland	New Zealand	-36.848	174.763
+Los Angeles	California	United States of America	33.992	-118.182
+Washington, D.C.	District of Columbia	United States of America	38.901	-77.011
+New York	New York	United States of America	40.752	-73.982
+London	Westminster	United Kingdom	51.502	-0.119
+Istanbul	Istanbul	Turkey	41.107	29.008
+Riyadh	Ar Riyad	Saudi Arabia	24.643	46.771
+Cape Town	Western Cape	South Africa	-33.918	18.433
+Moscow	Moskva	Russia	55.754	37.614
+Mexico City	Distrito Federal	Mexico	19.444	-99.133
+Lagos	Lagos	Nigeria	6.445	3.390
+Rome	Lazio	Italy	41.898	12.481
+Beijing	Beijing	China	39.931	116.386
+Nairobi	Nairobi	Kenya	-1.281	36.815
+Jakarta	Jakarta Raya	Indonesia	-6.172	106.827
+Bogota	Bogota	Colombia	4.598	-74.085
+Cairo	Al Qahirah	Egypt	30.052	31.248
+Shanghai	Shanghai	China	31.218	121.435
+Tokyo	Tokyo	Japan	35.687	139.749
+Mumbai	Maharashtra	India	19.019	72.855
+Paris	Île-de-France	France	48.869	2.331
+Santiago	Región Metropolitana de Santiago	Chile	-33.448	-70.669
+Kolkata	West Bengal	India	22.497	88.323
+Rio de Janeiro	Rio de Janeiro	Brazil	-22.923	-43.227
+Sao Paulo	São Paulo	Brazil	-23.557	-46.627
+Sydney	New South Wales	Australia	-33.918	151.183
+Singapore		Singapore	1.295	103.854
+Hong Kong		Hong Kong S.A.R.	22.307	114.183

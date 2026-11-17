@@ -35,6 +35,13 @@
 #include <QPixmap>
 #include <QSet>
 #include <QUrlQuery>
+#include <QMenu>
+#include <QAction>
+#include <QToolButton>
+#include <QFile>
+#include <QTextStream>
+#include <QFontMetricsF>
+#include <QPolygonF>
 
 #include "revision_utils.hpp"
 #include "Win11Theme.hpp"
@@ -223,22 +230,164 @@ namespace
     p.drawEllipse (QRectF {2, 2, 10, 10});
     return QIcon {pm};
   }
+
+  // where a place is from another: angular distance (radians) and
+  // initial heading (degrees from north)
+  void path_to (double lat1, double lon1, double lat2, double lon2, double& dist, double& bearing)
+  {
+    double const p1 = rad (lat1), p2 = rad (lat2), dl = rad (lon2 - lon1);
+    double const c = std::sin (p1) * std::sin (p2) + std::cos (p1) * std::cos (p2) * std::cos (dl);
+    dist = std::acos (qBound (-1., c, 1.));
+    bearing = deg (std::atan2 (std::sin (dl) * std::cos (p2),
+                               std::cos (p1) * std::sin (p2) - std::sin (p1) * std::cos (p2) * std::cos (dl)));
+    if (bearing < 0) bearing += 360.;
+  }
+
+  // the place reached going dist radians from a place on a heading
+  void destination (double lat, double lon, double bearing, double dist, double& lat2, double& lon2)
+  {
+    double const p1 = rad (lat), b = rad (bearing);
+    double const p2 = std::asin (qBound (-1., std::sin (p1) * std::cos (dist) + std::cos (p1) * std::sin (dist) * std::cos (b), 1.));
+    double l2 = rad (lon) + std::atan2 (std::sin (b) * std::sin (dist) * std::cos (p1),
+                                        std::cos (dist) - std::sin (p1) * std::sin (p2));
+    lat2 = deg (p2);
+    lon2 = std::fmod (deg (l2) + 540., 360.) - 180.;
+  }
+
+  // six-character Maidenhead locator for a place
+  QString latlon_to_grid (double lat, double lon)
+  {
+    double const x = qBound (0., lon + 180., 359.99999);
+    double const y = qBound (0., lat + 90., 179.99999);
+    QString g;
+    g += QChar ('A' + static_cast<int> (x / 20.));
+    g += QChar ('A' + static_cast<int> (y / 10.));
+    g += QChar ('0' + static_cast<int> (std::fmod (x, 20.) / 2.));
+    g += QChar ('0' + static_cast<int> (std::fmod (y, 10.)));
+    g += QChar ('a' + static_cast<int> (std::fmod (x, 2.) * 12.));
+    g += QChar ('a' + static_cast<int> (std::fmod (y, 1.) * 24.));
+    return g;
+  }
+
+  QString latlon_text (double lat, double lon)
+  {
+    return QString {"%1%2%3 %4%5%6"}
+      .arg (std::abs (lat), 0, 'f', 1).arg (QChar {0x00B0}).arg (lat >= 0 ? 'N' : 'S')
+      .arg (std::abs (lon), 0, 'f', 1).arg (QChar {0x00B0}).arg (lon >= 0 ? 'E' : 'W');
+  }
+
+  // the main window's style sheet sets the font, so big text has to be
+  // asked for in a style sheet too
+  QString big_css (double factor)
+  {
+    double base = QApplication::font ().pointSizeF ();
+    if (base <= 0) base = 9.;
+    return QString {"font-size: %1pt; font-weight: bold;"}.arg (base * factor, 0, 'f', 1);
+  }
+
+  // call signs are shown with a slashed zero, like a QSL card
+  QString slashed (QString call)
+  {
+    return call.replace ('0', QChar {0x00D8});
+  }
+
+  // X-ray class (A, B, C, M, X) and a colour level for a flux in W/m2
+  QString xray_class (double flux, int * level = nullptr)
+  {
+    char cls = 'A';
+    double base = 1e-8;
+    if (flux >= 1e-4) {cls = 'X'; base = 1e-4;}
+    else if (flux >= 1e-5) {cls = 'M'; base = 1e-5;}
+    else if (flux >= 1e-6) {cls = 'C'; base = 1e-6;}
+    else if (flux >= 1e-7) {cls = 'B'; base = 1e-7;}
+    if (level) *level = cls == 'X' ? 0 : cls == 'M' ? 1 : 2;
+    return QString {"%1%2"}.arg (cls).arg (flux / base, 0, 'f', 1);
+  }
+
+  // the NCDXF/IARU beacons, in the order they transmit; each sends for
+  // ten seconds on 14.100, then moves up to 18.110 and so on, so the
+  // whole cycle takes three minutes
+  struct BeaconDef {char const * call; char const * place; char const * grid;};
+  BeaconDef const ncdxf[18] = {
+    {"4U1UN", "United Nations, New York", "FN30AS"},
+    {"VE8AT", "Inuvik, Canada", "CP38GH"},
+    {"W6WX", "Mt. Umunhum, California", "CM97BD"},
+    {"KH6RS", "Maui, Hawaii", "BL10TS"},
+    {"ZL6B", "Masterton, New Zealand", "RE78TW"},
+    {"VK6RBP", "Rolystone, Australia", "OF87AV"},
+    {"JA2IGY", "Mt. Asama, Japan", "PM84JK"},
+    {"RR9O", "Novosibirsk, Russia", "NO14KX"},
+    {"VR2B", "Hong Kong", "OL72BG"},
+    {"4S7B", "Colombo, Sri Lanka", "MJ96WV"},
+    {"ZS6DN", "Pretoria, South Africa", "KG44DC"},
+    {"5Z4B", "Kikuyu, Kenya", "KI88KS"},
+    {"4X6TU", "Tel Aviv, Israel", "KM72JB"},
+    {"OH2B", "Lohja, Finland", "KP20EH"},
+    {"CS3B", "Madeira", "IM12JT"},
+    {"LU4AA", "Buenos Aires, Argentina", "GF05TJ"},
+    {"OA4B", "Lima, Peru", "FH17MW"},
+    {"YV5B", "Caracas, Venezuela", "FJ69CC"},
+  };
+  char const * const beacon_freqs[5] = {"14.100", "18.110", "21.150", "24.930", "28.200"};
+  QColor beacon_color (int band)
+  {
+    static QColor const colors[5] = {QColor {"#4FC3F7"}, QColor {"#81C784"}, QColor {"#FFD54F"},
+                                     QColor {"#FF8A65"}, QColor {"#F06292"}};
+    return band >= 0 && band < 5 ? colors[band] : QColor {"#9AA4B2"};
+  }
+  // which beacon is on band b (0 = 14.100) in this ten-second slot
+  int beacon_on (int slot, int band) {return ((slot - band) % 18 + 18) % 18;}
+
+  // places for the names shown when you point at the map
+  struct City {QString name; double lat; double lon;};
+  QVector<City> const& cities ()
+  {
+    static QVector<City> list;
+    if (list.isEmpty ())
+      {
+        QFile file {":/map_cities.txt"};
+        if (file.open (QIODevice::ReadOnly | QIODevice::Text))
+          {
+            QTextStream in {&file};
+            in.setCodec ("UTF-8");
+            while (!in.atEnd ())
+              {
+                auto const line = in.readLine ();
+                if (line.startsWith ('#')) continue;
+                auto const parts = line.split ('\t');
+                if (parts.size () < 5) continue;
+                QString name = parts[0];
+                if (parts[1].size () && parts[1] != parts[0]) name += ", " + parts[1];
+                name += ", " + parts[2];
+                list << City {name, parts[3].toDouble (), parts[4].toDouble ()};
+              }
+          }
+      }
+    return list;
+  }
 }
 
 //
-// The map. Three looks: satellite pictures of the Earth by day with the
+// The map. Four looks: satellite pictures of the Earth by day with the
 // lights of the cities at night (NASA Blue Marble and Black Marble,
-// public domain), the same by day only, or plain land and borders
-// (Natural Earth, public domain) tinted to suit the colour scheme.
-// Optional overlays: gray line, Maidenhead grid, NOAA aurora forecast and
-// NASA rain and snow. Stations heard in the last 30 minutes are drawn in
-// the colours the main window highlights them with.
+// public domain), the same by day only, terrain with the sea floor
+// (NASA Blue Marble with bathymetry), or plain land and borders (Natural
+// Earth, public domain) tinted to suit the colour scheme. Drawn flat, or
+// centred on you (azimuthal equidistant: straight lines from the middle
+// are beam headings, and the distance from the middle is the distance
+// from you). Optional overlays: gray line, a lat/long or Maidenhead grid,
+// NOAA aurora forecast, NASA rain and snow and the NCDXF beacons.
+// Stations heard in the last 30 minutes are drawn in the colours the
+// main window highlights them with.
 //
 class ConditionsMap final
   : public QWidget
 {
 public:
-  enum Style {DayNight = 0, Satellite = 1, Countries = 2};
+  enum Style {DayNight = 0, Satellite = 1, Countries = 2, Terrain = 3};
+  enum Projection {Flat = 0, Azimuthal = 1};
+  enum Grid {NoGrid = 0, LatLong = 1, Maidenhead = 2, MaidenheadFine = 3};
+  struct Beacon {QString call; QString place; double lat; double lon; int band;};
 
   explicit ConditionsMap (QWidget * parent)
     : QWidget {parent}
@@ -248,36 +397,59 @@ public:
     setMinimumSize (360, 180);
     setSizePolicy (QSizePolicy::Expanding, QSizePolicy::Expanding);
     setMouseTracking (true);
+    for (auto const& b : ncdxf)
+      {
+        double lat, lon;
+        ConditionsWindow::grid_to_latlon (b.grid, lat, lon);
+        beacons << Beacon {b.call, b.place, lat, lon, -1};
+      }
     retint ();
     update_night ();
   }
 
   // options
   Style style {DayNight};
+  Projection projection {Flat};
+  Grid grid {NoGrid};
   bool gray_line {true};
-  bool grid {false};
   bool show_aurora {false};
   bool show_rain {false};
+  bool show_beacons {false};
   bool show_cq {true};
   bool show_me {true};
   bool show_called {true};
   bool show_others {true};
+  bool miles {false};
   QColor cq_color {"#3FB950"};
   QColor my_call_color {"#FF4D4D"};
   QColor tx_color {"#FFD54A"};
   QHash<QString, Station> stations;
   QSet<QString> called;              // stations you transmitted to
+  QVector<Beacon> beacons;
+  std::function<void (QString const&, Qt::KeyboardModifiers)> on_double_click;
+
+  // something under the stations changed: build the picture again
+  void changed ()
+  {
+    composite_ = scaled_ = projected_ = QImage {};
+    grid_key_.clear ();
+    update ();
+  }
 
   void set_style (Style s)
   {
     style = s;
-    if (style != Countries && day_.isNull ())
+    if ((DayNight == style || Satellite == style) && day_.isNull ())
       {
         // load the satellite pictures the first time they're wanted
         day_ = QImage {":/map_day.jpg"}.convertToFormat (QImage::Format_RGB32);
         night_lights_ = QImage {":/map_night.jpg"}.convertToFormat (QImage::Format_RGB32);
         day_small_ = day_.scaled (1024, 512, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
         night_small_ = night_lights_.scaled (1024, 512, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+      }
+    if (Terrain == style && terrain_.isNull ())
+      {
+        terrain_ = QImage {":/map_terrain.jpg"}.convertToFormat (QImage::Format_RGB32);
       }
     rebuild_base ();
   }
@@ -334,20 +506,26 @@ public:
             line[x] = qPremultiply (qRgba (0, 0, 20, static_cast<int> (f * 195)));
           }
       }
-    night_scaled_ = QImage {};
     rebuild_base ();
   }
 
-  void set_my (double lat, double lon) {my_lat_ = lat; my_lon_ = lon; update ();}
+  void set_my (double lat, double lon)
+  {
+    my_lat_ = lat;
+    my_lon_ = lon;
+    lut_.clear ();                    // the centred map moves with you
+    changed ();
+  }
   void set_dx (QString const& call, double lat, double lon) {dx_call_ = call; dx_lat_ = lat; dx_lon_ = lon; update ();}
 
-  void set_aurora (QImage const& img) {aurora_ = img; aurora_scaled_ = QImage {}; update ();}
-  void set_rain (QImage const& img) {rain_ = img; rain_scaled_ = QImage {}; update ();}
+  void set_aurora (QImage const& img) {aurora_ = img; changed ();}
+  void set_rain (QImage const& img) {rain_ = img; changed ();}
 
 protected:
   void resizeEvent (QResizeEvent *) override
   {
-    scaled_ = night_scaled_ = aurora_scaled_ = rain_scaled_ = QImage {};
+    scaled_ = projected_ = QImage {};
+    grid_key_.clear ();
   }
 
   void paintEvent (QPaintEvent *) override
@@ -356,25 +534,28 @@ protected:
     p.setRenderHint (QPainter::Antialiasing);
     p.fillRect (rect (), palette ().window ());
     auto const r = map_rect ();
-    auto fit = [&r] (QImage const& src, QImage& cache) -> QImage const& {
-      if (cache.size () != r.size () && !src.isNull ())
-        {
-          cache = src.scaled (r.size (), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-        }
-      return cache;
-    };
-    p.drawImage (r.topLeft (), fit (base_, scaled_));
-    // the day/night picture already shows the night side
-    if (gray_line && style != DayNight) p.drawImage (r.topLeft (), fit (night_, night_scaled_));
-    if (show_rain && !rain_.isNull ()) p.drawImage (r.topLeft (), fit (rain_, rain_scaled_));
-    if (show_aurora && !aurora_.isNull ()) p.drawImage (r.topLeft (), fit (aurora_, aurora_scaled_));
-    if (grid) draw_grid (p, r);
+    if (Flat == projection)
+      {
+        if (scaled_.size () != r.size ())
+          {
+            scaled_ = composite ().scaled (r.size (), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+          }
+        p.drawImage (r.topLeft (), scaled_);
+      }
+    else
+      {
+        if (projected_.size () != r.size ()) project (r.width ());
+        p.drawImage (r.topLeft (), projected_);
+      }
+    if (grid != NoGrid) draw_grid (p, r);
 
     // the sun
     auto const sun = to_point (sun_lat_, sun_lon_);
     p.setPen (QPen {QColor {"#FFB000"}, 2});
     p.setBrush (QColor {"#FFD54A"});
     p.drawEllipse (sun, 7, 7);
+
+    if (show_beacons) draw_beacons (p);
 
     // great circle to the station being worked
     if (!qIsNaN (my_lat_) && !qIsNaN (dx_lat_))
@@ -446,26 +627,13 @@ protected:
         p.drawEllipse (dx, 6, 6);
         auto f = font ();
         f.setBold (true);
-        p.setFont (f);
-        // outlined label so it reads on any background
-        QPainterPath text;
-        text.addText (dx + QPointF {10, 5}, f, dx_call_);
-        p.setPen (QPen {QColor {0, 0, 0, 200}, 3});
-        p.setBrush (Qt::NoBrush);
-        p.drawPath (text);
-        p.setPen (Qt::NoPen);
-        p.setBrush (Qt::white);
-        p.drawPath (text);
+        outlined_text (p, dx + QPointF {10, 5}, slashed (dx_call_), f, Qt::white);
       }
     p.setPen (QPen {palette ().mid ().color (), 1});
     p.setBrush (Qt::NoBrush);
-    p.drawRect (QRectF {r}.adjusted (0.5, 0.5, -0.5, -0.5));
+    if (Flat == projection) p.drawRect (QRectF {r}.adjusted (0.5, 0.5, -0.5, -0.5));
+    else p.drawEllipse (QRectF {r}.adjusted (0.5, 0.5, -0.5, -0.5));
   }
-
-public:
-  std::function<void (QString const&, Qt::KeyboardModifiers)> on_double_click;
-
-protected:
 
   // the visible station nearest a point, within a few pixels
   QString station_at (QPointF const& pos) const
@@ -481,6 +649,17 @@ protected:
         if (d < best_d) {best_d = d; best = it.key ();}
       }
     return best;
+  }
+
+  int beacon_at (QPointF const& pos) const
+  {
+    if (!show_beacons) return -1;
+    for (int i = 0; i < beacons.size (); ++i)
+      {
+        auto const pt = to_point (beacons[i].lat, beacons[i].lon);
+        if (std::pow (pt.x () - pos.x (), 2) + std::pow (pt.y () - pos.y (), 2) < 81.) return i;
+      }
+    return -1;
   }
 
   bool shown (QString const& call, Station const& s) const
@@ -500,6 +679,8 @@ protected:
   void mouseMoveEvent (QMouseEvent * e) override
   {
     setCursor (station_at (e->pos ()).size () ? Qt::PointingHandCursor : Qt::ArrowCursor);
+    // keep the place under the pointer up to date while a tip is showing
+    if (QToolTip::isVisible ()) show_tip (e->pos (), e->globalPos ());
     QWidget::mouseMoveEvent (e);
   }
 
@@ -508,26 +689,65 @@ protected:
     if (e->type () == QEvent::ToolTip)
       {
         auto * help = static_cast<QHelpEvent *> (e);
-        auto const call = station_at (help->pos ());
-        if (call.size ())
-          {
-            auto const& s = stations[call];
-            QString what;
-            if (s.to_me) what = QObject::tr ("calling you");
-            else if (called.contains (call)) what = QObject::tr ("you called");
-            else if (s.cq) what = QObject::tr ("calling CQ");
-            QToolTip::showText (help->globalPos (),
-                                QString {"<b>%1</b> &nbsp;%2 dB &nbsp;%3 UTC &nbsp;%4<br/>%5"}
-                                .arg (call).arg (s.snr).arg (s.heard.toString ("hh:mm")).arg (what)
-                                .arg (QObject::tr ("Double-click to call")), this);
-          }
-        else
-          {
-            QToolTip::hideText ();
-          }
+        show_tip (help->pos (), help->globalPos ());
         return true;
       }
     return QWidget::event (e);
+  }
+
+  void show_tip (QPoint const& pos, QPoint const& global)
+  {
+    auto const call = station_at (pos);
+    if (call.size ())
+      {
+        auto const& s = stations[call];
+        QString what;
+        if (s.to_me) what = QObject::tr ("calling you");
+        else if (called.contains (call)) what = QObject::tr ("you called");
+        else if (s.cq) what = QObject::tr ("calling CQ");
+        QToolTip::showText (global,
+                            QString {"<b>%1</b> &nbsp;%2 dB &nbsp;%3 UTC &nbsp;%4<br/>%5"}
+                            .arg (slashed (call)).arg (s.snr).arg (s.heard.toString ("hh:mm")).arg (what)
+                            .arg (QObject::tr ("Double-click to call")), this);
+        return;
+      }
+    int const b = beacon_at (pos);
+    if (b >= 0)
+      {
+        auto const& beacon = beacons[b];
+        QString text = QString {"<b>%1</b> &nbsp;%2<br/>"}.arg (slashed (beacon.call)).arg (beacon.place);
+        if (beacon.band >= 0) text += QObject::tr ("Sending on %1 MHz now").arg (beacon_freqs[beacon.band]);
+        else text += QObject::tr ("NCDXF beacon, not sending this moment");
+        QToolTip::showText (global, text, this);
+        return;
+      }
+    double lat, lon;
+    if (!from_point (pos, lat, lon))
+      {
+        QToolTip::hideText ();
+        return;
+      }
+    QString text;
+    // the nearest city within a few pixels
+    double best_d = 144.;
+    for (auto const& c : cities ())
+      {
+        auto const pt = to_point (c.lat, c.lon);
+        double const d = std::pow (pt.x () - pos.x (), 2) + std::pow (pt.y () - pos.y (), 2);
+        if (d < best_d) {best_d = d; text = "<b>" + c.name.toHtmlEscaped () + "</b><br/>";}
+      }
+    text += QObject::tr ("Grid %1 &nbsp;%2").arg (latlon_to_grid (lat, lon)).arg (latlon_text (lat, lon));
+    if (!qIsNaN (my_lat_))
+      {
+        double dist, bearing;
+        path_to (my_lat_, my_lon_, lat, lon, dist, bearing);
+        double const km = dist * 6371.;
+        text += "<br/>" + QObject::tr ("%1 %2 from you, heading %3%4")
+          .arg (QLocale {}.toString (qRound (miles ? km * 0.621371 : km)))
+          .arg (miles ? QObject::tr ("miles") : QObject::tr ("km"))
+          .arg (qRound (bearing)).arg (QChar {0x00B0});
+      }
+    QToolTip::showText (global, text, this);
   }
 
 private:
@@ -539,13 +759,23 @@ private:
         base_ = countries_;
         break;
 
+      case Terrain:
+        if (terrain_.isNull ()) {base_ = countries_; break;}
+        base_ = terrain_.convertToFormat (QImage::Format_ARGB32_Premultiplied);
+        {
+          QPainter p {&base_};
+          p.setOpacity (0.35);
+          p.drawImage (base_.rect (), border_lines_);
+        }
+        break;
+
       case Satellite:
         if (day_.isNull ()) {base_ = countries_; break;}
         base_ = day_.convertToFormat (QImage::Format_ARGB32_Premultiplied);
         {
           QPainter p {&base_};
           p.setOpacity (0.45);
-          p.drawImage (0, 0, border_lines_);
+          p.drawImage (base_.rect (), border_lines_);
         }
         break;
 
@@ -577,75 +807,293 @@ private:
         }
         break;
       }
-    scaled_ = QImage {};
-    update ();
+    changed ();
   }
 
-  void draw_grid (QPainter& p, QRect const& r)
+  // the flat picture with the shading, rain and aurora on it
+  QImage const& composite ()
   {
-    // Maidenhead fields: 20 by 10 degrees, AA to RR
-    p.setPen (QPen {QColor {255, 255, 255, 70}, 1});
-    for (int i = 1; i < 18; ++i)
+    if (composite_.isNull ())
       {
-        double const x = r.left () + r.width () * i / 18.;
-        p.drawLine (QPointF {x, double (r.top ())}, QPointF {x, double (r.bottom ())});
-        double const y = r.top () + r.height () * i / 18.;
-        p.drawLine (QPointF {double (r.left ()), y}, QPointF {double (r.right ()), y});
+        composite_ = base_.convertToFormat (QImage::Format_ARGB32_Premultiplied);
+        if (composite_.constBits () == base_.constBits ()) composite_ = base_.copy ();
+        QPainter p {&composite_};
+        p.setRenderHint (QPainter::SmoothPixmapTransform);
+        auto const all = composite_.rect ();
+        // the day/night picture already shows the night side
+        if (gray_line && style != DayNight) p.drawImage (all, night_);
+        if (show_rain && !rain_.isNull ()) p.drawImage (all, rain_);
+        if (show_aurora && !aurora_.isNull ()) p.drawImage (all, aurora_);
       }
-    if (r.width () < 600) return;
-    auto f = font ();
-    f.setPointSizeF (qMax (6., f.pointSizeF () * 0.8));
-    p.setFont (f);
-    p.setPen (QColor {255, 255, 255, 140});
-    for (int i = 0; i < 18; ++i)
+    return composite_;
+  }
+
+  double centre_lat () const {return qIsNaN (my_lat_) ? 0. : my_lat_;}
+  double centre_lon () const {return qIsNaN (my_lon_) ? 0. : my_lon_;}
+
+  // the flat picture redrawn centred on you; a table of which source
+  // pixel goes where is worked out once for each size
+  void project (int size)
+  {
+    auto const& src = composite ();
+    int const W = src.width (), H = src.height ();
+    if (lut_.size () != size * size || lut_src_ != src.size ())
       {
-        for (int j = 0; j < 18; ++j)
+        lut_.resize (size * size);
+        lut_src_ = src.size ();
+        double const p0 = rad (centre_lat ()), l0 = rad (centre_lon ());
+        double const sp0 = std::sin (p0), cp0 = std::cos (p0);
+        double const half = size / 2.;
+        for (int y = 0; y < size; ++y)
           {
-            QString field;
-            field += QChar ('A' + i);
-            field += QChar ('A' + (17 - j));
-            p.drawText (QPointF {r.left () + r.width () * i / 18. + 3, r.top () + r.height () * j / 18. + f.pointSizeF () + 3}, field);
+            for (int x = 0; x < size; ++x)
+              {
+                double const dx = (x + 0.5 - half) / half, dy = (y + 0.5 - half) / half;
+                double const rho = std::sqrt (dx * dx + dy * dy);
+                if (rho > 1.) {lut_[y * size + x] = -1; continue;}
+                double const c = rho * pi, az = std::atan2 (dx, -dy);
+                double const sc = std::sin (c), cc = std::cos (c);
+                double const lat = std::asin (qBound (-1., sp0 * cc + cp0 * sc * std::cos (az), 1.));
+                double lon = l0 + std::atan2 (std::sin (az) * sc * cp0, cc - sp0 * std::sin (lat));
+                double lon_deg = std::fmod (deg (lon) + 540., 360.) - 180.;
+                int const sx = qBound (0, static_cast<int> ((lon_deg + 180.) / 360. * W), W - 1);
+                int const sy = qBound (0, static_cast<int> ((90. - deg (lat)) / 180. * H), H - 1);
+                lut_[y * size + x] = sy * W + sx;
+              }
+          }
+      }
+    projected_ = QImage {size, size, QImage::Format_ARGB32_Premultiplied};
+    projected_.fill (Qt::transparent);
+    auto const * in = reinterpret_cast<QRgb const *> (src.constBits ());
+    for (int y = 0; y < size; ++y)
+      {
+        auto * out = reinterpret_cast<QRgb *> (projected_.scanLine (y));
+        for (int x = 0; x < size; ++x)
+          {
+            int const i = lut_[y * size + x];
+            if (i >= 0) out[x] = in[i];
           }
       }
   }
 
   QRect map_rect () const
   {
-    // keep the map 2:1 and centred
     int w = width (), h = height ();
+    if (Azimuthal == projection)
+      {
+        int const s = qMin (w, h);
+        return QRect {(w - s) / 2, (h - s) / 2, s, s};
+      }
+    // keep the flat map 2:1 and centred
     if (w > 2 * h) w = 2 * h; else h = w / 2;
     return QRect {(width () - w) / 2, (height () - h) / 2, w, h};
   }
 
+public:
   QPointF to_point (double lat, double lon) const
   {
     auto const r = map_rect ();
-    return {r.left () + (lon + 180.) / 360. * r.width (), r.top () + (90. - lat) / 180. * r.height ()};
+    if (Flat == projection)
+      {
+        return {r.left () + (lon + 180.) / 360. * r.width (), r.top () + (90. - lat) / 180. * r.height ()};
+      }
+    double dist, bearing;
+    path_to (centre_lat (), centre_lon (), lat, lon, dist, bearing);
+    double const rho = dist / pi * r.width () / 2.;
+    return {r.center ().x () + 0.5 + rho * std::sin (rad (bearing)),
+            r.center ().y () + 0.5 - rho * std::cos (rad (bearing))};
+  }
+
+  bool from_point (QPointF const& pt, double& lat, double& lon) const
+  {
+    auto const r = map_rect ();
+    if (Flat == projection)
+      {
+        if (!r.contains (pt.toPoint ())) return false;
+        lon = (pt.x () - r.left ()) / r.width () * 360. - 180.;
+        lat = 90. - (pt.y () - r.top ()) / r.height () * 180.;
+        return true;
+      }
+    double const half = r.width () / 2.;
+    double const dx = (pt.x () - r.left () - half) / half, dy = (pt.y () - r.top () - half) / half;
+    double const rho = std::sqrt (dx * dx + dy * dy);
+    if (rho > 1.) return false;
+    destination (centre_lat (), centre_lon (), deg (std::atan2 (dx, -dy)), rho * pi, lat, lon);
+    return true;
+  }
+
+private:
+  // a line through places, broken where it jumps across the map
+  void add_line (QPainterPath& path, QVector<QPointF> const& pts) const
+  {
+    double const jump = map_rect ().width () / (Flat == projection ? 2. : 4.);
+    for (int i = 0; i < pts.size (); ++i)
+      {
+        if (0 == i || std::hypot (pts[i].x () - pts[i - 1].x (), pts[i].y () - pts[i - 1].y ()) > jump) path.moveTo (pts[i]);
+        else path.lineTo (pts[i]);
+      }
+  }
+
+  void meridian (QPainterPath& path, double lon, double step) const
+  {
+    QVector<QPointF> pts;
+    for (double lat = -90.; lat <= 90.001; lat += step) pts << to_point (qBound (-89.9, lat, 89.9), lon);
+    add_line (path, pts);
+  }
+
+  void parallel (QPainterPath& path, double lat, double step) const
+  {
+    QVector<QPointF> pts;
+    for (double lon = -180.; lon <= 180.001; lon += step) pts << to_point (lat, qBound (-179.99, lon, 179.99));
+    add_line (path, pts);
+  }
+
+  void draw_grid (QPainter& p, QRect const& r)
+  {
+    // the lines only change with the size, the view or where you are
+    auto const key = QString {"%1/%2/%3x%4/%5,%6"}.arg (grid).arg (projection).arg (r.width ()).arg (r.height ())
+      .arg (centre_lat ()).arg (centre_lon ());
+    if (key != grid_key_)
+      {
+        grid_key_ = key;
+        grid_major_ = grid_minor_ = QPainterPath {};
+        double const step = Flat == projection ? 10. : 2.;
+        if (LatLong == grid)
+          {
+            for (int lon = -165; lon <= 180; lon += 15) meridian (grid_major_, lon, step);
+            for (int lat = -75; lat <= 75; lat += 15) parallel (grid_major_, lat, step);
+          }
+        else
+          {
+            for (int lon = -160; lon < 180; lon += 20) meridian (grid_major_, lon, step);
+            for (int lat = -80; lat < 90; lat += 10) parallel (grid_major_, lat, step);
+            if (MaidenheadFine == grid)
+              {
+                // the squares inside each field: 2 by 1 degrees
+                double const fine = Flat == projection ? 90. : 3.;
+                for (int lon = -178; lon < 180; lon += 2) if (lon % 20) meridian (grid_minor_, lon, fine);
+                for (int lat = -89; lat < 90; ++lat) if (lat % 10) parallel (grid_minor_, lat, Flat == projection ? 180. : 3.);
+              }
+          }
+      }
+    p.setBrush (Qt::NoBrush);
+    if (!grid_minor_.isEmpty ())
+      {
+        p.setPen (QPen {QColor {255, 255, 255, 32}, 0.6});
+        p.drawPath (grid_minor_);
+      }
+    p.setPen (QPen {QColor {255, 255, 255, 80}, 1});
+    p.drawPath (grid_major_);
+
+    auto f = font ();
+    f.setPointSizeF (qMax (6., f.pointSizeF () * 0.8));
+    QColor const label {255, 255, 255, 170};
+    if (LatLong == grid)
+      {
+        if (Flat != projection || r.width () < 500) return;
+        for (int lat = -60; lat <= 60; lat += 30)
+          {
+            auto const pt = to_point (lat, -180.);
+            outlined_text (p, pt + QPointF {3, -3}, QString {"%1%2"}.arg (lat).arg (QChar {0x00B0}), f, label);
+          }
+        for (int lon = -150; lon <= 150; lon += 30)
+          {
+            auto const pt = to_point (-90., lon);
+            outlined_text (p, pt + QPointF {3, -4}, QString {"%1%2"}.arg (lon).arg (QChar {0x00B0}), f, label);
+          }
+        return;
+      }
+    if (r.width () < 500) return;
+    QVector<QRectF> used;
+    for (int i = 0; i < 18; ++i)
+      {
+        for (int j = 0; j < 18; ++j)
+          {
+            QString field;
+            field += QChar ('A' + i);
+            field += QChar ('A' + j);
+            if (Flat == projection)
+              {
+                if (r.width () < 600) return;
+                auto const pt = to_point (-90. + (j + 1) * 10., -180. + i * 20.);
+                outlined_text (p, pt + QPointF {3, f.pointSizeF () + 3}, field, f, label);
+              }
+            else
+              {
+                double const lat = -90. + j * 10. + 5., lon = -180. + i * 20. + 10.;
+                double dist, bearing;
+                path_to (centre_lat (), centre_lon (), lat, lon, dist, bearing);
+                if (dist > pi * 0.6) continue;      // too squeezed out near the edge
+                auto const pt = to_point (lat, lon);
+                QFontMetricsF fm {f};
+                QRectF const box {pt.x () - fm.boundingRect (field).width () / 2. - 2, pt.y () - fm.ascent () / 2. - 2,
+                    fm.boundingRect (field).width () + 4, fm.ascent () + 4};
+                // near the pole the fields crowd together; leave out labels that would overlap
+                bool crowded = false;
+                for (auto const& other : used) if (other.intersects (box)) {crowded = true; break;}
+                if (crowded) continue;
+                used << box;
+                outlined_text (p, pt - QPointF {fm.boundingRect (field).width () / 2., -fm.ascent () / 2.}, field, f, label);
+              }
+          }
+      }
+  }
+
+  void draw_beacons (QPainter& p)
+  {
+    auto f = font ();
+    f.setPointSizeF (qMax (6., f.pointSizeF () * 0.85));
+    f.setBold (true);
+    for (auto const& b : beacons)
+      {
+        auto const pt = to_point (b.lat, b.lon);
+        QPolygonF tri;
+        tri << pt + QPointF {0, -7} << pt + QPointF {6, 4.5} << pt + QPointF {-6, 4.5};
+        if (b.band >= 0)
+          {
+            p.setPen (QPen {QColor {0, 0, 0, 200}, 1});
+            p.setBrush (beacon_color (b.band));
+            p.drawPolygon (tri);
+            outlined_text (p, pt + QPointF {8, 4}, slashed (b.call), f, beacon_color (b.band));
+          }
+        else
+          {
+            p.setPen (QPen {QColor {230, 230, 230, 200}, 1.4});
+            p.setBrush (QColor {0, 0, 0, 90});
+            p.drawPolygon (tri);
+          }
+      }
   }
 
   void draw_great_circle (QPainter& p, double lat1, double lon1, double lat2, double lon2)
   {
-    double const p1 = rad (lat1), l1 = rad (lon1), p2 = rad (lat2), l2 = rad (lon2);
-    double const d = 2 * std::asin (std::sqrt (std::pow (std::sin ((p2 - p1) / 2), 2)
-                                               + std::cos (p1) * std::cos (p2) * std::pow (std::sin ((l2 - l1) / 2), 2)));
-    if (d < 1e-6) return;
-    QPainterPath path;
-    QPointF last;
-    for (int i = 0; i <= 100; ++i)
+    double dist, bearing;
+    path_to (lat1, lon1, lat2, lon2, dist, bearing);
+    if (dist < 1e-6) return;
+    QVector<QPointF> pts;
+    for (int i = 0; i <= 120; ++i)
       {
-        double const f = i / 100.;
-        double const A = std::sin ((1 - f) * d) / std::sin (d), B = std::sin (f * d) / std::sin (d);
-        double const x = A * std::cos (p1) * std::cos (l1) + B * std::cos (p2) * std::cos (l2);
-        double const y = A * std::cos (p1) * std::sin (l1) + B * std::cos (p2) * std::sin (l2);
-        double const z = A * std::sin (p1) + B * std::sin (p2);
-        auto const pt = to_point (deg (std::atan2 (z, std::sqrt (x * x + y * y))), deg (std::atan2 (y, x)));
-        // start a new piece where the path crosses the edge of the map
-        if (0 == i || std::abs (pt.x () - last.x ()) > map_rect ().width () / 2.) path.moveTo (pt);
-        else path.lineTo (pt);
-        last = pt;
+        double lat, lon;
+        destination (lat1, lon1, bearing, dist * i / 120., lat, lon);
+        pts << to_point (lat, lon);
       }
+    QPainterPath path;
+    add_line (path, pts);
     p.setBrush (Qt::NoBrush);
     p.drawPath (path);
+  }
+
+  // text with a dark edge so it reads on any background
+  static void outlined_text (QPainter& p, QPointF const& at, QString const& s, QFont const& f, QColor const& color)
+  {
+    QPainterPath text;
+    text.addText (at, f, s);
+    p.setPen (QPen {QColor {0, 0, 0, 200}, 3});
+    p.setBrush (Qt::NoBrush);
+    p.drawPath (text);
+    p.setPen (Qt::NoPen);
+    p.setBrush (color);
+    p.drawPath (text);
   }
 
   // mask (white = land) to an image of one colour with the mask as alpha
@@ -665,15 +1113,20 @@ private:
   QImage night_lights_;
   QImage day_small_;
   QImage night_small_;
+  QImage terrain_;
   QImage base_;
+  QImage composite_;
   QImage scaled_;
+  QImage projected_;
+  QVector<int> lut_;
+  QSize lut_src_;
   QImage night_;
-  QImage night_scaled_;
   QVector<double> shade_;
   QImage aurora_;
-  QImage aurora_scaled_;
   QImage rain_;
-  QImage rain_scaled_;
+  QString grid_key_;
+  QPainterPath grid_major_;
+  QPainterPath grid_minor_;
   double sun_lat_ {0.};
   double sun_lon_ {0.};
   double my_lat_ {qQNaN ()};
@@ -681,6 +1134,161 @@ private:
   double dx_lat_ {qQNaN ()};
   double dx_lon_ {qQNaN ()};
   QString dx_call_;
+};
+
+//
+// Solar X-rays over the last day from the GOES satellites, on a log
+// scale with the flare classes marked, like the NOAA plot
+//
+class XRayGraph final
+  : public QWidget
+{
+public:
+  explicit XRayGraph (QWidget * parent)
+    : QWidget {parent}
+  {
+    setMinimumSize (240, 120);
+    setSizePolicy (QSizePolicy::Expanding, QSizePolicy::Expanding);
+    setToolTip (QObject::tr ("<p>Solar X-rays from the GOES satellites over the last day (NOAA).</p>"
+                             "<p><b>Red:</b> 0.1-0.8 nm, the one flare classes come from. <b>Blue:</b> 0.05-0.4 nm.</p>"
+                             "<p>M and X class flares can black out HF on the daylight side of the Earth for minutes to hours.</p>"));
+  }
+
+  QVector<QPointF> long_band;          // x: seconds since 1970, y: W/m2
+  QVector<QPointF> short_band;
+
+protected:
+  void paintEvent (QPaintEvent *) override
+  {
+    QPainter p {this};
+    p.setRenderHint (QPainter::Antialiasing);
+    auto const pal = palette ();
+    QColor const text = pal.text ().color ();
+    QFontMetricsF fm {font ()};
+    auto big = font ();
+    big.setBold (true);
+    big.setPointSizeF (big.pointSizeF () * 1.35);
+    QFontMetricsF bfm {big};
+
+    QRectF const plot = QRectF (rect ()).adjusted (2, bfm.height () + 4, -(fm.boundingRect ("X").width () + 8), -(fm.height () + 2));
+    if (plot.width () < 20 || plot.height () < 20) return;
+    p.fillRect (plot, pal.base ());
+    double const lo = -9., hi = -3.;
+    auto y_of = [&] (double flux) {
+      double const l = std::log10 (qMax (flux, 1e-12));
+      return plot.bottom () - (qBound (lo, l, hi) - lo) / (hi - lo) * plot.height ();
+    };
+    double const now = QDateTime::currentMSecsSinceEpoch () / 1000.;
+    double const start = now - 24 * 3600.;
+    auto x_of = [&] (double t) {return plot.left () + (t - start) / (now - start) * plot.width ();};
+
+    // flare classes: A from 1e-8, B, C, M and X from 1e-4
+    QColor grid = text;
+    grid.setAlpha (50);
+    char const classes[] = "ABCMX";
+    for (int i = 0; i < 5; ++i)
+      {
+        double const y1 = y_of (std::pow (10., -8 + i)), y2 = y_of (std::pow (10., -7 + i));
+        if (i >= 3)
+          {
+            QColor band = i == 3 ? QColor {255, 170, 0, 30} : QColor {255, 60, 60, 36};
+            p.fillRect (QRectF {plot.left (), y2, plot.width (), y1 - y2}, band);
+          }
+        p.setPen (QPen {grid, 1});
+        p.drawLine (QPointF {plot.left (), y1}, QPointF {plot.right (), y1});
+        p.setPen (text);
+        p.drawText (QPointF {plot.right () + 4, (y1 + y2) / 2. + fm.ascent () / 2. - 1}, QString {QChar (classes[i])});
+      }
+    // hours back
+    p.setPen (QPen {grid, 1});
+    for (int h = 6; h < 24; h += 6)
+      {
+        double const x = x_of (now - h * 3600.);
+        p.setPen (QPen {grid, 1});
+        p.drawLine (QPointF {x, plot.top ()}, QPointF {x, plot.bottom ()});
+        p.setPen (text);
+        auto const label = QString {"-%1h"}.arg (h);
+        p.drawText (QPointF {x - fm.boundingRect (label).width () / 2., plot.bottom () + fm.ascent () + 1}, label);
+      }
+    p.drawText (QPointF {plot.right () - fm.boundingRect (QObject::tr ("now")).width (), plot.bottom () + fm.ascent () + 1}, QObject::tr ("now"));
+
+    auto draw = [&] (QVector<QPointF> const& series, QColor const& color) {
+      QPainterPath path;
+      bool started = false;
+      double last_t = 0;
+      for (auto const& pt : series)
+        {
+          if (pt.x () < start || pt.y () <= 0) continue;
+          QPointF const at {x_of (pt.x ()), y_of (pt.y ())};
+          if (!started || pt.x () - last_t > 900.) path.moveTo (at);
+          else path.lineTo (at);
+          started = true;
+          last_t = pt.x ();
+        }
+      p.setPen (QPen {color, 1.4});
+      p.setBrush (Qt::NoBrush);
+      p.drawPath (path);
+    };
+    p.save ();
+    p.setClipRect (plot);
+    draw (short_band, QColor {"#4FA3FF"});
+    draw (long_band, QColor {"#FF5050"});
+    p.restore ();
+    p.setPen (QPen {pal.mid ().color (), 1});
+    p.drawRect (plot.adjusted (0.5, 0.5, -0.5, -0.5));
+
+    // title and the class now, large
+    p.setFont (big);
+    p.setPen (text);
+    p.drawText (QPointF {2, bfm.ascent ()}, QObject::tr ("X-ray"));
+    if (long_band.size ())
+      {
+        int level;
+        auto const cls = xray_class (long_band.last ().y (), &level);
+        p.setPen (level_color (level));
+        p.drawText (QPointF {plot.right () - bfm.boundingRect (cls).width (), bfm.ascent ()}, cls);
+      }
+  }
+};
+
+//
+// The latest picture of the Sun from NASA's Solar Dynamics Observatory
+//
+class SunImage final
+  : public QWidget
+{
+public:
+  explicit SunImage (QWidget * parent)
+    : QWidget {parent}
+  {
+    setMinimumSize (110, 110);
+    setSizePolicy (QSizePolicy::Expanding, QSizePolicy::Expanding);
+  }
+  QSize sizeHint () const override {return {160, 160};}
+
+  void set_image (QImage const& img) {image_ = img; scaled_ = QImage {}; update ();}
+  void set_message (QString const& m) {message_ = m; update ();}
+
+protected:
+  void paintEvent (QPaintEvent *) override
+  {
+    QPainter p {this};
+    int const s = qMin (width (), height ());
+    QRect const r {(width () - s) / 2, (height () - s) / 2, s, s};
+    if (image_.isNull ())
+      {
+        p.setPen (palette ().text ().color ());
+        p.drawText (rect (), Qt::AlignCenter | Qt::TextWordWrap, message_);
+        return;
+      }
+    if (scaled_.size () != r.size ()) scaled_ = image_.scaled (r.size (), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    p.drawImage (r.topLeft (), scaled_);
+  }
+
+private:
+  QImage image_;
+  QImage scaled_;
+  QString message_;
 };
 
 ConditionsWindow::ConditionsWindow (QSettings * settings, QWidget * parent)
@@ -700,6 +1308,9 @@ ConditionsWindow::ConditionsWindow (QSettings * settings, QWidget * parent)
 {
   setObjectName ("ConditionsWindow");
   setWindowTitle (tr ("Conditions - %1").arg (QApplication::applicationName ()));
+  sun_timer_ = new QTimer {this};
+  sun_timer_->setInterval (15 * 60 * 1000);       // SDO puts up new pictures every 15 minutes or so
+  connect (sun_timer_, &QTimer::timeout, this, &ConditionsWindow::fetch_sun);
   build_ui ();
 
   refresh_timer_->setInterval (15 * 60 * 1000);   // NOAA updates every few minutes; no need to ask more
@@ -719,14 +1330,150 @@ ConditionsWindow::~ConditionsWindow ()
 {
 }
 
+QFrame * ConditionsWindow::make_box (QString const& key, QString const& title, QVBoxLayout *& body)
+{
+  auto * frame = new QFrame {this};
+  frame->setObjectName ("conditionsBox");
+  body = new QVBoxLayout {frame};
+  body->setContentsMargins (8, 6, 8, 6);
+  body->setSpacing (3);
+  if (title.size ())
+    {
+      auto * label = new QLabel {"<b>" + title + "</b>", frame};
+      body->addWidget (label);
+    }
+  boxes_[key] = frame;
+  return frame;
+}
+
+void ConditionsWindow::add_box_action (QString const& key, QString const& text)
+{
+  auto * action = boxes_menu_->addAction (text);
+  action->setCheckable (true);
+  settings_->beginGroup ("Conditions");
+  action->setChecked (settings_->value ("Box_" + key, true).toBool ());
+  settings_->endGroup ();
+  box_actions_[key] = action;
+  boxes_[key]->setVisible (action->isChecked ());
+  connect (action, &QAction::toggled, this, [this, key] (bool on) {
+      boxes_[key]->setVisible (on);
+      settings_->beginGroup ("Conditions");
+      settings_->setValue ("Box_" + key, on);
+      settings_->endGroup ();
+      update_containers ();
+      if (on && "sun" == key && isVisible ()) fetch_sun ();
+    });
+}
+
+bool ConditionsWindow::box_on (QString const& key) const
+{
+  auto * action = box_actions_.value (key);
+  return action && action->isChecked ();
+}
+
+void ConditionsWindow::update_containers ()
+{
+  // hide a row or column when every box in it is switched off
+  top_row_->setVisible (box_on ("clock") || box_on ("xray") || box_on ("sun") || box_on ("beacons"));
+  left_column_->setVisible (box_on ("de") || box_on ("dx") || box_on ("bands"));
+  if (box_on ("sun") && isVisible ()) sun_timer_->start (); else sun_timer_->stop ();
+}
+
 void ConditionsWindow::build_ui ()
 {
+  boxes_menu_ = new QMenu {this};
   auto * outer = new QVBoxLayout {this};
   outer->setContentsMargins (10, 10, 10, 8);
   outer->setSpacing (8);
+  QVBoxLayout * body;
+
+  // ---- top row: call and clocks, X-ray graph, the Sun, beacons ----
+  top_row_ = new QWidget {this};
+  auto * top = new QHBoxLayout {top_row_};
+  top->setContentsMargins (0, 0, 0, 0);
+  top->setSpacing (8);
+  top_row_->setMaximumHeight (210);
+
+  auto * clock_box = make_box ("clock", {}, body);
+  call_label_ = new QLabel {clock_box};
+  call_label_->setAlignment (Qt::AlignCenter);
+  auto f = call_label_->font ();
+  f.setPointSizeF (f.pointSizeF () * 2.6);
+  f.setBold (true);
+  call_label_->setFont (f);
+  utc_clock_ = new QLabel {clock_box};
+  utc_clock_->setAlignment (Qt::AlignCenter);
+  f = utc_clock_->font ();
+  f.setPointSizeF (f.pointSizeF () * 2.0);
+  f.setBold (true);
+  utc_clock_->setFont (f);
+  utc_date_ = new QLabel {clock_box};
+  utc_date_->setAlignment (Qt::AlignCenter);
+  local_clock_ = new QLabel {clock_box};
+  local_clock_->setAlignment (Qt::AlignCenter);
+  f = local_clock_->font ();
+  f.setPointSizeF (f.pointSizeF () * 1.3);
+  local_clock_->setFont (f);
+  body->addStretch ();
+  body->addWidget (call_label_);
+  body->addWidget (utc_clock_);
+  body->addWidget (utc_date_);
+  body->addWidget (local_clock_);
+  body->addStretch ();
+  top->addWidget (clock_box, 3);
+
+  auto * xray_box = make_box ("xray", {}, body);
+  xray_graph_ = new XRayGraph {xray_box};
+  body->addWidget (xray_graph_);
+  top->addWidget (xray_box, 4);
+
+  auto * sun_box = make_box ("sun", {}, body);
+  sun_image_ = new SunImage {sun_box};
+  sun_image_->set_message (tr ("The Sun from NASA SDO"));
+  sun_image_->setToolTip (tr ("The latest picture of the Sun from NASA's Solar Dynamics Observatory. "
+                              "Bright spots in the ultraviolet views are active regions that can flare."));
+  sun_channel_ = new QComboBox {sun_box};
+  sun_channel_->addItem (tr ("Sunspots (visible)"), "HMIIC");
+  sun_channel_->addItem (tr ("Corona 193 %1").arg (QChar {0x00C5}), "0193");
+  sun_channel_->addItem (tr ("Corona 171 %1").arg (QChar {0x00C5}), "0171");
+  sun_channel_->addItem (tr ("Chromosphere 304 %1").arg (QChar {0x00C5}), "0304");
+  sun_channel_->addItem (tr ("Magnetic field"), "HMIB");
+  settings_->beginGroup ("Conditions");
+  sun_channel_->setCurrentIndex (qBound (0, settings_->value ("SunChannel", 1).toInt (), sun_channel_->count () - 1));
+  settings_->endGroup ();
+  connect (sun_channel_, static_cast<void (QComboBox::*) (int)> (&QComboBox::currentIndexChanged), this, [this] (int i) {
+      settings_->beginGroup ("Conditions");
+      settings_->setValue ("SunChannel", i);
+      settings_->endGroup ();
+      sun_image_->set_image (QImage {});
+      sun_image_->set_message (tr ("Loading..."));
+      fetch_sun ();
+    });
+  body->addWidget (sun_image_, 1);
+  body->addWidget (sun_channel_);
+  top->addWidget (sun_box, 2);
+
+  auto * beacon_box = make_box ("beacons", tr ("NCDXF beacons"), body);
+  beacon_box->setToolTip (tr ("<p>The NCDXF/IARU beacons take turns sending for ten seconds on each band, "
+                              "at 100 watts. If you can hear one, the band is open to it.</p>"
+                              "<p>Switch on <b>Beacons</b> over the map to see where they are.</p>"));
+  for (int b = 0; b < 5; ++b)
+    {
+      beacon_rows_[b] = new QLabel {beacon_box};
+      body->addWidget (beacon_rows_[b]);
+    }
+  beacon_next_ = new QLabel {beacon_box};
+  beacon_next_->setEnabled (false);
+  body->addWidget (beacon_next_);
+  body->addStretch ();
+  top->addWidget (beacon_box, 3);
+  outer->addWidget (top_row_);
 
   // ---- space weather tiles ----
-  auto * tiles = new QGridLayout;
+  auto * spacewx = new QWidget {this};
+  boxes_["spacewx"] = spacewx;
+  auto * tiles = new QGridLayout {spacewx};
+  tiles->setContentsMargins (0, 0, 0, 0);
   tiles->setSpacing (6);
   struct {char const * key; char const * caption; char const * tip;} const defs[] = {
     {"sfi", QT_TR_NOOP ("Solar flux"), QT_TR_NOOP ("10.7 cm solar flux index (SFI). Higher is better for the high bands.")},
@@ -740,22 +1487,21 @@ void ConditionsWindow::build_ui ()
   int col = 0;
   for (auto const& d : defs)
     {
-      auto * frame = new QFrame {this};
+      auto * frame = new QFrame {spacewx};
       frame->setObjectName ("conditionsTile");
-      frame->setFrameShape (QFrame::StyledPanel);
       frame->setToolTip (tr (d.tip));
       auto * v = new QVBoxLayout {frame};
-      v->setContentsMargins (8, 6, 8, 6);
+      v->setContentsMargins (8, 4, 8, 4);
       v->setSpacing (0);
       Tile t;
       t.caption = new QLabel {tr (d.caption), frame};
       t.caption->setAlignment (Qt::AlignCenter);
       t.value = new QLabel {QString {QChar {0x2014}}, frame};
       t.value->setAlignment (Qt::AlignCenter);
-      auto f = t.value->font ();
-      f.setPointSizeF (f.pointSizeF () * 1.9);
-      f.setBold (true);
-      t.value->setFont (f);
+      auto vf = t.value->font ();
+      vf.setPointSizeF (vf.pointSizeF () * 1.7);
+      vf.setBold (true);
+      t.value->setFont (vf);
       t.note = new QLabel {frame};
       t.note->setAlignment (Qt::AlignCenter);
       v->addWidget (t.caption);
@@ -764,11 +1510,59 @@ void ConditionsWindow::build_ui ()
       tiles_[d.key] = t;
       tiles->addWidget (frame, 0, col++);
     }
-  outer->addLayout (tiles);
+  outer->addWidget (spacewx);
 
-  // ---- map, with band outlook and clocks beside it ----
+  // ---- you, the DX station and the band outlook beside the map ----
   auto * middle = new QHBoxLayout;
-  middle->setSpacing (10);
+  middle->setSpacing (8);
+  left_column_ = new QWidget {this};
+  auto * side = new QVBoxLayout {left_column_};
+  side->setContentsMargins (0, 0, 0, 0);
+  side->setSpacing (8);
+  left_column_->setFixedWidth (270);
+
+  auto * de_box = make_box ("de", {}, body);
+  de_info_ = new QLabel {de_box};
+  de_info_->setWordWrap (true);
+  de_info_->setTextFormat (Qt::RichText);
+  body->addWidget (de_info_);
+  side->addWidget (de_box);
+
+  auto * dx_box = make_box ("dx", {}, body);
+  dx_info_ = new QLabel {dx_box};
+  dx_info_->setWordWrap (true);
+  dx_info_->setTextFormat (Qt::RichText);
+  body->addWidget (dx_info_);
+  side->addWidget (dx_box);
+
+  auto * bands_box = make_box ("bands", tr ("Band outlook"), body);
+  bands_box->setToolTip (tr ("A rough estimate from the solar flux and K index, not a forecast for any one path."));
+  auto * bands = new QGridLayout;
+  bands->setHorizontalSpacing (6);
+  bands->setVerticalSpacing (4);
+  bands->addWidget (new QLabel {tr ("Day"), bands_box}, 0, 1, Qt::AlignCenter);
+  bands->addWidget (new QLabel {tr ("Night"), bands_box}, 0, 2, Qt::AlignCenter);
+  char const * groups[] = {"80-40m", "30-20m", "17-15m", "12-10m"};
+  for (int g = 0; g < 4; ++g)
+    {
+      bands->addWidget (new QLabel {groups[g], bands_box}, g + 1, 0);
+      for (int dn = 0; dn < 2; ++dn)
+        {
+          auto * cell = new QLabel {QString {QChar {0x2014}}, bands_box};
+          cell->setAlignment (Qt::AlignCenter);
+          cell->setMinimumWidth (56);
+          band_cells_[g][dn] = cell;
+          bands->addWidget (cell, g + 1, dn + 1);
+        }
+    }
+  body->addLayout (bands);
+  auto * est = new QLabel {tr ("Estimated from solar flux and K"), bands_box};
+  est->setEnabled (false);
+  body->addWidget (est);
+  side->addWidget (bands_box);
+  side->addStretch ();
+  middle->addWidget (left_column_);
+
   map_ = new ConditionsMap {this};
   map_->on_double_click = [this] (QString const& call, Qt::KeyboardModifiers modifiers) {
     Q_EMIT station_double_clicked (call, modifiers);
@@ -778,57 +1572,6 @@ void ConditionsWindow::build_ui ()
   map_column->addWidget (build_map_bar ());
   map_column->addWidget (map_, 1);
   middle->addLayout (map_column, 1);
-
-  auto * side = new QVBoxLayout;
-  side->setSpacing (6);
-  auto * bands_title = new QLabel {tr ("<b>Band outlook</b>"), this};
-  bands_title->setToolTip (tr ("A rough estimate from the solar flux and K index, not a forecast for any one path."));
-  side->addWidget (bands_title);
-  auto * bands = new QGridLayout;
-  bands->setHorizontalSpacing (6);
-  bands->setVerticalSpacing (4);
-  bands->addWidget (new QLabel {tr ("Day"), this}, 0, 1, Qt::AlignCenter);
-  bands->addWidget (new QLabel {tr ("Night"), this}, 0, 2, Qt::AlignCenter);
-  char const * groups[] = {"80-40m", "30-20m", "17-15m", "12-10m"};
-  for (int g = 0; g < 4; ++g)
-    {
-      bands->addWidget (new QLabel {groups[g], this}, g + 1, 0);
-      for (int dn = 0; dn < 2; ++dn)
-        {
-          auto * cell = new QLabel {QString {QChar {0x2014}}, this};
-          cell->setAlignment (Qt::AlignCenter);
-          cell->setMinimumWidth (56);
-          band_cells_[g][dn] = cell;
-          bands->addWidget (cell, g + 1, dn + 1);
-        }
-    }
-  side->addLayout (bands);
-  auto * est = new QLabel {tr ("Estimated from solar flux and K"), this};
-  est->setEnabled (false);
-  side->addWidget (est);
-  side->addSpacing (10);
-
-  utc_clock_ = new QLabel {this};
-  local_clock_ = new QLabel {this};
-  auto f = utc_clock_->font ();
-  f.setPointSizeF (f.pointSizeF () * 1.6);
-  f.setBold (true);
-  utc_clock_->setFont (f);
-  local_clock_->setFont (f);
-  side->addWidget (new QLabel {tr ("<b>UTC</b>"), this});
-  side->addWidget (utc_clock_);
-  side->addWidget (new QLabel {tr ("<b>Local</b>"), this});
-  side->addWidget (local_clock_);
-  side->addSpacing (10);
-  my_sun_ = new QLabel {this};
-  my_sun_->setWordWrap (true);
-  dx_sun_ = new QLabel {this};
-  dx_sun_->setWordWrap (true);
-  side->addWidget (my_sun_);
-  side->addWidget (dx_sun_);
-  side->addStretch ();
-
-  middle->addLayout (side);
   outer->addLayout (middle, 1);
 
   status_ = new QLabel {this};
@@ -836,8 +1579,20 @@ void ConditionsWindow::build_ui ()
   status_->setWordWrap (true);
   outer->addWidget (status_);
 
-  resize (1100, 640);
+  // the Boxes menu
+  add_box_action ("clock", tr ("Call sign and clock"));
+  add_box_action ("xray", tr ("X-ray graph"));
+  add_box_action ("sun", tr ("The Sun (NASA SDO)"));
+  add_box_action ("beacons", tr ("NCDXF beacons"));
+  add_box_action ("spacewx", tr ("Space weather"));
+  add_box_action ("de", tr ("You (DE)"));
+  add_box_action ("dx", tr ("DX station"));
+  add_box_action ("bands", tr ("Band outlook"));
+  update_containers ();
+
+  resize (1280, 860);
   apply_colors ();
+  update_beacons ();
 }
 
 QWidget * ConditionsWindow::build_map_bar ()
@@ -847,31 +1602,58 @@ QWidget * ConditionsWindow::build_map_bar ()
   v->setContentsMargins (0, 0, 0, 0);
   v->setSpacing (2);
 
-  // first row: which map, and what to draw over it
+  // first row: which map, how it's drawn, and what to draw over it
   auto * row1 = new QHBoxLayout;
-  row1->setSpacing (10);
+  row1->setSpacing (8);
   row1->addWidget (new QLabel {tr ("Map:"), bar});
   style_box_ = new QComboBox {bar};
   style_box_->addItem (tr ("Satellite, day and night"));
   style_box_->addItem (tr ("Satellite"));
   style_box_->addItem (tr ("Countries"));
+  style_box_->addItem (tr ("Terrain"));
   style_box_->setToolTip (tr ("<p><b>Satellite, day and night:</b> the Earth by day, city lights on the night side.</p>"
                               "<p><b>Satellite:</b> the Earth by day everywhere.</p>"
-                              "<p><b>Countries:</b> plain land and borders in this colour scheme.</p>"));
+                              "<p><b>Countries:</b> plain land and borders in this colour scheme.</p>"
+                              "<p><b>Terrain:</b> mountains and the sea floor.</p>"));
   row1->addWidget (style_box_);
+  projection_box_ = new QComboBox {bar};
+  projection_box_->addItem (tr ("Flat"));
+  projection_box_->addItem (tr ("Centred on you"));
+  projection_box_->setToolTip (tr ("<p><b>Flat:</b> the whole world, north up.</p>"
+                                   "<p><b>Centred on you:</b> an azimuthal map. A straight line from the middle is the "
+                                   "beam heading to that place, and the farther out, the farther away. "
+                                   "The edge is the far side of the world.</p>"));
+  row1->addWidget (projection_box_);
+  row1->addWidget (new QLabel {tr ("Grid:"), bar});
+  grid_box_ = new QComboBox {bar};
+  grid_box_->addItem (tr ("None"));
+  grid_box_->addItem (tr ("Lat/long"));
+  grid_box_->addItem (tr ("Maidenhead"));
+  grid_box_->addItem (tr ("Maidenhead squares"));
+  grid_box_->setToolTip (tr ("<p><b>Lat/long:</b> lines every 15 degrees.</p>"
+                             "<p><b>Maidenhead:</b> fields AA to RR.</p>"
+                             "<p><b>Maidenhead squares:</b> the fields and the squares inside them.</p>"
+                             "<p>Point at the map to see the grid square, the nearest city and how far it is from you.</p>"));
+  row1->addWidget (grid_box_);
   gray_box_ = new QCheckBox {tr ("Gray line"), bar};
   gray_box_->setToolTip (tr ("Shade the night side of the Earth"));
-  grid_box_ = new QCheckBox {tr ("Grid squares"), bar};
-  grid_box_->setToolTip (tr ("Maidenhead fields (AA to RR)"));
   aurora_box_ = new QCheckBox {tr ("Aurora"), bar};
   aurora_box_->setToolTip (tr ("NOAA's 30-minute aurora forecast. Strong aurora can absorb or reflect HF and VHF signals near the poles."));
   rain_box_ = new QCheckBox {tr ("Rain and snow"), bar};
   rain_box_->setToolTip (tr ("Where it's raining or snowing over the last half hour or so, from NASA satellites"));
+  beacons_box_ = new QCheckBox {tr ("Beacons"), bar};
+  beacons_box_->setToolTip (tr ("The 18 NCDXF/IARU beacons. The ones sending now are filled in the colour of their band."));
   row1->addWidget (gray_box_);
-  row1->addWidget (grid_box_);
   row1->addWidget (aurora_box_);
   row1->addWidget (rain_box_);
+  row1->addWidget (beacons_box_);
   row1->addStretch ();
+  auto * boxes = new QToolButton {bar};
+  boxes->setText (tr ("Boxes"));
+  boxes->setToolTip (tr ("Choose which boxes this window shows"));
+  boxes->setPopupMode (QToolButton::InstantPopup);
+  boxes->setMenu (boxes_menu_);
+  row1->addWidget (boxes);
   v->addLayout (row1);
 
   // second row: which stations; the check boxes double as the legend
@@ -897,11 +1679,15 @@ QWidget * ConditionsWindow::build_map_bar ()
 
   // restore and react
   settings_->beginGroup ("Conditions");
-  style_box_->setCurrentIndex (qBound (0, settings_->value ("MapStyle", 0).toInt (), 2));
+  style_box_->setCurrentIndex (qBound (0, settings_->value ("MapStyle", 0).toInt (), style_box_->count () - 1));
+  projection_box_->setCurrentIndex (qBound (0, settings_->value ("MapProjection", 0).toInt (), 1));
+  // older betas had a single Grid squares check box
+  int const old_grid = settings_->value ("GridSquares", false).toBool () ? 2 : 0;
+  grid_box_->setCurrentIndex (qBound (0, settings_->value ("MapGrid", old_grid).toInt (), grid_box_->count () - 1));
   gray_box_->setChecked (settings_->value ("GrayLine", true).toBool ());
-  grid_box_->setChecked (settings_->value ("GridSquares", false).toBool ());
   aurora_box_->setChecked (settings_->value ("Aurora", false).toBool ());
   rain_box_->setChecked (settings_->value ("Rain", false).toBool ());
+  beacons_box_->setChecked (settings_->value ("Beacons", false).toBool ());
   show_cq_->setChecked (settings_->value ("ShowCQ", true).toBool ());
   show_me_->setChecked (settings_->value ("ShowCallingMe", true).toBool ());
   show_called_->setChecked (settings_->value ("ShowCalled", true).toBool ());
@@ -909,21 +1695,25 @@ QWidget * ConditionsWindow::build_map_bar ()
   settings_->endGroup ();
 
   auto apply = [this] {
-    map_->set_style (static_cast<ConditionsMap::Style> (style_box_->currentIndex ()));
-    gray_box_->setEnabled (style_box_->currentIndex () != ConditionsMap::DayNight);
+    map_->projection = static_cast<ConditionsMap::Projection> (projection_box_->currentIndex ());
+    map_->grid = static_cast<ConditionsMap::Grid> (grid_box_->currentIndex ());
     map_->gray_line = gray_box_->isChecked ();
-    map_->grid = grid_box_->isChecked ();
     map_->show_aurora = aurora_box_->isChecked ();
     map_->show_rain = rain_box_->isChecked ();
+    map_->show_beacons = beacons_box_->isChecked ();
     map_->show_cq = show_cq_->isChecked ();
     map_->show_me = show_me_->isChecked ();
     map_->show_called = show_called_->isChecked ();
     map_->show_others = show_others_->isChecked ();
-    map_->update ();
+    gray_box_->setEnabled (style_box_->currentIndex () != ConditionsMap::DayNight);
+    map_->set_style (static_cast<ConditionsMap::Style> (style_box_->currentIndex ()));   // redraws
     save_map_options ();
   };
-  connect (style_box_, static_cast<void (QComboBox::*) (int)> (&QComboBox::currentIndexChanged), this, apply);
-  for (auto * box : {gray_box_, grid_box_, show_cq_, show_me_, show_called_, show_others_})
+  for (auto * combo : {style_box_, projection_box_, grid_box_})
+    {
+      connect (combo, static_cast<void (QComboBox::*) (int)> (&QComboBox::currentIndexChanged), this, apply);
+    }
+  for (auto * box : {gray_box_, beacons_box_, show_cq_, show_me_, show_called_, show_others_})
     {
       connect (box, &QCheckBox::toggled, this, apply);
     }
@@ -943,10 +1733,13 @@ void ConditionsWindow::save_map_options ()
 {
   settings_->beginGroup ("Conditions");
   settings_->setValue ("MapStyle", style_box_->currentIndex ());
+  settings_->setValue ("MapProjection", projection_box_->currentIndex ());
+  settings_->setValue ("MapGrid", grid_box_->currentIndex ());
+  settings_->remove ("GridSquares");
   settings_->setValue ("GrayLine", gray_box_->isChecked ());
-  settings_->setValue ("GridSquares", grid_box_->isChecked ());
   settings_->setValue ("Aurora", aurora_box_->isChecked ());
   settings_->setValue ("Rain", rain_box_->isChecked ());
+  settings_->setValue ("Beacons", beacons_box_->isChecked ());
   settings_->setValue ("ShowCQ", show_cq_->isChecked ());
   settings_->setValue ("ShowCallingMe", show_me_->isChecked ());
   settings_->setValue ("ShowCalled", show_called_->isChecked ());
@@ -1056,15 +1849,27 @@ void ConditionsWindow::refresh_overlays ()
   else overlay_timer_->stop ();
 }
 
+
 void ConditionsWindow::apply_colors ()
 {
   auto const pal = palette ();
-  setStyleSheet (QString {"QFrame#conditionsTile {background-color: %1; border: 1px solid %2; border-radius: 8px;}"}
+  setStyleSheet (QString {"QFrame#conditionsTile, QFrame#conditionsBox {background-color: %1; border: 1px solid %2; border-radius: 8px;}"}
                  .arg (pal.alternateBase ().color ().name ()).arg (pal.mid ().color ().name ()));
+  // the scheme's accent colour, made to stand out from the background
+  auto accent = pal.highlight ().color ();
+  auto const background = pal.window ().color ();
+  for (int i = 0; i < 6 && std::abs (accent.lightness () - background.lightness ()) < 110; ++i)
+    {
+      accent = background.lightness () < 128 ? accent.lighter (125) : accent.darker (125);
+    }
+  call_label_->setStyleSheet (big_css (2.8) + QString {" color: %1;"}.arg (accent.name ()));
+  utc_clock_->setStyleSheet (big_css (2.0));
+  local_clock_->setStyleSheet (big_css (1.2).replace ("bold", "normal"));
   map_->retint ();
   update_legend ();
   update_tiles ();
   update_bands ();
+  xray_graph_->update ();
 }
 
 void ConditionsWindow::scheme_changed ()
@@ -1081,8 +1886,10 @@ void ConditionsWindow::showEvent (QShowEvent * e)
   refresh_overlays ();
   tick ();
   map_->update_night ();
+  update_containers ();
   // fetch now unless the numbers are recent
   if (!updated_.isValid () || updated_.secsTo (QDateTime::currentDateTimeUtc ()) > 10 * 60) refresh ();
+  if (box_on ("sun")) fetch_sun ();
 }
 
 void ConditionsWindow::hideEvent (QHideEvent * e)
@@ -1091,6 +1898,7 @@ void ConditionsWindow::hideEvent (QHideEvent * e)
   clock_timer_->stop ();
   refresh_timer_->stop ();
   overlay_timer_->stop ();
+  sun_timer_->stop ();
   QWidget::hideEvent (e);
 }
 
@@ -1105,8 +1913,10 @@ void ConditionsWindow::closeEvent (QCloseEvent * e)
 void ConditionsWindow::tick ()
 {
   auto const now = QDateTime::currentDateTimeUtc ();
-  utc_clock_->setText (now.toString ("hh:mm:ss"));
-  local_clock_->setText (now.toLocalTime ().toString ("h:mm:ss AP"));
+  utc_clock_->setText (now.toString ("hh:mm:ss") + " UTC");
+  utc_date_->setText (QLocale {}.toString (now.date (), "ddd d MMM yyyy"));
+  local_clock_->setText (tr ("Local %1").arg (now.toLocalTime ().toString ("h:mm:ss AP")));
+  update_beacons ();
   if (0 == now.time ().second ())
     {
       map_->update_night ();
@@ -1116,8 +1926,59 @@ void ConditionsWindow::tick ()
           if (it->heard.secsTo (now) > 1800) it = map_->stations.erase (it);
           else ++it;
         }
-      if (0 == now.time ().minute () % 10) update_sun_times ();
+      update_de_dx ();
+      xray_graph_->update ();
     }
+}
+
+void ConditionsWindow::update_beacons ()
+{
+  auto const now = QDateTime::currentDateTimeUtc ();
+  int const secs = QTime {0, 0}.secsTo (now.time ());
+  int const slot = (secs % 180) / 10;
+  for (int b = 0; b < 5; ++b)
+    {
+      auto const& beacon = ncdxf[beacon_on (slot, b)];
+      beacon_rows_[b]->setText (QString {"<span style=\"color:%1\">&#9650;</span> %2 &nbsp;<b>%3</b> &nbsp;%4"}
+                                .arg (beacon_color (b).name ()).arg (beacon_freqs[b])
+                                .arg (slashed (beacon.call)).arg (QString {beacon.place}.section (',', -1).trimmed ()));
+    }
+  beacon_next_->setText (tr ("Next change in %1 s").arg (10 - secs % 10));
+  if (slot != beacon_slot_)
+    {
+      beacon_slot_ = slot;
+      for (int i = 0; i < map_->beacons.size (); ++i) map_->beacons[i].band = -1;
+      for (int b = 0; b < 5; ++b) map_->beacons[beacon_on (slot, b)].band = b;
+      if (map_->show_beacons) map_->update ();
+    }
+}
+
+void ConditionsWindow::fetch_sun ()
+{
+  if (!box_on ("sun")) return;
+  auto const channel = sun_channel_->currentData ().toString ();
+  QNetworkRequest req {QUrl {QString {"https://sdo.gsfc.nasa.gov/assets/img/latest/latest_512_%1.jpg"}.arg (channel)}};
+  req.setRawHeader ("User-Agent", http_user_agent ().toUtf8 ());
+#if QT_VERSION >= QT_VERSION_CHECK (5, 9, 0)
+  req.setAttribute (QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+#endif
+  auto * reply = network_->get (req);
+  connect (reply, &QNetworkReply::finished, this, [this, reply, channel] {
+      reply->deleteLater ();
+      if (channel != sun_channel_->currentData ().toString ()) return;   // changed while loading
+      QImage img;
+      if (QNetworkReply::NoError == reply->error ()) img.loadFromData (reply->readAll ());
+      if (img.isNull ())
+        {
+          sun_image_->set_message (tr ("The Sun picture couldn't be reached. Will try again in 15 minutes."));
+          return;
+        }
+      sun_image_->set_image (img);
+      sun_image_->setToolTip (tr ("The Sun from NASA's Solar Dynamics Observatory, fetched %1 UTC. "
+                                  "Bright spots in the ultraviolet views are active regions that can flare.")
+                              .arg (QDateTime::currentDateTimeUtc ().toString ("hh:mm")));
+    });
+  if (isVisible ()) sun_timer_->start ();
 }
 
 void ConditionsWindow::refresh ()
@@ -1129,7 +1990,7 @@ void ConditionsWindow::refresh ()
   request (swpc + "products/noaa-planetary-k-index.json", &ConditionsWindow::on_kindex);
   request (swpc + "products/summary/solar-wind-speed.json", &ConditionsWindow::on_wind);
   request (swpc + "products/summary/solar-wind-mag-field.json", &ConditionsWindow::on_mag);
-  request (swpc + "json/goes/primary/xrays-6-hour.json", &ConditionsWindow::on_xray);
+  request (swpc + "json/goes/primary/xrays-1-day.json", &ConditionsWindow::on_xray);
   request (swpc + "text/daily-solar-indices.txt", &ConditionsWindow::on_daily);
   status_->setText (tr ("Getting the latest space weather from NOAA..."));
 }
@@ -1160,7 +2021,7 @@ void ConditionsWindow::request (QString const& url, void (ConditionsWindow::*han
           update_tiles ();
           update_bands ();
           QString text = tr ("Space weather and aurora: NOAA Space Weather Prediction Center, updated %1 UTC. "
-                             "Maps: NASA Blue Marble and Black Marble, Natural Earth; rain and snow: NASA GIBS.")
+                             "Sun: NASA SDO. Maps: NASA Blue Marble and Black Marble, Natural Earth; rain and snow: NASA GIBS.")
             .arg (updated_.toString ("hh:mm"));
           if (overlay_status_.size ()) text += ' ' + overlay_status_;
           if (failed_) text += ' ' + tr ("(%n item(s) couldn't be reached; will try again in 15 minutes)", "", failed_);
@@ -1205,16 +2066,29 @@ void ConditionsWindow::on_mag (QByteArray const& data)
   bt_ = field (recs.last (), {"bt", "Bt"});
 }
 
+
 void ConditionsWindow::on_xray (QByteArray const& data)
 {
+  // a day of one-minute readings in two wavebands
   auto const recs = records (data);
-  for (int i = recs.size () - 1; i >= 0; --i)
+  QVector<QPointF> long_band, short_band;
+  for (auto const& r : recs)
     {
-      if (recs[i].value ("energy").toString () == "0.1-0.8nm")
-        {
-          xray_ = field (recs[i], {"flux"});
-          break;
-        }
+      double const flux = field (r, {"flux"});
+      if (qIsNaN (flux) || flux <= 0) continue;
+      auto const t = QDateTime::fromString (r.value ("time_tag").toString (), Qt::ISODate);
+      if (!t.isValid ()) continue;
+      QPointF const pt {t.toMSecsSinceEpoch () / 1000., flux};
+      auto const energy = r.value ("energy").toString ();
+      if ("0.1-0.8nm" == energy) long_band << pt;
+      else if ("0.05-0.4nm" == energy) short_band << pt;
+    }
+  if (long_band.size ())
+    {
+      xray_ = long_band.last ().y ();
+      xray_graph_->long_band = long_band;
+      xray_graph_->short_band = short_band;
+      xray_graph_->update ();
     }
 }
 
@@ -1249,7 +2123,7 @@ void ConditionsWindow::update_tiles ()
     t.value->setText (value);
     t.note->setText (note);
     auto const c = level_color (level);
-    t.value->setStyleSheet (level < 0 ? QString {} : QString {"color: %1;"}.arg (c.name ()));
+    t.value->setStyleSheet (big_css (1.7) + (level < 0 ? QString {} : QString {" color: %1;"}.arg (c.name ())));
   };
   QString const none {QChar {0x2014}};
   if (qIsNaN (sfi_)) set ("sfi", none, {}, -1);
@@ -1268,15 +2142,9 @@ void ConditionsWindow::update_tiles ()
   if (qIsNaN (xray_)) set ("xray", none, {}, -1);
   else
     {
-      char cls = 'A';
-      double base = 1e-8;
-      if (xray_ >= 1e-4) {cls = 'X'; base = 1e-4;}
-      else if (xray_ >= 1e-5) {cls = 'M'; base = 1e-5;}
-      else if (xray_ >= 1e-6) {cls = 'C'; base = 1e-6;}
-      else if (xray_ >= 1e-7) {cls = 'B'; base = 1e-7;}
-      set ("xray", QString {"%1%2"}.arg (cls).arg (xray_ / base, 0, 'f', 1),
-           cls == 'X' || cls == 'M' ? tr ("flare") : tr ("normal"),
-           cls == 'X' ? 0 : cls == 'M' ? 1 : 2);
+      int level;
+      auto const cls = xray_class (xray_, &level);
+      set ("xray", cls, level < 2 ? tr ("flare") : tr ("normal"), level);
     }
   if (qIsNaN (wind_)) set ("wind", none, {}, -1);
   else set ("wind", QString::number (qRound (wind_)), tr ("km/s"), wind_ >= 600 ? 0 : wind_ >= 500 ? 1 : 2);
@@ -1307,53 +2175,100 @@ void ConditionsWindow::update_bands ()
     }
 }
 
-void ConditionsWindow::update_sun_times ()
+
+void ConditionsWindow::update_de_dx ()
 {
-  auto describe = [] (QString const& who, QString const& grid) {
-    double lat, lon;
-    if (!grid_to_latlon (grid, lat, lon)) return QString {};
+  auto const now = QDateTime::currentDateTimeUtc ();
+  auto sun_line = [] (double lat, double lon) {
     QDateTime rise, set;
     sun_times (lat, lon, rise, set);
-    QString text = QString {"<b>%1</b> (%2)<br/>"}.arg (who.toHtmlEscaped ()).arg (grid.left (6).toUpper ());
-    if (rise.isValid ()) text += tr ("Sunrise %1").arg (rise.toString ("hh:mm"));
-    else text += tr ("No sunrise today");
-    text += " &nbsp; ";
-    if (set.isValid ()) text += tr ("Sunset %1").arg (set.toString ("hh:mm"));
-    else text += tr ("No sunset today");
-    return text + " UTC";
+    return tr ("Sunrise %1 &nbsp;Sunset %2 UTC")
+      .arg (rise.isValid () ? rise.toString ("hh:mm") : QString {"--:--"})
+      .arg (set.isValid () ? set.toString ("hh:mm") : QString {"--:--"});
   };
-  my_sun_->setText (describe (tr ("You"), my_grid_));
-  auto dx_text = dx_call_.size () ? describe (dx_call_, dx_grid_) : QString {};
-  // distance and beam heading from you, in km or miles as Settings says
-  double lat1, lon1, lat2, lon2;
-  if (dx_text.size () && grid_to_latlon (my_grid_, lat1, lon1) && grid_to_latlon (dx_grid_, lat2, lon2))
+
+  // you
+  QString de = QString {"<span style=\"font-size:large\"><b>DE</b> &nbsp;%1</span>"}
+    .arg (my_call_.size () ? slashed (my_call_).toHtmlEscaped () : QString {});
+  double my_lat, my_lon;
+  bool const have_me = grid_to_latlon (my_grid_, my_lat, my_lon);
+  if (have_me)
     {
-      double const p1 = rad (lat1), p2 = rad (lat2), dl = rad (lon2 - lon1);
-      double const c = std::sin (p1) * std::sin (p2) + std::cos (p1) * std::cos (p2) * std::cos (dl);
-      double const km = 6371. * std::acos (qBound (-1., c, 1.));
-      double bearing = deg (std::atan2 (std::sin (dl) * std::cos (p2),
-                                        std::cos (p1) * std::sin (p2) - std::sin (p1) * std::cos (p2) * std::cos (dl)));
-      if (bearing < 0) bearing += 360.;
-      dx_text += "<br/>" + tr ("%1 %2, beam heading %3%4")
-        .arg (QLocale {}.toString (qRound (miles_ ? km * 0.621371 : km)))
-        .arg (miles_ ? tr ("miles") : tr ("km"))
-        .arg (qRound (bearing)).arg (QChar {0x00B0});
+      de += "<br/>" + my_grid_.left (6).toUpper () + " &nbsp;" + latlon_text (my_lat, my_lon);
+      de += "<br/>" + tr ("Local time %1").arg (now.toLocalTime ().toString ("h:mm AP"));
+      de += "<br/>" + sun_line (my_lat, my_lon);
     }
-  dx_sun_->setText (dx_text);
+  else
+    {
+      de += "<br/>" + tr ("Put your grid in Settings > General to see your sunrise and sunset.");
+    }
+  de_info_->setText (de);
+
+  // the station being worked
+  QString dx = QString {"<span style=\"font-size:large\"><b>DX</b> &nbsp;%1</span>"}.arg (slashed (dx_call_).toHtmlEscaped ());
+  double dx_lat, dx_lon;
+  bool have_dx = dx_call_.size () && grid_to_latlon (dx_grid_, dx_lat, dx_lon);
+  bool approx = false;
+  if (!have_dx && dx_call_.size () && map_->stations.contains (dx_call_))
+    {
+      dx_lat = map_->stations[dx_call_].lat;
+      dx_lon = map_->stations[dx_call_].lon;
+      approx = map_->stations[dx_call_].approx;
+      have_dx = true;
+    }
+  if (dx_call_.isEmpty ())
+    {
+      dx += "<br/>" + tr ("Nobody yet. Double-click a station in Band Activity or on the map.");
+    }
+  else if (!have_dx)
+    {
+      dx += "<br/>" + tr ("No grid square yet.");
+    }
+  else
+    {
+      dx += "<br/>" + (approx ? tr ("Country only") : dx_grid_.left (6).toUpper ()) + " &nbsp;" + latlon_text (dx_lat, dx_lon);
+      // local time from the longitude; time zones don't always follow it
+      int const offset = qRound (dx_lon / 15.);
+      dx += "<br/>" + tr ("About %1 local").arg (now.addSecs (offset * 3600).toString ("h:mm AP"));
+      dx += "<br/>" + sun_line (dx_lat, dx_lon);
+      if (have_me)
+        {
+          double dist, bearing;
+          path_to (my_lat, my_lon, dx_lat, dx_lon, dist, bearing);
+          double const km = dist * 6371., long_km = 40030. - km;
+          auto distance = [this] (double km) {
+            return QString {"%1 %2"}.arg (QLocale {}.toString (qRound (miles_ ? km * 0.621371 : km)))
+              .arg (miles_ ? tr ("mi") : tr ("km"));
+          };
+          dx += "<br/>" + tr ("Short path %1 at %2%3").arg (distance (km)).arg (qRound (bearing)).arg (QChar {0x00B0});
+          dx += "<br/>" + tr ("Long path %1 at %2%3").arg (distance (long_km))
+            .arg (qRound (std::fmod (bearing + 180., 360.))).arg (QChar {0x00B0});
+        }
+    }
+  dx_info_->setText (dx);
+}
+
+void ConditionsWindow::set_my_call (QString const& call)
+{
+  my_call_ = call.trimmed ().toUpper ();
+  call_label_->setText (slashed (my_call_));
+  update_de_dx ();
 }
 
 void ConditionsWindow::set_my_grid (QString const& grid)
 {
+  if (grid == my_grid_) return;
   my_grid_ = grid;
   double lat, lon;
   if (grid_to_latlon (grid, lat, lon)) map_->set_my (lat, lon);
-  update_sun_times ();
+  update_de_dx ();
 }
 
 void ConditionsWindow::set_miles (bool miles)
 {
   miles_ = miles;
-  update_sun_times ();
+  map_->miles = miles;
+  update_de_dx ();
 }
 
 void ConditionsWindow::set_dx (QString const& call, QString const& grid)
@@ -1374,7 +2289,7 @@ void ConditionsWindow::set_dx (QString const& call, QString const& grid)
     {
       map_->set_dx (call, qQNaN (), qQNaN ());
     }
-  update_sun_times ();
+  update_de_dx ();
 }
 
 void ConditionsWindow::add_station (QString const& call, QString const& grid, int snr, bool cq, bool to_me,

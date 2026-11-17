@@ -3650,6 +3650,7 @@ void MainWindow::on_actionSettings_triggered()           // Setup Dialog (Settin
     apply_display_colors ();
     if (m_conditions)
       {
+        m_conditions->set_my_call (m_config.my_callsign ());
         m_conditions->set_my_grid (m_config.my_grid ());
         m_conditions->set_miles (m_config.miles ());
       }
@@ -4767,6 +4768,7 @@ void MainWindow::setup_callsign_info ()
   // the Conditions window always opens on its own, never inside the main window
   m_conditions = new ConditionsWindow {m_settings};
   connect (m_conditions, &ConditionsWindow::station_double_clicked, this, &MainWindow::double_click_station);
+  m_conditions->set_my_call (m_config.my_callsign ());
   m_conditions->set_my_grid (m_config.my_grid ());
   m_conditions->set_miles (m_config.miles ());
   update_conditions_colors ();
@@ -4813,6 +4815,7 @@ void MainWindow::show_conditions ()
 {
   if (!m_conditions) return;
   update_conditions_colors ();
+  m_conditions->set_my_call (m_config.my_callsign ());
   m_conditions->set_my_grid (m_config.my_grid ());
   m_conditions->set_dx (ui->dxCallEntry->text ().trimmed ().toUpper (), ui->dxGridEntry->text ().trimmed ());
   m_conditions->show ();

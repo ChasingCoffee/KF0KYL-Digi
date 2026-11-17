@@ -18,6 +18,11 @@ class QLabel;
 class QTimer;
 class QGridLayout;
 class QSettings;
+class QFrame;
+class QMenu;
+class QVBoxLayout;
+class XRayGraph;
+class SunImage;
 
 //
 // ConditionsWindow - a separate window with space weather and band
@@ -40,6 +45,7 @@ public:
   explicit ConditionsWindow (QSettings *, QWidget * parent = nullptr);
   ~ConditionsWindow ();
 
+  void set_my_call (QString const& call);
   void set_my_grid (QString const& grid);
   void set_dx (QString const& call, QString const& grid);
   void set_miles (bool miles);         // Settings > General > Display distance in miles
@@ -70,6 +76,13 @@ protected:
 private:
   void build_ui ();
   QWidget * build_map_bar ();
+  // a box that can be switched on and off from the Boxes menu
+  QFrame * make_box (QString const& key, QString const& title, QVBoxLayout *& body);
+  void add_box_action (QString const& key, QString const& text);
+  void update_containers ();
+  void fetch_sun ();
+  void update_beacons ();
+  bool box_on (QString const& key) const;
   void save_map_options ();
   void refresh_overlays ();            // aurora and rain, when switched on
   void update_legend ();
@@ -84,7 +97,7 @@ private:
   void on_daily (QByteArray const&);
   void update_tiles ();
   void update_bands ();
-  void update_sun_times ();
+  void update_de_dx ();
   void apply_colors ();
 
   QSettings * settings_;
@@ -96,15 +109,31 @@ private:
   struct Tile {QLabel * value; QLabel * caption; QLabel * note;};
   QHash<QString, Tile> tiles_;
   QLabel * band_cells_[4][2] {};
+  QLabel * call_label_;
   QLabel * utc_clock_;
+  QLabel * utc_date_;
   QLabel * local_clock_;
-  QLabel * my_sun_;
-  QLabel * dx_sun_;
+  QLabel * de_info_;
+  QLabel * dx_info_;
+  XRayGraph * xray_graph_;
+  SunImage * sun_image_;
+  class QComboBox * sun_channel_;
+  QTimer * sun_timer_;
+  QLabel * beacon_rows_[5] {};
+  QLabel * beacon_next_;
+  int beacon_slot_ {-1};
+  QMenu * boxes_menu_;
+  QHash<QString, QWidget *> boxes_;
+  QHash<QString, class QAction *> box_actions_;
+  QWidget * top_row_;
+  QWidget * left_column_;
   QLabel * status_;
   QTimer * overlay_timer_ {nullptr};
   class QComboBox * style_box_;
   class QCheckBox * gray_box_;
-  class QCheckBox * grid_box_;
+  class QComboBox * projection_box_;
+  class QComboBox * grid_box_;
+  class QCheckBox * beacons_box_;
   class QCheckBox * aurora_box_;
   class QCheckBox * rain_box_;
   class QCheckBox * show_cq_;
@@ -130,6 +159,7 @@ private:
   int failed_ {0};
 
   bool miles_ {false};
+  QString my_call_;
   QString my_grid_;
   QString dx_call_;
   QString dx_grid_;
