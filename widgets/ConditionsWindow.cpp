@@ -341,6 +341,27 @@ namespace
   // which beacon is on band b (0 = 14.100) in this ten-second slot
   int beacon_on (int slot, int band) {return ((slot - band) % 18 + 18) % 18;}
 
+  // the colours for VOACAP reliability, 0 to 1
+  QColor VoacapGrid_colour (double v)
+  {
+    struct Stop {double at; QColor c;};
+    static Stop const stops[] = {{0., QColor {60, 40, 90}}, {0.3, QColor {60, 110, 220}}, {0.55, QColor {40, 190, 130}},
+                                 {0.75, QColor {240, 200, 60}}, {1., QColor {250, 90, 60}}};
+    v = qBound (0., v, 1.);
+    for (int i = 0; i < 4; ++i)
+      {
+        if (v <= stops[i + 1].at)
+          {
+            double const t = (v - stops[i].at) / (stops[i + 1].at - stops[i].at);
+            auto const& a = stops[i].c;
+            auto const& b = stops[i + 1].c;
+            return QColor::fromRgbF (a.redF () + (b.redF () - a.redF ()) * t, a.greenF () + (b.greenF () - a.greenF ()) * t,
+                                     a.blueF () + (b.blueF () - a.blueF ()) * t);
+          }
+      }
+    return stops[4].c;
+  }
+
   // places for the names shown when you point at the map
   struct City {QString name; double lat; double lon;};
   QVector<City> const& cities ()
@@ -418,6 +439,8 @@ public:
   bool show_aurora {false};
   bool show_rain {false};
   bool show_beacons {false};
+  bool show_prop {false};
+  QString prop_label;                // what the propagation layer shows
   bool show_cq {true};
   bool show_me {true};
   bool show_called {true};
@@ -437,6 +460,7 @@ public:
   {
     composite_ = scaled_ = projected_ = QImage {};
     scaled_key_.clear ();
+    projected_key_.clear ();
     grid_key_.clear ();
     update ();
   }
@@ -526,6 +550,7 @@ public:
 
   void set_aurora (QImage const& img) {aurora_ = img; changed ();}
   void set_rain (QImage const& img) {rain_ = img; changed ();}
+  void set_prop (QImage const& img) {prop_ = img; changed ();}
 
   void set_projection (Projection p)
   {
@@ -822,6 +847,35 @@ protected:
       }
     draw_legend (p, r);
     draw_zoom_buttons (p);
+    if (show_prop) draw_prop_scale (p);
+  }
+
+  // what the propagation colours mean, bottom right
+  void draw_prop_scale (QPainter& p)
+  {
+    auto f = font ();
+    f.setPointSizeF (qMax (6.5, f.pointSizeF () * 0.85));
+    QFontMetricsF fm {f};
+    double const bar_w = 120, h = fm.height () + 8;
+    auto const ends = QObject::tr ("0–100%");
+    double const w = fm.boundingRect (prop_label).width () + bar_w + fm.boundingRect (ends).width () + 40;
+    QRectF const panel {width () - w - 12., height () - h - 36., w, h + 12};
+    p.setPen (QPen {QColor {255, 255, 255, 40}, 1});
+    p.setBrush (QColor {13, 17, 23, 190});
+    p.drawRoundedRect (panel, 12, 12);
+    p.setFont (f);
+    p.setPen (QColor {233, 236, 241});
+    double x = panel.left () + 12;
+    double const mid = panel.center ().y ();
+    p.drawText (QPointF {x, mid + fm.ascent () / 2 - 1}, prop_label);
+    x += fm.boundingRect (prop_label).width () + 8;
+    QLinearGradient g {QPointF {x, 0}, QPointF {x + bar_w, 0}};
+    for (int i = 0; i <= 4; ++i) g.setColorAt (i / 4., VoacapGrid_colour (i / 4.));
+    p.setPen (Qt::NoPen);
+    p.setBrush (g);
+    p.drawRoundedRect (QRectF {x, mid - 4, bar_w, 8}, 4, 4);
+    p.setPen (QColor {233, 236, 241, 190});
+    p.drawText (QPointF {x + bar_w + 8, mid + fm.ascent () / 2 - 1}, ends);
   }
 
   // which stations are shown: chips in a see-through bar on the map;
@@ -1138,6 +1192,7 @@ private:
             p.setOpacity (1.);
           }
         if (show_rain && !rain_.isNull ()) p.drawImage (all, rain_);
+        if (show_prop && !prop_.isNull ()) p.drawImage (all, prop_);
         if (show_aurora && !aurora_.isNull ()) p.drawImage (all, aurora_);
       }
     return composite_;
@@ -1455,6 +1510,7 @@ private:
   QVector<double> shade_;
   QImage aurora_;
   QImage rain_;
+  QImage prop_;
   QVector<QRectF> legend_rects_;
   QString grid_key_;
   QPainterPath grid_major_;
@@ -1743,29 +1799,15 @@ public:
     return names[b];
   }
 
+  // the band shown on the map (-1: none), and a click on a band's row
+  int selected {-1};
+  std::function<void (int)> on_band;
+
   // reliability 0..1 and signal to noise, [band][hour UTC]; empty when unknown
   QVector<QVector<float>> rel;
   QVector<QVector<float>> snr;
 
-  static QColor colour (double v)
-  {
-    struct Stop {double at; QColor c;};
-    static Stop const stops[] = {{0., QColor {60, 40, 90}}, {0.3, QColor {60, 110, 220}}, {0.55, QColor {40, 190, 130}},
-                                 {0.75, QColor {240, 200, 60}}, {1., QColor {250, 90, 60}}};
-    v = qBound (0., v, 1.);
-    for (int i = 0; i < 4; ++i)
-      {
-        if (v <= stops[i + 1].at)
-          {
-            double const t = (v - stops[i].at) / (stops[i + 1].at - stops[i].at);
-            auto const& a = stops[i].c;
-            auto const& b = stops[i + 1].c;
-            return QColor::fromRgbF (a.redF () + (b.redF () - a.redF ()) * t, a.greenF () + (b.greenF () - a.greenF ()) * t,
-                                     a.blueF () + (b.blueF () - a.blueF ()) * t);
-          }
-      }
-    return stops[4].c;
-  }
+  static QColor colour (double v) {return VoacapGrid_colour (v);}
 
 protected:
   QRectF cells () const
@@ -1790,8 +1832,26 @@ protected:
     for (int b = 0; b < bands; ++b)
       {
         double const y = area.top () + b * ch;      // 80 m at the top
-        p.setPen (muted);
+        if (b == selected)
+          {
+            // the band on the map: its row picked out in the accent colour
+            QColor glow {Win11Theme::token ("accent")};
+            glow.setAlpha (55);
+            p.setPen (Qt::NoPen);
+            p.setBrush (glow);
+            p.drawRoundedRect (QRectF {0, y, width () - 0.5, ch}, 3, 3);
+            auto bold = small;
+            bold.setBold (true);
+            p.setFont (bold);
+            p.setPen (QColor {Win11Theme::token ("accent")});
+          }
+        else
+          {
+            p.setFont (small);
+            p.setPen (muted);
+          }
         p.drawText (QRectF {0, y, area.left () - 6, ch}, Qt::AlignRight | Qt::AlignVCenter, band_name (b));
+        p.setFont (small);
         for (int h = 0; h < 24; ++h)
           {
             QRectF const cell {area.left () + h * cw + 0.75, y + 0.75, cw - 1.5, ch - 1.5};
@@ -1811,6 +1871,12 @@ protected:
             p.drawRoundedRect (cell, 2, 2);
           }
       }
+    if (selected >= 0 && selected < bands)
+      {
+        p.setPen (QPen {QColor {Win11Theme::token ("accent")}, 1.5});
+        p.setBrush (Qt::NoBrush);
+        p.drawRoundedRect (QRectF {area.left () + 0.25, area.top () + selected * ch + 0.25, area.width () - 0.5, ch - 0.5}, 3, 3);
+      }
     // the hour now
     p.setPen (QPen {QColor {Win11Theme::token ("text")}, 1.5});
     p.setBrush (Qt::NoBrush);
@@ -1823,8 +1889,22 @@ protected:
       }
   }
 
+  int band_at (QPoint const& pos) const
+  {
+    auto const area = cells ();
+    if (pos.y () < area.top () || pos.y () >= area.bottom ()) return -1;
+    return qBound (0, static_cast<int> ((pos.y () - area.top ()) / (area.height () / bands)), bands - 1);
+  }
+
+  void mousePressEvent (QMouseEvent * e) override
+  {
+    int const b = band_at (e->pos ());
+    if (b >= 0 && on_band) on_band (b);
+  }
+
   void mouseMoveEvent (QMouseEvent * e) override
   {
+    setCursor (band_at (e->pos ()) >= 0 ? Qt::PointingHandCursor : Qt::ArrowCursor);
     auto const area = cells ();
     if (!area.contains (e->pos ()) || rel.isEmpty ())
       {
@@ -1837,6 +1917,7 @@ protected:
     auto text = QObject::tr ("<b>%1 m at %2:00 UTC</b><br/>Reliability %3%")
       .arg (band_name (b)).arg (h, 2, 10, QChar {'0'}).arg (qRound (rel[b][h] * 100));
     if (b < snr.size () && h < snr[b].size ()) text += QObject::tr ("<br/>Signal to noise %1 dB in 1 Hz").arg (qRound (snr[b][h]));
+    text += "<br/>" + (b == selected ? QObject::tr ("Click to take this band off the map") : QObject::tr ("Click to show this band on the map"));
     QToolTip::showText (e->globalPos (), text, this);
   }
 };
@@ -2340,6 +2421,7 @@ void ConditionsWindow::build_ui ()
   }
   voacap_grid_ = new VoacapGrid {voacap_box};
   voacap_grid_->setObjectName ("plain");
+  voacap_grid_->on_band = [this] (int b) {select_prop_band (b);};
   body->addWidget (voacap_grid_, 1);
   voacap_now_ = new QLabel {voacap_box};
   voacap_now_->setWordWrap (true);
@@ -2355,6 +2437,10 @@ void ConditionsWindow::build_ui ()
   voacap_timer_->setSingleShot (true);
   voacap_timer_->setInterval (600);
   connect (voacap_timer_, &QTimer::timeout, this, &ConditionsWindow::run_voacap);
+  area_timer_ = new QTimer {this};
+  area_timer_->setSingleShot (true);
+  area_timer_->setInterval (800);
+  connect (area_timer_, &QTimer::timeout, this, &ConditionsWindow::run_area);
   auto voacap_changed = [this] {
     settings_->beginGroup ("Conditions");
     settings_->setValue ("VoacapPower", voacap_power_->currentData ());
@@ -2362,7 +2448,7 @@ void ConditionsWindow::build_ui ()
     settings_->setValue ("VoacapTOA", voacap_toa_->currentData ());
     settings_->setValue ("VoacapLongPath", 1 == voacap_path_->checkedId ());
     settings_->endGroup ();
-    voacap_timer_->start ();
+    schedule_voacap ();
   };
   for (auto * combo : {voacap_power_, voacap_mode_, voacap_toa_})
     {
@@ -2493,7 +2579,10 @@ QWidget * ConditionsWindow::build_map_bar ()
   aurora_box_ = make_chip (tr ("Aurora"), tr ("NOAA's 30-minute aurora forecast. Strong aurora can absorb or reflect HF and VHF signals near the poles."), bar);
   rain_box_ = make_chip (tr ("Rain"), tr ("Where it's raining or snowing over the last half hour or so, from NASA satellites"), bar);
   beacons_box_ = make_chip (tr ("Beacons"), tr ("The 18 NCDXF/IARU beacons. The ones sending now are filled in the color of their band."), bar);
-  for (auto * b : {gray_box_, aurora_box_, rain_box_, beacons_box_}) row2->addWidget (b);
+  prop_box_ = make_chip (tr ("Propagation"), tr ("<p>VOACAP's map for one band from you: how likely it is to reach each part of the world "
+                                                  "this hour, at the power, mode and take-off angle set in the VOACAP box.</p>"
+                                                  "<p>Click a band in the VOACAP box to choose it.</p>"), bar);
+  for (auto * b : {gray_box_, aurora_box_, rain_box_, beacons_box_, prop_box_}) row2->addWidget (b);
   row2->addStretch ();
   row1->addStretch ();
   auto * boxes = new QToolButton {bar};
@@ -2525,6 +2614,8 @@ QWidget * ConditionsWindow::build_map_bar ()
   aurora_box_->setChecked (settings_->value ("Aurora", false).toBool ());
   rain_box_->setChecked (settings_->value ("Rain", false).toBool ());
   beacons_box_->setChecked (settings_->value ("Beacons", false).toBool ());
+  prop_band_ = qBound (0, settings_->value ("PropBand", 4).toInt (), VoacapGrid::bands - 1);     // 20 m
+  prop_box_->setChecked (settings_->value ("Propagation", false).toBool ());
   show_cq_->setChecked (settings_->value ("ShowCQ", true).toBool ());
   show_me_->setChecked (settings_->value ("ShowCallingMe", true).toBool ());
   show_called_->setChecked (settings_->value ("ShowCalled", true).toBool ());
@@ -2538,6 +2629,9 @@ QWidget * ConditionsWindow::build_map_bar ()
     map_->show_aurora = aurora_box_->isChecked ();
     map_->show_rain = rain_box_->isChecked ();
     map_->show_beacons = beacons_box_->isChecked ();
+    map_->show_prop = prop_box_->isChecked ();
+    voacap_grid_->selected = prop_box_->isChecked () ? prop_band_ : -1;
+    voacap_grid_->update ();
     map_->show_cq = show_cq_->isChecked ();
     map_->show_me = show_me_->isChecked ();
     map_->show_called = show_called_->isChecked ();
@@ -2559,6 +2653,10 @@ QWidget * ConditionsWindow::build_map_bar ()
     {
       connect (box, &QAbstractButton::toggled, this, apply);
     }
+  connect (prop_box_, &QAbstractButton::toggled, this, [this, apply] (bool on) {
+      apply ();
+      if (on) schedule_area ();
+    });
   for (auto * box : {aurora_box_, rain_box_})
     {
       connect (box, &QAbstractButton::toggled, this, [this, apply] {
@@ -2582,6 +2680,8 @@ void ConditionsWindow::save_map_options ()
   settings_->setValue ("Aurora", aurora_box_->isChecked ());
   settings_->setValue ("Rain", rain_box_->isChecked ());
   settings_->setValue ("Beacons", beacons_box_->isChecked ());
+  settings_->setValue ("Propagation", prop_box_->isChecked ());
+  settings_->setValue ("PropBand", prop_band_);
   settings_->setValue ("ShowCQ", show_cq_->isChecked ());
   settings_->setValue ("ShowCallingMe", show_me_->isChecked ());
   settings_->setValue ("ShowCalled", show_called_->isChecked ());
@@ -2751,6 +2851,7 @@ void ConditionsWindow::showEvent (QShowEvent * e)
 {
   QWidget::showEvent (e);
   apply_colors ();                     // the program's font and colours are settled by now
+  schedule_area ();
   clock_timer_->start ();
   refresh_timer_->start ();
   refresh_overlays ();
@@ -3168,6 +3269,152 @@ void ConditionsWindow::update_de_dx ()
 void ConditionsWindow::schedule_voacap ()
 {
   if (voacap_timer_) voacap_timer_->start ();
+  schedule_area ();
+}
+
+void ConditionsWindow::schedule_area ()
+{
+  if (area_timer_ && prop_box_ && prop_box_->isChecked ()) area_timer_->start ();
+}
+
+void ConditionsWindow::select_prop_band (int band)
+{
+  // the same band again takes it off the map
+  if (prop_box_->isChecked () && band == prop_band_)
+    {
+      prop_box_->setChecked (false);
+      return;
+    }
+  prop_band_ = band;
+  map_->set_prop (QImage {});
+  if (prop_box_->isChecked ())
+    {
+      voacap_grid_->selected = band;
+      voacap_grid_->update ();
+      save_map_options ();
+      schedule_area ();
+    }
+  else
+    {
+      prop_box_->setChecked (true);         // shows it and works it out
+    }
+}
+
+void ConditionsWindow::run_area ()
+{
+  if (!prop_box_->isChecked () || !isVisible ()) return;
+  if (area_process_) {area_again_ = true; return;}
+  double lat, lon;
+  if (!grid_to_latlon (my_grid_, lat, lon)) return;
+  auto const program = voacap_program ();
+  if (program.isEmpty ()) return;
+  static double const freqs[VoacapGrid::bands] = {3.573, 5.357, 7.074, 10.136, 14.074, 18.100, 21.074, 24.915, 28.074};
+  double ssn = 100.;
+  if (!qIsNaN (sfi_))
+    {
+      double const disc = 0.728 * 0.728 + 4. * 0.00089 * (sfi_ - 63.7);
+      ssn = disc > 0 ? (-0.728 + std::sqrt (disc)) / (2. * 0.00089) : 0.;
+    }
+  else if (!qIsNaN (ssn_)) ssn = ssn_;
+  ssn = qBound (0., ssn, 300.);
+  auto const now = QDateTime::currentDateTimeUtc ();
+  int const hour = now.time ().hour () ? now.time ().hour () : 24;
+  int const watts = voacap_power_->currentData ().toInt ();
+  bool const long_path = 1 == voacap_path_->checkedId ();
+  auto pos = [] (double v, char p, char n) {return QString {"%1%2"}.arg (std::abs (v), 6, 'f', 2).arg (v >= 0 ? p : n);};
+  auto nine = [] (QString const& first, QString const& rest) {
+    QString s = first;
+    for (int i = 0; i < 8; ++i) s += rest;
+    return s;
+  };
+  // fixed columns again, as VOACAP's area cards are read
+  QStringList const lines {
+    "Model    :VOACAP",
+    "Colors   :Black    :Blue     :Ignore   :Ignore   :Red      :Black with shading",
+    "Cities   :Receive.cty",
+    "Nparms   :    1",
+    "Parameter:REL      0",
+    QString {"Transmit :%1   %2   %3 %4"}.arg (pos (lat, 'N', 'S')).arg (pos (lon, 'E', 'W')).arg ("DE", -20).arg (long_path ? "Long " : "Short"),
+    QString {"Pcenter  :%1   %2   %3"}.arg (pos (lat, 'N', 'S')).arg (pos (lon, 'E', 'W')).arg ("DE", -20),
+    "Area     :    -180.0     180.0     -90.0      90.0",
+    "Gridsize :  121    1",
+    "Method   :   30",
+    "Coeffs   :CCIR",
+    "Months   :" + nine (QString {"%1"}.arg (double (now.date ().month ()), 7, 'f', 2), "   0.00"),
+    "Ssns     :" + nine (QString {"%1"}.arg (qRound (ssn), 7), "      0"),
+    "Hours    :" + nine (QString {"%1"}.arg (hour, 7), "      0"),
+    "Freqs    :" + nine (QString {"%1"}.arg (freqs[prop_band_], 7, 'f', 3), "  0.000"),
+    QString {"System   :  145%1   90%2     3.000     0.100"}.arg (voacap_toa_->currentData ().toDouble (), 10, 'f', 3)
+      .arg (qRound (voacap_mode_->currentData ().toDouble ()), 5),
+    "Fprob    : 1.00 1.00 1.00 0.00",
+    QString {"Rec Ants :[%1]  gain=   0.0   0.0"}.arg ("default /isotrope", -21),
+    QString {"Tx Ants  :[%1]  0.000  -1.0 %2"}.arg ("default /isotrope", -21).arg (watts / 1000., 10, 'f', 4),
+  };
+  auto const root = voacap_root ();
+  QDir {root}.mkpath ("areadata/kf0kyl");
+  QFile input {root + "/areadata/kf0kyl/kf0kyl.voa"};
+  if (!input.open (QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) return;
+  input.write (lines.join ('\n').toLatin1 () + '\n');
+  input.close ();
+  QFile::remove (root + "/areadata/kf0kyl/kf0kyl.vg1");
+  map_->prop_label = tr ("Working out %1 m\u2026").arg (VoacapGrid::band_name (prop_band_));
+  map_->update ();
+  int const band = prop_band_;
+  QString const label = tr ("%1 m from you \u00B7 %2 W %3 \u00B7 %4 UTC").arg (VoacapGrid::band_name (band)).arg (watts)
+    .arg (voacap_mode_->currentText ()).arg (hour % 24, 2, 10, QChar {'0'});
+  area_process_ = new QProcess {this};
+  area_process_->setWorkingDirectory (root + "/run");
+  connect (area_process_, static_cast<void (QProcess::*) (int, QProcess::ExitStatus)> (&QProcess::finished), this,
+           [this, root, band, label] (int, QProcess::ExitStatus) {
+             area_process_->deleteLater ();
+             area_process_ = nullptr;
+             if (band == prop_band_ && !area_again_) on_area (root + "/areadata/kf0kyl/kf0kyl.vg1", label);
+             if (area_again_) {area_again_ = false; schedule_area ();}
+           });
+  connect (area_process_, &QProcess::errorOccurred, this, [this] (QProcess::ProcessError error) {
+      if (QProcess::FailedToStart != error || !area_process_) return;
+      area_process_->deleteLater ();
+      area_process_ = nullptr;
+    });
+  area_process_->start (program, {"-s", root, "area", "calc", "kf0kyl/kf0kyl.voa"});
+}
+
+void ConditionsWindow::on_area (QString const& path, QString const& label)
+{
+  // one line per grid point; latitude, longitude and REL in fixed columns
+  QFile file {path};
+  if (!file.open (QIODevice::ReadOnly | QIODevice::Text))
+    {
+      map_->prop_label = tr ("VOACAP couldn't make this map");
+      map_->update ();
+      return;
+    }
+  file.readLine ();
+  file.readLine ();
+  auto const header = QString::fromLatin1 (file.readLine ());
+  int const rel_end = header.indexOf ("   REL") + 6;
+  if (rel_end < 6) return;
+  int const N = 121;
+  QImage img {N, N, QImage::Format_ARGB32_Premultiplied};
+  img.fill (Qt::transparent);
+  while (!file.atEnd ())
+    {
+      auto const line = QString::fromLatin1 (file.readLine ());
+      if (line.size () < rel_end) continue;
+      bool ok1, ok2, ok3;
+      double const lat = line.mid (6, 10).toDouble (&ok1);
+      double const lon = line.mid (16, 10).toDouble (&ok2);
+      double const rel = line.mid (rel_end - 6, 6).toDouble (&ok3);
+      if (!ok1 || !ok2 || !ok3) continue;
+      int const x = qBound (0, qRound ((lon + 180.) / 360. * (N - 1)), N - 1);
+      int const y = qBound (0, qRound ((90. - lat) / 180. * (N - 1)), N - 1);
+      if (rel < 0.03) continue;
+      QColor c = VoacapGrid_colour (rel);
+      c.setAlphaF (0.12 + 0.42 * rel);
+      img.setPixel (x, y, qPremultiply (c.rgba ()));
+    }
+  map_->prop_label = label;
+  map_->set_prop (img);
 }
 
 QString ConditionsWindow::voacap_root ()

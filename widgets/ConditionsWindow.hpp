@@ -96,6 +96,10 @@ private:
   void update_containers ();
   void fetch_sun ();
   void schedule_voacap ();
+  void schedule_area ();
+  void select_prop_band (int band);
+  void run_area ();
+  void on_area (QString const& path, QString const& label);
   void run_voacap ();
   void on_voacap (QString const& path);
   static QString voacap_root ();
@@ -163,6 +167,11 @@ private:
   QTimer * voacap_timer_ {nullptr};
   class QProcess * voacap_process_ {nullptr};
   bool voacap_again_ {false};
+  QAbstractButton * prop_box_ {nullptr};
+  int prop_band_ {4};
+  QTimer * area_timer_ {nullptr};
+  class QProcess * area_process_ {nullptr};
+  bool area_again_ {false};
   QDateTime voacap_ran_;
   QWidget * left_column_;
   class QScrollArea * left_scroll_ {nullptr};
