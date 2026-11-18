@@ -11,8 +11,6 @@
 
 <p align="center">
   <a href="https://github.com/ccoo26/KF0KYL-Digi/releases/latest"><b>⬇ Download the latest release</b></a>
-  &nbsp;·&nbsp;
-  <a href="https://github.com/ccoo26/KF0KYL-Digi/actions?query=branch%3Abeta"><b>🧪 Try the beta</b></a>
 </p>
 
 ![KF0KYL Digi in the Digi Green scheme](docs/images/main-digi-green.png)
@@ -184,11 +182,6 @@ Get the files from the **[Releases page](https://github.com/ccoo26/KF0KYL-Digi/r
 | Windows 10 / 11 (64-bit) | `kf0kyldigi-…-windows-x86_64` installer (`.exe`) |
 | Raspberry Pi 4 / 5 (or 3B+) | `kf0kyldigi-…-linux-aarch64.deb` |
 | Linux PC | `kf0kyldigi-…-linux-x86_64.AppImage` or `.deb` |
-
-**Want the newest features before the next release?** Beta builds are made automatically
-from the `beta` branch. Open the latest run on the
-[Actions page](https://github.com/ccoo26/KF0KYL-Digi/actions?query=branch%3Abeta) and
-download from **Artifacts** (you need to be signed in to GitHub).
 
 ### Windows
 1. Run the installer. Windows may say it *"protected your PC"* because the installer isn't
