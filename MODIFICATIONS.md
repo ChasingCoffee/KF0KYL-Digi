@@ -24,6 +24,7 @@ icon and version numbers.
 | 2026-11-13 | Version 1.0.1: first-run copy of WSJT-X settings now works on Windows |
 | 2026-11-14 | Version 1.0.2: shorter window title (WSJT-X credit stays in the About box and splash screen) |
 | 2026-11-14 | Version 1.1.0: View > Layout with Classic, Big Band Activity and Wide Screen arrangements, visible resize grips, Reset Layout; waterfall Fit option keeps the whole band visible; frequency and clock colour settings; new logo and program icon |
+| 2026-11-17 | Version 1.2.0: seven colour schemes with Digi Green as the default for new installs, refreshed look throughout; Conditions window with NOAA space weather, NASA SDO Sun, NCDXF beacons and a zoomable world map (gray line, aurora, rain, cities, grids, heard stations, double-click to call); built-in VOACAP (voacapl) point-to-point chart and band map; SDR and 3D waterfall styles and new palettes; Max tries limit beside each Tx message; text size settings; windows kept on screen |
 
 The full history of every change is in the Git commit log.
 

@@ -5209,12 +5209,12 @@ void MainWindow::apply_display_colors ()
     first.replace (QRegularExpression {R"(background-color\s*:\s*[^;]+;)"}, QString {"background-color: %1;"}.arg (background.name ()));
     label->setStyleSheet (first + sheet.mid (end));
   };
-  // Digi Green: the default yellow digits become the logo's blue-to-green
-  // blend; colours chosen in Settings are kept as they are
+  // Digi Green: the default yellow digits become the logo's green;
+  // colours chosen in Settings are kept as they are
   auto text_for = [] (QColor const& c) {
     if (Win11Theme::isDigiGreen () && c == QColor {"#ffff00"})
       {
-        return QString {"qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0A9BF0, stop:1 #8CF010)"};
+        return QString {"#8CF010"};
       }
     return c.name ();
   };

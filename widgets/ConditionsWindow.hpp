@@ -142,6 +142,9 @@ private:
   QColor call_second_;
   bool call_gradient_ {true};
   QLabel * utc_clock_;
+  QWidget * clock_column_ {nullptr};
+  QString clock_column_key_;
+  void fix_clock_width ();
   QLabel * utc_date_;
   QLabel * local_clock_;
   QLabel * de_info_;

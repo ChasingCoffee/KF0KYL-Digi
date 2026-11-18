@@ -5,20 +5,22 @@
 <h1 align="center">KF0KYL Digi</h1>
 
 <p align="center">
-  <b>FT8, FT4 and weak-signal digital modes with a modern look, built on WSJT-X.</b><br>
-  Dark mode · waterfall in the main window · layouts you can resize · automatic QRZ Logbook upload · see who you're working
+  <b>Everything you love about WSJT-X, with the station dashboard you always wanted.</b><br>
+  Same decoders · modern look · seven colour schemes · live band conditions and VOACAP map · QRZ built in
 </p>
 
 <p align="center">
   <a href="https://github.com/ccoo26/KF0KYL-Digi/releases/latest"><b>⬇ Download the latest release</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/ccoo26/KF0KYL-Digi/actions?query=branch%3Abeta"><b>🧪 Try the beta</b></a>
 </p>
 
-![KF0KYL Digi in dark mode, working EA3CJ on 20 m FT8](docs/images/main-dark.png)
+![KF0KYL Digi in the Digi Green scheme](docs/images/main-digi-green.png)
 
-KF0KYL Digi is a modified version of **WSJT-X 3.0.2** by Joe Taylor, K1JT, and the WSJT
-Development Team, maintained by Carson Coordes, KF0KYL. It decodes and transmits exactly
-like WSJT-X (same modes, same decoders, same rig control) with a cleaner interface and a
-few conveniences added on top.
+KF0KYL Digi is built on **WSJT-X 3.0.2** by Joe Taylor, K1JT, and the WSJT Development Team.
+Under the hood it decodes and transmits **exactly like WSJT-X**: same modes, same decoders,
+same rig control. Everything else, the parts you look at and click all evening, has been
+rebuilt to be easier on the eyes and to put more of your station in front of you.
 
 > **Not the official WSJT-X.** KF0KYL Digi is an independent, unofficial version and is
 > not endorsed by the WSJT Development Team. Please report problems with it
@@ -26,80 +28,150 @@ few conveniences added on top.
 
 ---
 
-## What's different from WSJT-X
+## Why KF0KYL Digi?
 
-### 🌙 Windows 11 look and dark mode
-A clean, modern theme with rounded controls, a blue accent colour, thin scroll bars and
-properly styled checkboxes, sliders and spinners. Turn dark mode on or off from
-**View → Use Dark Style**. On Windows the title bar goes dark too.
+| | WSJT-X | KF0KYL Digi |
+|---|:---:|:---:|
+| FT8, FT4, JT65, Q65, MSK144, WSPR and the rest | ✅ | ✅ same decoders |
+| Works with JTAlert, GridTracker, Log4OM, N1MM+ | ✅ | ✅ |
+| Modern look with dark mode and 7 colour schemes | | ✅ |
+| Waterfall built into the main window, with SDR and 3D styles | | ✅ |
+| Layouts you can drag and resize | | ✅ |
+| Live space weather, solar images and NCDXF beacons | | ✅ |
+| World map of everyone you're hearing, with gray line and aurora | | ✅ |
+| VOACAP propagation for your power and mode, painted on the map | | ✅ |
+| Click a station on the map to call it | | ✅ |
+| Automatic upload to your QRZ Logbook, no duplicates | | ✅ |
+| Name, location and QRZ photo of the station you're working | | ✅ |
+| **Max tries** limit on every Tx message | | ✅ |
+| Installs alongside WSJT-X and copies your settings over | | ✅ |
+| Free | ✅ | ✅ |
 
-![Light mode](docs/images/main-light.png)
+---
 
-### 📈 Waterfall in the main window
-The waterfall sits right above the decode panes, so there's one window to manage instead
-of two. Drag the divider to give it more or less room. Want it in its own window again,
-say on a second monitor? Untick **View → Waterfall in Main Window** and it pops back out;
-tick it to bring it home. Your layout is remembered.
+## 🎨 Seven colour schemes
 
-### 🧩 Layouts you can arrange
-Pick an arrangement from **View → Layout** and drag the dividers (the little dotted grips)
-to size each section the way you like. Every layout remembers its own sizes, and
-**View → Layout → Reset Layout** puts the current one back the way it started.
+Pick one from **View → Color Scheme**. Every window follows along, including the waterfall
+controls, Settings and the Conditions window.
 
-- **Classic:** waterfall on top, Band Activity and Rx Frequency side by side, controls
-  along the bottom. Drag up and down for a taller waterfall or taller decode boxes, and
-  sideways to widen either box.
-- **Big Band Activity:** a tall Band Activity on the left; waterfall, Rx Frequency and the
-  callsign info on the right.
+| | |
+|---|---|
+| **Digi Green** *(new default)*: black, blue, lime and white. High contrast and easy to read across the room. | ![Digi Green](docs/images/scheme-digi-green.png) |
+| **Dark**: the classic dark mode, with a dark Windows title bar to match. | ![Dark](docs/images/scheme-dark.png) |
+| **Midnight Blue**: deep navy, softer than black. | ![Midnight Blue](docs/images/scheme-midnight.png) |
+| **Night Red**: all red on black, so your eyes stay adjusted for night or field operating. | ![Night Red](docs/images/scheme-night-red.png) |
+| **High Contrast**: maximum contrast for bright rooms or tired eyes. | ![High Contrast](docs/images/scheme-high-contrast.png) |
+| **Light**: clean and bright for daytime. | ![Light](docs/images/scheme-light.png) |
+| **Paper**: warm, easy-on-the-eyes daytime look. | ![Paper](docs/images/scheme-paper.png) |
 
-  ![Big Band Activity layout](docs/images/layout-big-band.png)
+Upgrading? You keep the scheme you already had. New installs start in Digi Green.
 
-- **Wide Screen:** for wide monitors. Band Activity runs from top to bottom, and the
-  frequency, messages and buttons sit under the right-hand side. Switch back to another
-  layout any time.
+The look itself is new throughout: rounded buttons, sliding switches, pill tabs and status
+tags. Highlighted decode lines automatically pick black or white text so they're readable
+in any scheme. You can also choose your own colours for the big frequency and clock
+displays in **File → Settings → Colors**.
 
-  ![Wide Screen layout](docs/images/layout-wide.png)
+---
 
-The waterfall **squeezes to fit its box** (the **Fit** box next to Bins/Pixel), so you
-always see the whole band no matter how narrow you make it. Untick **Fit** to set
-Bins/Pixel by hand as before.
+## 🌍 The Conditions window: your station dashboard
 
-### 🎨 Frequency and clock colours
-Choose the text and background colours of the big frequency and date/time displays in
-**File → Settings → Colors**, or pick a ready-made scheme (classic yellow, logo green,
-LCD, blue and more).
+Open **View → Conditions…** and you get a full-screen dashboard of what the bands are
+doing *right now*, next to the stations you're actually decoding.
 
-![Frequency and clock colour settings](docs/images/display-colors.png)
+![Conditions window](docs/images/conditions.png)
 
-### ☁️ Automatic upload to your QRZ Logbook
-Every contact you log is sent to your [QRZ.com Logbook](https://logbook.qrz.com) the moment
-it's logged, whether you click OK in the log window or have logging set to automatic.
+Turn each box on or off from the **Boxes** menu, and the rest grow to fill the space.
 
-- **No duplicates.** It only sends the contact being logged, never your whole log, and it
-  remembers what it has already uploaded (even across restarts), so the same QSO is never
-  sent twice.
-- **Internet down? Nothing is lost.** Contacts wait in a queue and are retried
-  automatically until they go through.
-- **No pop-ups.** Results show quietly in the status bar, e.g. *"QRZ: W1AW uploaded to logbook"*.
+- **Station:** your call, big UTC clock and local time, with your logo or picture beside
+  it. Double-click it to pick the KF0KYL Digi logo, your own picture, or none.
+- **Space weather:** solar flux, sunspots, K and A index, X-ray, solar wind and Bz from
+  NOAA, plus a 24-hour X-ray graph.
+- **The Sun:** live NASA SDO images in visible light and several ultraviolet channels.
+- **NCDXF beacons:** which of the 18 beacons is sending on each band this second.
+- **DE and DX:** grid, local time, sunrise and sunset for you and the station you're
+  working, with distance and beam heading on short and long path.
 
-### 👤 See who you're working
-When you call a station, answer a CQ, or someone replies to *your* CQ and auto-sequencing
-picks them up, a strip under the decodes shows who they are: **name, city, state/country,
-grid, licence class and their QRZ photo**, plus a **QRZ Page** button that opens their full
-QRZ.com page in your browser.
+### The map
 
-![Callsign info](docs/images/callsign-info.png)
+- **Styles:** Day/Night satellite, Satellite, Countries and Terrain. Zoom in and it loads
+  sharp NASA imagery and crisp coastlines and borders.
+- **Flat or Centred on you** (azimuthal, so straight lines are beam headings).
+- **Zoom and pan** with the mouse or the + / − / Fit buttons.
+- **Overlays:** gray line, NOAA aurora forecast, rain and snow from NASA satellites,
+  NCDXF beacons, city names, and Maidenhead or lat/long grids.
+- **Every station you've heard in the last 30 minutes** is plotted in its Band Activity
+  colour: calling CQ, calling you, you called, or everyone else.
+- **Double-click a station on the map to call it.**
+- Point anywhere to see the nearest city, the grid square, and the distance and heading
+  from you.
 
-- With a **QRZ.com login** you get the details from QRZ (a QRZ XML subscription gives the
-  full set; free accounts get limited data).
-- **US calls** are filled in from FCC licence data even without a QRZ login.
-- **Everyone else** still shows the country, and the QRZ Page button always works.
-- Hide or show the strip with **View → Callsign Info**.
+### 📡 VOACAP propagation, built in
 
-### 🧳 Lives alongside WSJT-X
+No website, no separate program. KF0KYL Digi runs the VOACAP engine itself.
+
+![VOACAP band map](docs/images/voacap.png)
+
+- **DE → DX chart:** pick your power (5 W to 1500 W, including 15 W and 20 W for QRP),
+  your mode (FT8, FT4, WSPR, CW or SSB) and your takeoff angle. You get a 24-hour chart of
+  every band to the station you're working, short path or long path.
+- **Band map:** click a band and the map paints where your signal can be heard from your
+  location. **Green means you'll be heard**, fading through yellow and blue down to
+  **red where the band is closed**.
+
+---
+
+## 📈 A better waterfall
+
+- **Built into the main window**, so there's one window to manage. Prefer it on a second
+  monitor? Untick **View → Waterfall in Main Window**.
+- **Three styles:** Classic, **SDR** (big spectrum with grid and peak hold) and **3D**.
+- **New palettes:** Ocean, Inferno, Aurora, NightVision, Mono and Violet.
+- **Fit** squeezes the whole band into the space you give it, at any width.
+
+## 🧩 Layouts you can arrange
+
+Pick from **View → Layout** and drag the dotted grips to size each section. Each layout
+remembers its own sizes.
+
+- **Classic:** waterfall on top, Band Activity and Rx Frequency side by side.
+- **Big Band Activity:** a tall Band Activity on the left, with everything else on the right.
+- **Wide Screen:** for wide monitors, with Band Activity running top to bottom.
+
+Windows always open fully on your screen, never hidden under the taskbar, and big text
+sizes scroll instead of pushing controls off the edge.
+
+## ☁️ QRZ, built in
+
+- **Automatic QRZ Logbook upload.** Every contact goes up the moment it's logged. It never
+  sends the same QSO twice, and if your internet is down it waits and retries.
+- **See who you're working.** Name, city, state or country, grid, licence class and QRZ
+  photo appear under the decodes, with a button to open their QRZ page. US calls are filled
+  in from FCC data even without a QRZ login.
+
+## 🛑 Max tries on every message *(new)*
+
+Ever left a CQ running into a dead band, or kept calling a station that faded out ten
+minutes ago? Each Tx message now has a **Max** box right on the main screen, beside
+Tx1–Tx4 and Tx6.
+
+![Max tries boxes beside the Tx messages](docs/images/tx-max.png)
+
+- Set how many times in a row a message may go out **with no reply**, from 1 to 99,
+  or ∞ for no limit (the way WSJT-X has always worked).
+- When it reaches the limit, KF0KYL Digi turns off **Enable Tx** before keying up
+  again and tells you in the status bar, e.g. *"Stopped calling CQ after 5 calls with
+  no answer"*.
+- Set CQ to, say, 5 tries and your reply or report to 3, and you'll never find
+  yourself calling into nothing again.
+- The count starts over as soon as the message changes (the other station answered
+  and Auto Seq moved on) or when you turn Enable Tx back on.
+- Your limits are remembered between sessions.
+
+## 🧳 Lives alongside WSJT-X
+
 KF0KYL Digi keeps its own settings and log, so you can keep the official WSJT-X installed
-too. **The first time it starts it copies your WSJT-X settings, log and history over**, so
-there's nothing to set up again. Your WSJT-X files are left untouched.
+too. **The first time it starts, it copies your WSJT-X settings, log and history over**, so
+there's nothing to set up again.
 
 ---
 
@@ -112,6 +184,11 @@ Get the files from the **[Releases page](https://github.com/ccoo26/KF0KYL-Digi/r
 | Windows 10 / 11 (64-bit) | `kf0kyldigi-…-windows-x86_64` installer (`.exe`) |
 | Raspberry Pi 4 / 5 (or 3B+) | `kf0kyldigi-…-linux-aarch64.deb` |
 | Linux PC | `kf0kyldigi-…-linux-x86_64.AppImage` or `.deb` |
+
+**Want the newest features before the next release?** Beta builds are made automatically
+from the `beta` branch. Open the latest run on the
+[Actions page](https://github.com/ccoo26/KF0KYL-Digi/actions?query=branch%3Abeta) and
+download from **Artifacts** (you need to be signed in to GitHub).
 
 ### Windows
 1. Run the installer. Windows may say it *"protected your PC"* because the installer isn't
@@ -128,8 +205,9 @@ sudo apt update
 sudo apt install ./kf0kyldigi-*-linux-aarch64.deb
 ```
 
-It appears in the main menu (usually under **Sound & Video**) as **KF0KYL Digi**. On Linux it replaces the official
-`wsjtx` package (they share program files), so the two can't be installed at the same time.
+It appears in the main menu (usually under **Sound & Video**) as **KF0KYL Digi**. On Linux
+it replaces the official `wsjtx` package (they share program files), so the two can't be
+installed at the same time.
 
 Pi tips: a Pi 4 or 5 is comfortable (use **Decode → Deep** freely); a Pi 3B+ works with
 **Decode → Normal**. Make sure the clock is synchronised (`timedatectl` should say
@@ -168,20 +246,30 @@ PSK Reporter spots are identified as KF0KYL Digi.
 **Is it safe to run alongside WSJT-X?** Yes on Windows: separate install folder, settings
 and log. Just don't run both on the same radio at the same time.
 
+**Does the Conditions window use my internet all the time?** No. It only fetches while
+it's open: space weather every 15 minutes, rain and snow every 30. VOACAP runs on your
+own computer.
+
 **Where are my settings?** Windows: the `%LOCALAPPDATA%\KF0KYL Digi\` folder holds
 `KF0KYL Digi.ini` and your log, ALL.TXT and QRZ upload history. Linux:
 `~/.config/KF0KYL Digi.ini` and `~/.local/share/KF0KYL Digi/`. Use
 **File → Open log directory** to jump there.
 
-**My WSJT-X settings didn't come over.** They're copied only on the very first start, and
-version 1.0.0 missed them on Windows (fixed in 1.0.1). To copy them by hand, close
-KF0KYL Digi, then copy `%LOCALAPPDATA%\WSJT-X\WSJT-X.ini` into `%LOCALAPPDATA%\KF0KYL Digi\`
-and rename it to `KF0KYL Digi.ini`. Copy `wsjtx_log.adi` and `qrz_uploaded.txt` too.
+**My WSJT-X settings didn't come over.** They're copied only on the very first start. To
+copy them by hand, close KF0KYL Digi, then copy `%LOCALAPPDATA%\WSJT-X\WSJT-X.ini` into
+`%LOCALAPPDATA%\KF0KYL Digi\` and rename it to `KF0KYL Digi.ini`. Copy `wsjtx_log.adi` and
+`qrz_uploaded.txt` too.
 
 **Found a bug or have an idea?** Open an
 [issue](https://github.com/ccoo26/KF0KYL-Digi/issues).
 
 ---
+
+## Credits
+
+KF0KYL Digi stands on the work of the WSJT Development Team (WSJT-X), the VOACAP authors
+and the voacapl project, NOAA's Space Weather Prediction Center, NASA (SDO, Blue Marble,
+Black Marble and GIBS) and Natural Earth. Thank you.
 
 ## ☕ Buy me a coffee
 
@@ -197,25 +285,3 @@ and you'd like to say thanks, you can buy me a coffee here:
 Every push to this repository is built automatically by GitHub Actions for Windows, Linux
 x86-64 and Linux ARM64 (see `.github/workflows`). To build locally, follow the WSJT-X
 build instructions in [INSTALL](INSTALL); nothing extra is needed.
-
-A dated list of every change from WSJT-X 3.0.2 is in [MODIFICATIONS.md](MODIFICATIONS.md),
-and the full history is in the commit log.
-
----
-
-## Credits and licence
-
-KF0KYL Digi exists because of **WSJT-X** and the years of work by Joe Taylor, K1JT, and the
-WSJT Development Team: Bill Somerville G4WJS, Steve Franke K9AN, Nico Palermo IV3NWV,
-Uwe Risse DG2YCB, Brian Moran N9ADG, Roger Rehr W3SZ, John Nelson G4KLA, Charlie Suckling
-DL3WDG, Terrell Deppe KJ5HST and many contributors. The original WSJT-X README is kept in
-[README-WSJT-X.md](README-WSJT-X.md).
-
-Like WSJT-X, KF0KYL Digi is free software under the **GNU General Public License v3** (see
-[COPYING](COPYING)): you're free to use, study, share and modify it, and the complete
-source code is right here.
-
-"WSJT-X" is a trademark of the WSJT Development Team; KF0KYL Digi uses its own name and
-icon in line with their [trademark policy](TRADEMARK.md).
-
-73 de KF0KYL

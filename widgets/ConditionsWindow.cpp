@@ -31,6 +31,7 @@
 #include <QWheelEvent>
 #include <QProcess>
 #include <QFileDialog>
+#include <QtMath>
 #include <QPointer>
 #include <QtEndian>
 #include <memory>
@@ -2824,9 +2825,14 @@ void ConditionsWindow::build_ui ()
   auto * clock_box = make_box ("clock", {}, body);
   auto * clock_row = new QHBoxLayout;
   clock_row->setSpacing (16);
-  auto * clock_left = new QVBoxLayout;
+  // the call, clock and date sit in a column of fixed width, so the
+  // picture beside them keeps its size as the seconds tick over
+  clock_column_ = new QWidget {clock_box};
+  clock_column_->setObjectName ("plain");
+  auto * clock_left = new QVBoxLayout {clock_column_};
+  clock_left->setContentsMargins (0, 0, 0, 0);
   clock_left->setSpacing (4);
-  clock_row->addLayout (clock_left);
+  clock_row->addWidget (clock_column_);
   station_logo_ = new StationLogo {clock_box};
   station_logo_->setObjectName ("plain");
   station_logo_->on_double_click = [this] {show_station_pictures ();};
@@ -3487,11 +3493,59 @@ void ConditionsWindow::closeEvent (QCloseEvent * e)
   QWidget::closeEvent (e);
 }
 
+// the widest the call, clock and date can ever be at the current text size
+void ConditionsWindow::fix_clock_width ()
+{
+  if (!clock_column_) return;
+  double base = QApplication::font ().pointSizeF ();
+  if (base <= 0) base = 9.;
+  auto const key = QString {"%1|%2|%3|%4"}.arg (base).arg (QApplication::font ().family ())
+    .arg (utc_date_->font ().toString ()).arg (call_label_->sizeHint ().width ());
+  if (key == clock_column_key_) return;
+  clock_column_key_ = key;
+
+  auto widest_digit = [] (QFontMetricsF const& fm) {
+    double w = 0;
+    for (QChar d = '0'; d <= '9'; d = QChar {d.unicode () + 1}) w = qMax (w, fm.horizontalAdvance (d));
+    return w;
+  };
+  QFont big = QApplication::font ();
+  big.setPointSizeF (base * 3.6);
+  big.setWeight (QFont::Light);
+  QFontMetricsF const big_fm {big};
+  QFont small = QApplication::font ();
+  small.setPointSizeF (base * 1.3);
+  QFontMetricsF const small_fm {small};
+  double const clock_w = 6 * widest_digit (big_fm) + 2 * big_fm.horizontalAdvance (':')
+    + small_fm.horizontalAdvance (QString {QChar {0x00A0}} + "UTC");
+
+  // every day and month name, with the widest digits for the date and local time
+  QFontMetricsF const date_fm {utc_date_->font ()};
+  QString const nn {2, QChar {'0'}};
+  double date_w = 0;
+  QDate const sample {2026, 1, 28};
+  for (int m = 0; m < 12; ++m)
+    {
+      for (int d = 0; d < 7; ++d)
+        {
+          auto const day = sample.addMonths (m).addDays (d);
+          auto const text = tr ("%1 · Local %2").arg (QLocale {}.toString (day, "ddd d MMM yyyy"))
+            .arg (QTime {12, 59}.toString ("h:mm AP"));
+          date_w = qMax (date_w, date_fm.horizontalAdvance (text));
+        }
+    }
+  date_w += 2 * (widest_digit (date_fm) - date_fm.horizontalAdvance ('1')) + 2 * widest_digit (date_fm);
+
+  int const width = qCeil (qMax (qMax (clock_w, date_w), double (call_label_->sizeHint ().width ()))) + 8;
+  clock_column_->setFixedWidth (width);
+}
+
 void ConditionsWindow::tick ()
 {
   auto const now = QDateTime::currentDateTimeUtc ();
   double base = QApplication::font ().pointSizeF ();
   if (base <= 0) base = 9.;
+  fix_clock_width ();
   auto const muted = Win11Theme::token ("text_secondary");
   utc_clock_->setText (QString {"<span style=\"font-size:%1pt; font-weight:300;\">%2</span>"
                                 "<span style=\"font-size:%1pt; font-weight:300; color:%3;\">:%4</span>"
