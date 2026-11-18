@@ -2,6 +2,7 @@
 #define WORKWED_BEFORE_HPP_
 
 #include <QObject>
+#include <QSet>
 #include "AD1CCty.hpp"
 #include "pimpl_h.hpp"
 
@@ -32,6 +33,10 @@ public:
   AD1CCty const * countries () const;
   bool country_worked (QString const& call, QString const& mode, QString const& band) const;
   bool grid_worked (QString const& grid, QString const& mode, QString const& band) const;
+  // every four-character grid in the log on this band (any band if empty), any mode
+  QSet<QString> grids (QString const& band) const;
+  // every call in the log on this band (any band if empty), any mode
+  QSet<QString> calls (QString const& band) const;
   bool call_worked (QString const& call, QString const& mode, QString const& band) const;
   bool continent_worked (Continent continent, QString const& mode, QString const& band) const;
   bool CQ_zone_worked (int CQ_zone, QString const& mode, QString const& band) const;

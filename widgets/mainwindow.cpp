@@ -122,6 +122,10 @@
 #include "widgets/QSYMessageCreator.h"
 #include "widgets/qsymonitor.h"
 #include "Network/eqsl.h"
+#include "widgets/UpdateChecker.hpp"
+#include <QSoundEffect>
+#include <QDialogButtonBox>
+#include <QSlider>
 
 #define FCL fortran_charlen_t
 
@@ -582,6 +586,7 @@ MainWindow::MainWindow(QDir const& temp_directory, bool multiple,
   setup_main_splitter ();
   setup_callsign_info ();
   setup_tx_limits ();
+  setup_extras ();
   apply_display_colors ();
 
   // QRZ Logbook auto-upload: un-sent QSOs survive restarts in qrz_pending.adi
@@ -681,6 +686,7 @@ MainWindow::MainWindow(QDir const& temp_directory, bool multiple,
 
   // hook up the log book
   connect (&m_logBook, &LogBook::finished_loading, [this] (int record_count, QString cty_version, QString const& error) {
+      QTimer::singleShot (0, this, [this] {update_conditions_worked (true);});
       if (error.size ())
         {
           MessageBox::warning_message (this, tr ("Error Scanning ADIF Log"), error);
@@ -2839,6 +2845,7 @@ void MainWindow::fastSink(qint64 frames)
           }
         }
 
+        if (!ui->cbBypass->isChecked () && extra_filtered (decodedtext)) filtered = true;
         // search logbook for filtering
         if (ui->actionHideTerritory1->isChecked() or ui->actionHideTerritory2->isChecked() or
             ui->actionHideTerritory3->isChecked() or ui->actionHideTerritory4->isChecked() or
@@ -2988,6 +2995,7 @@ void MainWindow::fastSink(qint64 frames)
           }
         }
 
+        if (!ui->cbBypass->isChecked () && extra_filtered (decodedtext)) filtered = true;
         // search logbook for filtering
         if (ui->actionHideTerritory1->isChecked() or ui->actionHideTerritory2->isChecked() or
             ui->actionHideTerritory3->isChecked() or ui->actionHideTerritory4->isChecked() or
@@ -4242,6 +4250,7 @@ void MainWindow::bumpFqso(int n)                                 //bumpFqso()
 
 void MainWindow::displayDialFrequency ()
 {
+  update_conditions_worked (false);
   if (ui->actionUse_Dark_Style->isChecked()) ui->bandComboBox->setStyleSheet("QLineEdit {background-color: #1F1F1F}");  // initialize dark style at startup
   Frequency dial_frequency {m_rigState.ptt () && m_rigState.split () ?
       m_rigState.tx_frequency () : m_rigState.frequency ()};
@@ -4784,6 +4793,7 @@ void MainWindow::setup_callsign_info ()
   m_conditions->set_my_grid (m_config.my_grid ());
   m_conditions->set_miles (m_config.miles ());
   update_conditions_colors ();
+  update_conditions_worked (true);
   auto * conditions_action = new QAction {tr ("Conditions..."), this};
   conditions_action->setObjectName ("actionConditions");
   conditions_action->setToolTip (tr ("Space weather, band outlook and a gray-line map of the stations you hear"));
@@ -7180,6 +7190,7 @@ void MainWindow::readFromStdout()                             //readFromStdout
                     }
                   }
 
+                  if (!ui->cbBypass->isChecked () && extra_filtered (decodedtext)) filtered = true;
                   // search logbook for filtering
                   if (ui->actionHideTerritory1->isChecked() or ui->actionHideTerritory2->isChecked() or
                       ui->actionHideTerritory3->isChecked() or ui->actionHideTerritory4->isChecked() or
@@ -7329,6 +7340,7 @@ void MainWindow::readFromStdout()                             //readFromStdout
                     }
                   }
 
+                  if (!ui->cbBypass->isChecked () && extra_filtered (decodedtext)) filtered = true;
                   // search logbook for filtering
                   if (ui->actionHideTerritory1->isChecked() or ui->actionHideTerritory2->isChecked() or
                       ui->actionHideTerritory3->isChecked() or ui->actionHideTerritory4->isChecked() or
@@ -9118,7 +9130,8 @@ void MainWindow::guiUpdate()
               or ui->actionHideTerritory3->isChecked() or ui->actionHideTerritory4->isChecked()
               or ui->actionHideB4->isChecked() or ui->actionHideEU->isChecked() or ui->actionHideAS->isChecked()
               or ui->actionHideNA->isChecked() or ui->actionHideSA->isChecked() or ui->actionHideAF->isChecked()
-              or ui->actionHideOC->isChecked() or ui->actionHideAN->isChecked()) {
+              or ui->actionHideOC->isChecked() or ui->actionHideAN->isChecked()
+              or (m_actionWantedOnly && m_actionWantedOnly->isChecked ()) or m_minSnr > -99) {
           tx_status_label.setMinimumSize (QSize  {120, 18});
           if (ui->cbBypass->isChecked()) {
             if (ui->cbCQonly->isChecked()) {
@@ -11323,6 +11336,8 @@ void MainWindow::acceptQSO (QDateTime const& QSO_date_off, QString const& call, 
       MessageBox::warning_message (this, tr ("Log file error"),
                                    tr ("Cannot open \"%1\"").arg (m_logBook.path ()));
     }
+  play_qso_sound ();
+  update_conditions_worked (true);
 
   m_messageClient->qso_logged (QSO_date_off, call, grid, dial_freq, mode, rpt_sent, rpt_received
                                , tx_power, comments, name, QSO_date_on, operator_call, my_call, my_grid
@@ -18109,4 +18124,155 @@ void MainWindow::alertQSYmessage ()
 #else
   QSound::play(app_sounds_directory () + "Message.wav");  // for Linux and macOS
 #endif
+}
+
+// ---------------------------------------------------------------------
+// 1.2.1 extras
+
+void MainWindow::setup_extras ()
+{
+  // Band Activity filters, like GridTracker's: only what's new to you,
+  // and nothing weaker than a chosen strength
+  QAction * first = ui->menuFilters->actions ().value (0);
+  m_actionWantedOnly = new QAction {tr ("Show only new DXCC and grids on this band"), this};
+  m_actionWantedOnly->setCheckable (true);
+  m_actionWantedOnly->setToolTip (tr ("Hide stations whose country and grid are both in your log on this band already"));
+  m_actionWantedOnly->setChecked (m_settings->value ("FilterWantedOnly", false).toBool ());
+  ui->menuFilters->insertAction (first, m_actionWantedOnly);
+  auto * weaker = new QMenu {tr ("Hide signals weaker than"), ui->menuFilters};
+  ui->menuFilters->insertMenu (first, weaker);
+  ui->menuFilters->insertSeparator (first);
+  m_minSnrGroup = new QActionGroup {this};
+  m_minSnr = m_settings->value ("FilterMinSnr", -99).toInt ();
+  for (int db : {-99, -20, -15, -10, -5, 0})
+    {
+      auto * a = weaker->addAction (-99 == db ? tr ("Show all") : tr ("%1 dB").arg (db));
+      a->setCheckable (true);
+      a->setData (db);
+      a->setChecked (db == m_minSnr);
+      m_minSnrGroup->addAction (a);
+    }
+  connect (m_actionWantedOnly, &QAction::toggled, this, [this] (bool on) {
+      m_settings->setValue ("FilterWantedOnly", on);
+      statusChanged ();
+    });
+  connect (m_minSnrGroup, &QActionGroup::triggered, this, [this] (QAction * a) {
+      m_minSnr = a->data ().toInt ();
+      m_settings->setValue ("FilterMinSnr", m_minSnr);
+      statusChanged ();
+    });
+
+  // a sound of your choosing when a QSO is logged
+  auto * sound = new QAction {tr ("Sound when a QSO is logged..."), this};
+  sound->setToolTip (tr ("Play a sound file of your choice each time a QSO goes in the log"));
+  ui->menuTools->addSeparator ();
+  ui->menuTools->addAction (sound);
+  connect (sound, &QAction::triggered, this, &MainWindow::qso_sound_dialog);
+
+  // updates
+  m_updates = new UpdateChecker {m_settings, this};
+  auto * check = new QAction {tr ("Check for updates..."), this};
+  ui->menuHelp->insertAction (ui->menuHelp->actions ().value (0), check);
+  ui->menuHelp->insertSeparator (ui->menuHelp->actions ().value (1));
+  connect (check, &QAction::triggered, m_updates, &UpdateChecker::check_now);
+  m_updates->check_at_start ();
+}
+
+bool MainWindow::extra_filtered (DecodedText const& decoded)
+{
+  bool const wanted_only = m_actionWantedOnly && m_actionWantedOnly->isChecked ();
+  if (!wanted_only && m_minSnr <= -99) return false;
+  // anything sent to you always shows
+  auto const my_call = m_config.my_callsign ();
+  if (decoded.call () == my_call || Radio::base_callsign (decoded.call ()) == Radio::base_callsign (my_call)) return false;
+  if (m_minSnr > -99 && decoded.snr () < m_minSnr) return true;
+  if (wanted_only)
+    {
+      QString call, grid;
+      decoded.deCallAndGrid (call, grid);
+      call = call.remove ('<').remove ('>');
+      if (call.size () < 3) return false;
+      bool callB4, countryB4, gridB4, continentB4, CQZoneB4, ITUZoneB4;
+      auto const& looked_up = m_logBook.countries ()->lookup (call);
+      m_logBook.match (call, m_mode, grid, looked_up, callB4, countryB4, gridB4,
+                       continentB4, CQZoneB4, ITUZoneB4, m_currentBand);
+      static QRegularExpression const grid_re {"^[A-R]{2}[0-9]{2}$"};
+      bool const real_grid = grid.size () >= 4 && grid.left (4).toUpper ().contains (grid_re) && grid.left (4).toUpper () != "RR73";
+      bool const new_grid = real_grid && !gridB4;
+      if (countryB4 && !new_grid) return true;
+    }
+  return false;
+}
+
+void MainWindow::update_conditions_worked (bool force)
+{
+  if (!m_conditions) return;
+  auto const band = m_config.bands ()->find (m_freqNominal);
+  if (!force && band == m_workedBand) return;
+  m_workedBand = band;
+  m_conditions->set_worked (band, m_logBook.worked_calls (band), m_logBook.worked_grids (band));
+}
+
+void MainWindow::play_qso_sound ()
+{
+  if (!m_settings->value ("QsoSound/On", false).toBool ()) return;
+  auto const file = m_settings->value ("QsoSound/File").toString ();
+  if (file.isEmpty () || !QFileInfo::exists (file)) return;
+  if (!m_qsoSound) m_qsoSound = new QSoundEffect {this};
+  if (m_qsoSound->source () != QUrl::fromLocalFile (file)) m_qsoSound->setSource (QUrl::fromLocalFile (file));
+  m_qsoSound->setVolume (m_settings->value ("QsoSound/Volume", 80).toInt () / 100.);
+  m_qsoSound->play ();
+}
+
+void MainWindow::qso_sound_dialog ()
+{
+  QDialog dlg {this};
+  dlg.setWindowTitle (tr ("Sound when a QSO is logged"));
+  dlg.setMinimumWidth (460);
+  auto * layout = new QVBoxLayout {&dlg};
+  auto * on = new QCheckBox {tr ("Play a sound each time a QSO is logged"), &dlg};
+  on->setChecked (m_settings->value ("QsoSound/On", false).toBool ());
+  layout->addWidget (on);
+  auto * row = new QHBoxLayout;
+  auto * path = new QLineEdit {m_settings->value ("QsoSound/File").toString (), &dlg};
+  path->setPlaceholderText (tr ("A .wav sound file"));
+  auto * browse = new QPushButton {tr ("Choose..."), &dlg};
+  row->addWidget (path, 1);
+  row->addWidget (browse);
+  layout->addLayout (row);
+  auto * vrow = new QHBoxLayout;
+  vrow->addWidget (new QLabel {tr ("Volume"), &dlg});
+  auto * volume = new QSlider {Qt::Horizontal, &dlg};
+  volume->setRange (0, 100);
+  volume->setValue (m_settings->value ("QsoSound/Volume", 80).toInt ());
+  vrow->addWidget (volume, 1);
+  auto * test = new QPushButton {tr ("Test"), &dlg};
+  vrow->addWidget (test);
+  layout->addLayout (vrow);
+  auto * note = new QLabel {tr ("It plays through your computer's default speakers, not the radio. "
+                                "Use a .wav file; MP3 files can be converted with any audio program."), &dlg};
+  note->setWordWrap (true);
+  note->setStyleSheet ("color: palette(mid);");
+  layout->addWidget (note);
+  auto * buttons = new QDialogButtonBox {QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg};
+  layout->addWidget (buttons);
+  connect (buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+  connect (buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+  connect (browse, &QPushButton::clicked, &dlg, [&] {
+      auto const file = QFileDialog::getOpenFileName (&dlg, tr ("Sound to play"),
+          path->text ().isEmpty () ? QDir::homePath () : QFileInfo {path->text ()}.absolutePath (),
+          tr ("Sound files (*.wav)"));
+      if (!file.isEmpty ()) {path->setText (file); on->setChecked (true);}
+    });
+  QSoundEffect preview;
+  connect (test, &QPushButton::clicked, &dlg, [&] {
+      if (path->text ().isEmpty ()) return;
+      preview.setSource (QUrl::fromLocalFile (path->text ()));
+      preview.setVolume (volume->value () / 100.);
+      preview.play ();
+    });
+  if (QDialog::Accepted != dlg.exec ()) return;
+  m_settings->setValue ("QsoSound/On", on->isChecked ());
+  m_settings->setValue ("QsoSound/File", path->text ().trimmed ());
+  m_settings->setValue ("QsoSound/Volume", volume->value ());
 }

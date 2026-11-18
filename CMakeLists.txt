@@ -353,6 +353,7 @@ set (wsjtx_CXXSRCS
   widgets/Win11Theme.cpp
   widgets/CallsignInfo.cpp
   widgets/ConditionsWindow.cpp
+  widgets/UpdateChecker.cpp
   Configuration.cpp
   main.cpp
   Network/wsprnet.cpp

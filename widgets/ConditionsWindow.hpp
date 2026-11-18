@@ -3,6 +3,8 @@
 #define CONDITIONS_WINDOW_HPP_
 
 #include <QWidget>
+#include <QSet>
+#include <QDateTime>
 #include <QHash>
 #include <QDateTime>
 #include <QImage>
@@ -53,6 +55,8 @@ public:
 
   void set_my_call (QString const& call);
   void set_my_grid (QString const& grid);
+  // the log on the band the radio is on: calls and grids worked there
+  void set_worked (QString const& band, QSet<QString> const& calls, QSet<QString> const& grids);
   void set_dx (QString const& call, QString const& grid);
   void set_miles (bool miles);         // Settings > General > Display distance in miles
   // a decoded station; grid may be empty, then lat/lon come from the
@@ -190,6 +194,12 @@ private:
   class QComboBox * grid_box_;
   QAbstractButton * beacons_box_;
   QAbstractButton * cities_box_;
+  QAbstractButton * worked_grids_box_;
+  QAbstractButton * psk_box_;
+  class QCheckBox * show_worked_;
+  QTimer * psk_timer_ {nullptr};
+  QDateTime psk_asked_;
+  void fetch_psk ();
   QAbstractButton * aurora_box_;
   QAbstractButton * rain_box_;
   class QCheckBox * show_cq_;

@@ -527,6 +527,29 @@ bool WorkedBefore::country_worked (QString const& country, QString const& mode, 
     }
 }
 
+QSet<QString> WorkedBefore::grids (QString const& band) const
+{
+  QSet<QString> out;
+  for (worked_entry const& w : m_->worked_)
+    {
+      if (w.grid_.size () >= 4 && (band.isEmpty () || w.band_.compare (band, Qt::CaseInsensitive) == 0))
+        {
+          out << w.grid_.left (4).toUpper ();
+        }
+    }
+  return out;
+}
+
+QSet<QString> WorkedBefore::calls (QString const& band) const
+{
+  QSet<QString> out;
+  for (worked_entry const& w : m_->worked_)
+    {
+      if (band.isEmpty () || w.band_.compare (band, Qt::CaseInsensitive) == 0) out << w.call_;
+    }
+  return out;
+}
+
 bool WorkedBefore::grid_worked (QString const& grid, QString const& mode, QString const& band) const
 {
   auto gridsquare = grid.left (4).toUpper ();

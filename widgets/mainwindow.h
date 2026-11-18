@@ -94,6 +94,8 @@ class EchoGraph;
 class FastGraph;
 class WideGraph;
 class LogQSO;
+class UpdateChecker;
+class QSoundEffect;
 class Transceiver;
 class MessageAveraging;
 class ActiveStations;
@@ -1008,6 +1010,19 @@ private:
   // N times in a row with no reply (0 = no limit)
   QSpinBox * m_txLimit[7] {};
   void setup_tx_limits ();
+  // 1.2.1: Band Activity filters, worked stations on the map, a sound when
+  // a QSO is logged and the update check
+  void setup_extras ();
+  bool extra_filtered (DecodedText const&);
+  void update_conditions_worked (bool force);
+  void qso_sound_dialog ();
+  void play_qso_sound ();
+  QAction * m_actionWantedOnly {nullptr};
+  QActionGroup * m_minSnrGroup {nullptr};
+  int m_minSnr {-99};
+  QString m_workedBand;
+  QSoundEffect * m_qsoSound {nullptr};
+  UpdateChecker * m_updates {nullptr};
   // keep the main window on the screen; anything that doesn't fit scrolls
   QScrollArea * m_centralScroll {nullptr};
   void fit_window_to_screen ();

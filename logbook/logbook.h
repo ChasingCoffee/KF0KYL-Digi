@@ -34,6 +34,8 @@ public:
             , QString const& mode
             , QByteArray const& ADIF_record);
   AD1CCty const * countries () const {return worked_before_.countries ();}
+  QSet<QString> worked_grids (QString const& band) const {return worked_before_.grids (band);}
+  QSet<QString> worked_calls (QString const& band) const {return worked_before_.calls (band);}
   void rescan ();
   void match (QString const& call, QString const& mode, QString const& grid,
               AD1CCty::Record const&, bool& callB4, bool& countryB4,
