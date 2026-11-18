@@ -56,7 +56,8 @@ public:
   void set_my_call (QString const& call);
   void set_my_grid (QString const& grid);
   // the log on the band the radio is on: calls and grids worked there
-  void set_worked (QString const& band, QSet<QString> const& calls, QSet<QString> const& grids);
+  void set_worked (QString const& band, QSet<QString> const& calls, QSet<QString> const& grids,
+                   QSet<QString> const& today_calls, QSet<QString> const& today_grids);
   void set_dx (QString const& call, QString const& grid);
   void set_miles (bool miles);         // Settings > General > Display distance in miles
   // a decoded station; grid may be empty, then lat/lon come from the
@@ -196,7 +197,7 @@ private:
   QAbstractButton * cities_box_;
   QAbstractButton * worked_grids_box_;
   QAbstractButton * psk_box_;
-  class QCheckBox * show_worked_;
+  int worked_mode_ {0};          // 0 worked before, 1 worked today, 2 hidden
   QTimer * psk_timer_ {nullptr};
   QDateTime psk_asked_;
   void fetch_psk ();

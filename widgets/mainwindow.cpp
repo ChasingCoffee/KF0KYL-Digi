@@ -2076,7 +2076,9 @@ void MainWindow::readSettings()
       m_embedWaterfallAction->setChecked (embed);
     }
     for (int n : {1, 2, 3, 4, 6}) m_txLimit[n]->setValue (m_settings->value (QString {"TxRepeatLimit%1"}.arg (n), 0).toInt ());
-    int const layout = qBound (0, m_settings->value ("PanelLayout", 0).toInt (), 2);
+    // new installs start in Big Band Activity; upgrades keep what they had
+    int const first_layout = m_settings->contains ("DarkStyle") ? 0 : static_cast<int> (PanelLayout::BigBand);
+    int const layout = qBound (0, m_settings->value ("PanelLayout", first_layout).toInt (), 2);
     m_panelLayout = static_cast<PanelLayout> (layout);
     // carry the 1.0 waterfall divider over to the Classic layout
     if (!m_settings->contains (layout_key (0) + "wf_split") && m_settings->contains ("MainSplitterState"))
@@ -18208,9 +18210,49 @@ void MainWindow::update_conditions_worked (bool force)
 {
   if (!m_conditions) return;
   auto const band = m_config.bands ()->find (m_freqNominal);
-  if (!force && band == m_workedBand) return;
+  auto const day = QDateTime::currentDateTimeUtc ().date ();
+  if (!force && band == m_workedBand && day == m_workedDay) return;
+  m_workedDay = day;
   m_workedBand = band;
-  m_conditions->set_worked (band, m_logBook.worked_calls (band), m_logBook.worked_grids (band));
+  QSet<QString> today_calls, today_grids;
+  worked_today (band, today_calls, today_grids);
+  m_conditions->set_worked (band, m_logBook.worked_calls (band), m_logBook.worked_grids (band), today_calls, today_grids);
+}
+
+// calls and grids logged on this band since 00:00 UTC, read from the log file
+void MainWindow::worked_today (QString const& band, QSet<QString>& calls, QSet<QString>& grids) const
+{
+  QFile file {m_logBook.path ()};
+  if (!file.open (QIODevice::ReadOnly)) return;
+  auto const text = QString::fromUtf8 (file.readAll ());
+  auto const today = QDateTime::currentDateTimeUtc ().toString ("yyyyMMdd");
+  // most logs are in time order, so look from the end and stop at the first older record
+  auto field = [] (QString const& rec, QString const& name) -> QString {
+    static QHash<QString, QRegularExpression> cache;
+    auto it = cache.find (name);
+    if (it == cache.end ()) it = cache.insert (name, QRegularExpression {"<" + name + ":(\\d+)(?::[^>]*)?>", QRegularExpression::CaseInsensitiveOption});
+    auto const m = it->match (rec);
+    if (!m.hasMatch ()) return QString {};
+    return rec.mid (m.capturedEnd (), m.captured (1).toInt ()).trimmed ();
+  };
+  auto const records = text.split (QRegularExpression {"<eor>", QRegularExpression::CaseInsensitiveOption});
+  int older = 0;
+  for (int i = records.size () - 1; i >= 0; --i)
+    {
+      auto const& rec = records[i];
+      auto const date = field (rec, "QSO_DATE");
+      if (date.isEmpty ()) continue;
+      if (date != today)
+        {
+          if (++older > 50) break;      // well past today
+          continue;
+        }
+      if (band.size () && field (rec, "BAND").compare (band, Qt::CaseInsensitive) != 0) continue;
+      auto const call = field (rec, "CALL").toUpper ();
+      if (call.size ()) calls << call;
+      auto const grid = field (rec, "GRIDSQUARE").left (4).toUpper ();
+      if (grid.size () == 4) grids << grid;
+    }
 }
 
 void MainWindow::play_qso_sound ()

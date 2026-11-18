@@ -1021,6 +1021,8 @@ private:
   QActionGroup * m_minSnrGroup {nullptr};
   int m_minSnr {-99};
   QString m_workedBand;
+  QDate m_workedDay;
+  void worked_today (QString const& band, QSet<QString>& calls, QSet<QString>& grids) const;
   QSoundEffect * m_qsoSound {nullptr};
   UpdateChecker * m_updates {nullptr};
   // keep the main window on the screen; anything that doesn't fit scrolls

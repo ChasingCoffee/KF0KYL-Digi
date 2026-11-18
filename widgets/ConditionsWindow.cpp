@@ -526,12 +526,16 @@ public:
   bool show_me {true};
   bool show_called {true};
   bool show_others {true};
-  bool show_worked {true};
+  int worked_mode {0};               // 0 worked before, 1 worked today, 2 hidden
   bool show_worked_grids {false};
   bool show_psk {false};
   QString band_label;                // the band the radio is on, e.g. "20m"
   QSet<QString> worked_calls;        // in the log on this band
   QSet<QString> worked_grids;        // four-character grids in the log on this band
+  QSet<QString> today_calls;         // the same, logged since 00:00 UTC
+  QSet<QString> today_grids;
+  QSet<QString> const& calls_shown () const {return 1 == worked_mode ? today_calls : worked_calls;}
+  QSet<QString> const& grids_shown () const {return 1 == worked_mode ? today_grids : worked_grids;}
   struct Spot {QString call; QString grid; double lat; double lon; int snr; double mhz; QDateTime when;};
   QVector<Spot> psk_spots;           // stations that heard you (PSK Reporter)
   QDateTime psk_updated;
@@ -918,9 +922,8 @@ protected:
             if (!show_called) continue;
             c = tx_color;
           }
-        else if (worked_calls.contains (it.key ()))
+        else if (2 != worked_mode && calls_shown ().contains (it.key ()))
           {
-            if (!show_worked) continue;
             c = worked_color;
           }
         else if (s.cq)
@@ -1032,7 +1035,7 @@ protected:
       {QObject::tr ("Calling you"), my_call_color, show_me},
       {QObject::tr ("You called"), tx_color, show_called},
       {QObject::tr ("Others"), neutral, show_others},
-      {QObject::tr ("Worked"), worked_color, show_worked},
+      {1 == worked_mode ? QObject::tr ("Worked today") : QObject::tr ("Worked before"), worked_color, 2 != worked_mode},
     };
     auto f = font ();
     f.setPointSizeF (qMax (6.5, f.pointSizeF () * 0.85));
@@ -1075,6 +1078,47 @@ protected:
         p.drawText (QPointF {cr.left () + 19, cr.center ().y () + fm.ascent () / 2 - 1}, items[i].text);
       }
     p.setFont (f);
+    if (show_psk)
+      {
+        // what the Heard me line colours mean
+        struct Key {QString text; int snr;};
+        Key const keys[] = {
+          {QObject::tr ("Strong  %1 dB or better").arg (QString {"\u2212"} + "5"), 0},
+          {QObject::tr ("Fair  %1 to %2 dB").arg (QString {"\u2212"} + "6", QString {"\u2212"} + "15"), -10},
+          {QObject::tr ("Weak  below %1 dB").arg (QString {"\u2212"} + "15"), -20},
+        };
+        auto bold = f;
+        bold.setBold (true);
+        QFontMetricsF const bfm {bold};
+        auto const title = QObject::tr ("Heard me:");
+        double kw = 14 + bfm.horizontalAdvance (title) + 10;
+        for (auto const& k : keys) kw += 24 + fm.horizontalAdvance (k.text) + 16;
+        QRectF const key_panel {panel.right () + 8, panel.top (), kw, panel.height ()};
+        p.setPen (QPen {QColor {255, 255, 255, 40}, 1});
+        p.setBrush (QColor {13, 17, 23, 190});
+        p.drawRoundedRect (key_panel, 12, 12);
+        double kx = key_panel.left () + 14;
+        double const cy = key_panel.center ().y ();
+        p.setFont (bold);
+        p.setPen (QColor {233, 236, 241});
+        p.drawText (QPointF {kx, cy + fm.ascent () / 2 - 1}, title);
+        kx += bfm.horizontalAdvance (title) + 10;
+        p.setFont (f);
+        for (auto const& k : keys)
+          {
+            QColor const c = psk_color (k.snr);
+            p.setPen (QPen {c, 2.5});
+            p.drawLine (QPointF {kx, cy}, QPointF {kx + 16, cy});
+            p.setPen (QPen {QColor {0, 0, 0, 190}, 1});
+            p.setBrush (c);
+            QPolygonF d;
+            d << QPointF {kx + 8, cy - 4} << QPointF {kx + 12, cy} << QPointF {kx + 8, cy + 4} << QPointF {kx + 4, cy};
+            p.drawPolygon (d);
+            p.setPen (QColor {233, 236, 241});
+            p.drawText (QPointF {kx + 22, cy + fm.ascent () / 2 - 1}, k.text);
+            kx += 24 + fm.horizontalAdvance (k.text) + 16;
+          }
+      }
     QPointF const ring {origin.x () + x + 10, origin.y () + 6 + h / 2};
     p.setPen (QPen {QColor {233, 236, 241, 170}, 1.5});
     p.setBrush (Qt::NoBrush);
@@ -1147,7 +1191,7 @@ protected:
   {
     if (s.to_me) return show_me;
     if (called.contains (call)) return show_called;
-    if (worked_calls.contains (call)) return show_worked;
+    if (2 != worked_mode && calls_shown ().contains (call)) return true;
     if (s.cq) return show_cq;
     return show_others;
   }
@@ -1212,7 +1256,8 @@ protected:
         QString what;
         if (s.to_me) what = QObject::tr ("calling you");
         else if (called.contains (call)) what = QObject::tr ("you called");
-        else if (worked_calls.contains (call)) what = QObject::tr ("worked before on %1").arg (band_label);
+        else if (2 != worked_mode && calls_shown ().contains (call))
+          what = 1 == worked_mode ? QObject::tr ("worked today on %1").arg (band_label) : QObject::tr ("worked before on %1").arg (band_label);
         else if (s.cq) what = QObject::tr ("calling CQ");
         QToolTip::showText (global,
                             QString {"<b>%1</b> &nbsp;%2 dB &nbsp;%3 UTC &nbsp;%4<br/>%5"}
@@ -1841,7 +1886,7 @@ private:
     p.setRenderHint (QPainter::Antialiasing);
     p.setPen (QPen {edge, 1});
     p.setBrush (fill);
-    for (auto const& g : worked_grids)
+    for (auto const& g : grids_shown ())
       {
         if (g.size () < 4) continue;
         int const f1 = g[0].toUpper ().unicode () - 'A', f2 = g[1].toUpper ().unicode () - 'A';
@@ -1952,7 +1997,8 @@ private:
       }
     if (show_worked_grids)
       {
-        lines << QObject::tr ("Worked grids on %1: %2").arg (band_label).arg (worked_grids.size ());
+        lines << (1 == worked_mode ? QObject::tr ("Grids worked today on %1: %2").arg (band_label).arg (today_grids.size ())
+                                   : QObject::tr ("Worked grids on %1: %2").arg (band_label).arg (worked_grids.size ()));
       }
     if (lines.isEmpty ()) return;
     auto f = font ();
@@ -3389,11 +3435,18 @@ QWidget * ConditionsWindow::build_map_bar ()
   show_me_ = new QCheckBox {bar};
   show_called_ = new QCheckBox {bar};
   show_others_ = new QCheckBox {bar};
-  show_worked_ = new QCheckBox {bar};
-  for (auto * box : {show_cq_, show_me_, show_called_, show_others_, show_worked_}) box->hide ();
+  for (auto * box : {show_cq_, show_me_, show_called_, show_others_}) box->hide ();
   map_->on_legend = [this] (int i) {
-    QAbstractButton * boxes[] = {show_cq_, show_me_, show_called_, show_others_, show_worked_};
-    if (i >= 0 && i < 5) boxes[i]->toggle ();
+    QAbstractButton * boxes[] = {show_cq_, show_me_, show_called_, show_others_};
+    if (i >= 0 && i < 4) boxes[i]->toggle ();
+    if (4 == i)
+      {
+        // Worked before, then Worked today, then hidden
+        worked_mode_ = (worked_mode_ + 1) % 3;
+        map_->worked_mode = worked_mode_;
+        save_map_options ();
+        map_->update ();
+      }
   };
 
   // restore and react
@@ -3414,7 +3467,8 @@ QWidget * ConditionsWindow::build_map_bar ()
   show_me_->setChecked (settings_->value ("ShowCallingMe", true).toBool ());
   show_called_->setChecked (settings_->value ("ShowCalled", true).toBool ());
   show_others_->setChecked (settings_->value ("ShowOthers", true).toBool ());
-  show_worked_->setChecked (settings_->value ("ShowWorked", true).toBool ());
+  worked_mode_ = qBound (0, settings_->value ("WorkedMode", 0).toInt (), 2);
+  map_->worked_mode = worked_mode_;
   worked_grids_box_->setChecked (settings_->value ("WorkedGrids", false).toBool ());
   psk_box_->setChecked (settings_->value ("HeardMe", false).toBool ());
   settings_->endGroup ();
@@ -3434,7 +3488,6 @@ QWidget * ConditionsWindow::build_map_bar ()
     map_->show_me = show_me_->isChecked ();
     map_->show_called = show_called_->isChecked ();
     map_->show_others = show_others_->isChecked ();
-    map_->show_worked = show_worked_->isChecked ();
     map_->show_worked_grids = worked_grids_box_->isChecked ();
     bool const psk_was = map_->show_psk;
     map_->show_psk = psk_box_->isChecked ();
@@ -3453,7 +3506,7 @@ QWidget * ConditionsWindow::build_map_bar ()
   connect (grid_box_, static_cast<void (QComboBox::*) (int)> (&QComboBox::currentIndexChanged), this, apply);
   for (auto * box : {gray_box_, cities_box_, beacons_box_, static_cast<QAbstractButton *> (show_cq_), static_cast<QAbstractButton *> (show_me_),
                      static_cast<QAbstractButton *> (show_called_), static_cast<QAbstractButton *> (show_others_),
-                     static_cast<QAbstractButton *> (show_worked_), worked_grids_box_, psk_box_})
+                     worked_grids_box_, psk_box_})
     {
       connect (box, &QAbstractButton::toggled, this, apply);
     }
@@ -3491,7 +3544,7 @@ void ConditionsWindow::save_map_options ()
   settings_->setValue ("ShowCallingMe", show_me_->isChecked ());
   settings_->setValue ("ShowCalled", show_called_->isChecked ());
   settings_->setValue ("ShowOthers", show_others_->isChecked ());
-  settings_->setValue ("ShowWorked", show_worked_->isChecked ());
+  settings_->setValue ("WorkedMode", worked_mode_);
   settings_->setValue ("WorkedGrids", worked_grids_box_->isChecked ());
   settings_->setValue ("HeardMe", psk_box_->isChecked ());
   settings_->endGroup ();
@@ -4643,8 +4696,11 @@ bool ConditionsWindow::grid_to_latlon (QString const& grid_in, double& lat, doub
   return true;
 }
 
-void ConditionsWindow::set_worked (QString const& band, QSet<QString> const& calls, QSet<QString> const& grids)
+void ConditionsWindow::set_worked (QString const& band, QSet<QString> const& calls, QSet<QString> const& grids,
+                                   QSet<QString> const& today_calls, QSet<QString> const& today_grids)
 {
+  map_->today_calls = today_calls;
+  map_->today_grids = today_grids;
   bool const band_changed = band != map_->band_label;
   map_->band_label = band;
   map_->worked_calls = calls;
