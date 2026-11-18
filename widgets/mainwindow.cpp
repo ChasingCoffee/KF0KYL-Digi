@@ -122,6 +122,8 @@
 #include "widgets/QSYMessageCreator.h"
 #include "widgets/qsymonitor.h"
 #include "Network/eqsl.h"
+#include "widgets/SstvPanel.hpp"
+#include "Modulator/Modulator.hpp"
 
 #define FCL fortran_charlen_t
 
@@ -582,6 +584,7 @@ MainWindow::MainWindow(QDir const& temp_directory, bool multiple,
   setup_main_splitter ();
   setup_callsign_info ();
   setup_tx_limits ();
+  setup_sstv ();
   apply_display_colors ();
 
   // QRZ Logbook auto-upload: un-sent QSOs survive restarts in qrz_pending.adi
@@ -4242,6 +4245,7 @@ void MainWindow::bumpFqso(int n)                                 //bumpFqso()
 
 void MainWindow::displayDialFrequency ()
 {
+  if (m_sstv && m_sstvActive) m_sstv->set_frequency (m_freqNominal);
   if (ui->actionUse_Dark_Style->isChecked()) ui->bandComboBox->setStyleSheet("QLineEdit {background-color: #1F1F1F}");  // initialize dark style at startup
   Frequency dial_frequency {m_rigState.ptt () && m_rigState.split () ?
       m_rigState.tx_frequency () : m_rigState.frequency ()};
@@ -5992,6 +5996,7 @@ void MainWindow::msgAvgDecode2()
 
 void MainWindow::decode()                                       //decode()
 {
+  if (m_sstvActive) return;     // the SSTV screen does its own listening
   if(m_decoderBusy) return;                          //Don't start decoder if it's already busy.
   m_fetched=0;
   QDateTime now = QDateTime::currentDateTimeUtc ();
@@ -12919,7 +12924,7 @@ void MainWindow::on_tuneButton_clicked (bool checked)
   if (m_auto && !(m_mode=="WSPR" || m_mode=="FST4W")) ui->autoButton->click();   // stop any other transmission
   stopWRTimer.stop();           // stop any Wait & Reply timeout
   stopWCTimer.stop();           // stop any Wait & Call timeout
-  if (checked && m_config.tune_watchdog() && !(m_mode=="WSPR" || m_mode=="FST4W")) {
+  if (checked && !m_sstvSending && m_config.tune_watchdog() && !(m_mode=="WSPR" || m_mode=="FST4W")) {
       tuneATU_Timer.start (m_config.tune_watchdog_time()*1000); // tune watchdog
   }
   if (!checked) {
@@ -12929,7 +12934,7 @@ void MainWindow::on_tuneButton_clicked (bool checked)
   static bool lastChecked = false;
   if (lastChecked == checked) return;
   lastChecked = checked;
-  if (checked && m_tune==false) { // we're starting tuning so remember Tx and change pwr to Tune value
+  if (checked && m_tune==false && !m_sstvSending) { // we're starting tuning so remember Tx and change pwr to Tune value
     if (m_config.pwrBandTuneMemory ()) {
       auto const& curBand = ui->bandComboBox->currentText();
       m_pwrBandTxMemory[curBand] = ui->outAttenuation->value(); // remember our Tx pwr
@@ -12958,7 +12963,7 @@ void MainWindow::end_tuning ()
   tuneATU_Timer.stop ();        // stop tune watchdog when stopping Tune manually
   on_stopTxButton_clicked ();
   // we're turning off so remember our Tune pwr setting and reset to Tx pwr
-  if (m_config.pwrBandTuneMemory() || m_config.pwrBandTxMemory()) {
+  if (!m_sstvSending && (m_config.pwrBandTuneMemory() || m_config.pwrBandTxMemory())) {
     auto const& curBand = ui->bandComboBox->currentText();
     m_pwrBandTuneMemory[curBand] = ui->outAttenuation->value(); // remember our Tune pwr
     m_PwrBandSetOK = false;
@@ -18109,4 +18114,220 @@ void MainWindow::alertQSYmessage ()
 #else
   QSound::play(app_sounds_directory () + "Message.wav");  // for Linux and macOS
 #endif
+}
+
+// ---------------------------------------------------------------------
+// SSTV
+
+namespace
+{
+  // keeps the SSTV screen the size of the main window's central area
+  class FollowParent : public QObject
+  {
+  public:
+    explicit FollowParent (QWidget * w) : QObject {w}, w_ {w} {}
+  protected:
+    bool eventFilter (QObject * o, QEvent * e) override
+    {
+      if (QEvent::Resize == e->type ()) w_->setGeometry (static_cast<QWidget *> (o)->rect ());
+      return false;
+    }
+  private:
+    QWidget * w_;
+  };
+}
+
+QMap<QString, QAction *> MainWindow::sstv_mode_actions () const
+{
+  return {
+    {"FT8", ui->actionFT8}, {"FT4", ui->actionFT4}, {"MSK144", ui->actionMSK144}, {"Q65", ui->actionQ65},
+    {"JT65", ui->actionJT65}, {"JT9", ui->actionJT9}, {"JT4", ui->actionJT4}, {"FST4", ui->actionFST4},
+    {"FST4W", ui->actionFST4W}, {"WSPR", ui->actionWSPR}, {"Echo", ui->actionEcho},
+  };
+}
+
+void MainWindow::setup_sstv ()
+{
+  qRegisterMetaType<QVector<short>> ("QVector<short>");
+
+  m_actionSSTV = new QAction {tr ("SSTV"), this};
+  m_actionSSTV->setCheckable (true);
+  m_actionSSTV->setToolTip (tr ("Slow-scan TV: send and receive pictures"));
+  ui->menuMode->insertAction (ui->actionMSK144, m_actionSSTV);
+  connect (m_actionSSTV, &QAction::triggered, this, [this] (bool on) {
+      if (on) enter_sstv ();
+      else m_actionSSTV->setChecked (m_sstvActive);
+    });
+
+  // picking any other mode leaves SSTV
+  auto const actions = sstv_mode_actions ();
+  for (auto * a : actions)
+    {
+      connect (a, &QAction::triggered, this, [this] {if (m_sstvActive) leave_sstv ();});
+    }
+  for (auto * b : {ui->ft8Button, ui->ft4Button, ui->msk144Button, ui->q65Button, ui->jt65Button})
+    {
+      connect (b, &QPushButton::clicked, this, [this] {if (m_sstvActive) leave_sstv ();});
+    }
+
+  // an SSTV button under the other mode buttons
+  if (auto * box = ui->verticalLayout_15)
+    {
+      int const at = box->indexOf (ui->jt65Button);
+      if (at >= 0)
+        {
+          auto * b = new QPushButton {tr ("SSTV"), ui->jt65Button->parentWidget ()};
+          b->setObjectName ("sstvButton");
+          b->setToolTip (tr ("Switch to SSTV: send and receive pictures"));
+          b->setMinimumSize (ui->jt65Button->minimumSize ());
+          b->setMaximumSize (ui->jt65Button->maximumSize ());
+          b->setFocusPolicy (Qt::NoFocus);
+          box->insertWidget (at + 1, b);
+          connect (b, &QPushButton::clicked, this, [this] {enter_sstv ();});
+        }
+    }
+
+  m_sstvTxTimer.setInterval (200);
+  connect (&m_sstvTxTimer, &QTimer::timeout, this, [this] {
+      if (!m_sstvSending) return;
+      if (Modulator::external_wave_done () || !m_tune) sstv_stop_tx ();
+    });
+}
+
+void MainWindow::enter_sstv ()
+{
+  if (m_sstvActive)
+    {
+      m_actionSSTV->setChecked (true);
+      return;
+    }
+  if (!m_sstv)
+    {
+      m_sstv = new SstvPanel {m_settings, m_config.writeable_data_dir ().absoluteFilePath ("SSTV"), ui->centralWidget};
+      ui->centralWidget->installEventFilter (new FollowParent {m_sstv});
+      QStringList modes {"FT8", "FT4", "MSK144", "Q65", "JT65", "JT9", "JT4", "FST4", "FST4W", "WSPR", "Echo", "SSTV"};
+      m_sstv->set_modes (modes);
+      m_sstv->set_place_lookup ([this] (QString const& call) {
+          SstvPanel::Place place;
+          auto const country = m_logBook.countries ()->lookup (call);
+          place.country = country.entity_name;
+          double my_lat, my_lon;
+          if (!country.entity_name.isEmpty () && ConditionsWindow::grid_to_latlon (m_config.my_grid (), my_lat, my_lon))
+            {
+              double const lat = country.latitude, lon = -country.longtitude;
+              double const r = 3.14159265358979323846 / 180.;
+              double const a = std::sin ((lat - my_lat) * r / 2.), b = std::sin ((lon - my_lon) * r / 2.);
+              double const h = a * a + std::cos (my_lat * r) * std::cos (lat * r) * b * b;
+              place.km = 2. * 6371. * std::asin (std::min (1., std::sqrt (h)));
+            }
+          return place;
+        });
+      connect (m_detector, &Detector::samples, m_sstv, &SstvPanel::add_samples, Qt::QueuedConnection);
+      connect (m_sstv, &SstvPanel::mode_chosen, this, [this] (QString const& mode) {
+          auto const actions = sstv_mode_actions ();
+          if (auto * a = actions.value (mode)) a->trigger ();
+          if (m_sstvActive) leave_sstv ();
+        });
+      connect (m_sstv, &SstvPanel::band_chosen, this, &MainWindow::sstv_go);
+      connect (m_sstv, &SstvPanel::send_audio, this, &MainWindow::sstv_send);
+      connect (m_sstv, &SstvPanel::halt, this, [this] {
+          if (m_sstvSending) sstv_stop_tx ();
+          else on_stopTxButton_clicked ();
+        });
+      connect (m_sstv, &SstvPanel::tune, this, [this] (bool on) {
+          if (m_sstvSending) return;
+          ui->tuneButton->setChecked (on);
+          on_tuneButton_clicked (on);
+        });
+      connect (m_sstv, &SstvPanel::log_qso, this, [this] (QString const& call, QString const& sent, QString const& rcvd,
+                                                          QDateTime const& on, QDateTime const& off) {
+          m_logDlg->initLogQSO (call, QString {}, "SSTV", sent, rcvd, on, off, m_freqNominal, false, QString {}, QString {});
+        });
+      connect (m_sstv, &SstvPanel::station_heard, this, [this] (QString const& call) {
+          if (!m_conditions) return;
+          auto const country = m_logBook.countries ()->lookup (call);
+          m_conditions->add_station (call, QString {}, 0, true, false, QColor {Win11Theme::token ("accent2")},
+                                     country.latitude, -country.longtitude);
+        });
+    }
+
+  // nothing else may be sending
+  if (m_auto) auto_tx_mode (false);
+  if (m_tune) stop_tuning ();
+  m_sstvActive = true;
+  m_actionSSTV->setChecked (true);
+  m_sstvPrevTxFreq = ui->TxFreqSpinBox->value ();
+  // keep the transmit audio offset in the middle of the passband, so a
+  // rig split doesn't move the picture's radio frequency
+  ui->TxFreqSpinBox->setValue (1700);
+  // the modes read the Tx offset back from settings: keep the real one there
+  QTimer::singleShot (400, this, [this] {m_settings->setValue ("TxFreq_old", m_sstvPrevTxFreq);});
+  m_sstv->set_my_call (m_config.my_callsign ());
+  m_sstv->set_my_grid (m_config.my_grid ());
+  m_sstv->restyle ();
+  Detector::tap = true;
+  if (!m_monitoring) on_monitorButton_clicked (true);
+
+  // the SSTV calling frequency on this band
+  qint64 hz;
+  bool lsb;
+  if (SstvPanel::calling_frequency (m_config.bands ()->find (m_freqNominal), hz, lsb)) sstv_go (hz, lsb);
+  m_sstv->set_frequency (m_freqNominal);
+
+  if (m_conditions) m_conditions->clear_stations ();   // the map shows only SSTV stations now
+  m_sstv->setGeometry (ui->centralWidget->rect ());
+  m_sstv->show ();
+  m_sstv->raise ();
+  mode_label.setText ("SSTV");
+}
+
+void MainWindow::leave_sstv ()
+{
+  if (!m_sstvActive) return;
+  if (m_sstvSending) sstv_stop_tx ();
+  m_sstvActive = false;
+  m_actionSSTV->setChecked (false);
+  Detector::tap = false;
+  if (m_sstv) m_sstv->hide ();
+  m_config.set_lower_sideband (false);
+  m_settings->setValue ("TxFreq_old", m_sstvPrevTxFreq);
+  ui->TxFreqSpinBox->setValue (m_sstvPrevTxFreq);
+  if (m_conditions) m_conditions->clear_stations ();
+  // back to this mode's usual frequency on the band
+  auto const row = m_config.frequencies ()->best_working_frequency (m_freqNominal);
+  if (row >= 0)
+    {
+      ui->bandComboBox->setCurrentIndex (row);
+      on_bandComboBox_activated (row);
+    }
+  statusChanged ();
+}
+
+void MainWindow::sstv_go (qint64 dial_hz, bool lsb)
+{
+  m_config.set_lower_sideband (lsb);
+  m_bandEdited = true;
+  band_changed (Frequency (dial_hz));
+  if (m_sstv) m_sstv->set_frequency (dial_hz);
+}
+
+void MainWindow::sstv_send (QVector<float> const& wave)
+{
+  if (m_sstvSending || wave.isEmpty ()) return;
+  if (m_tune) stop_tuning ();
+  Modulator::set_external_wave (wave);
+  m_sstvSending = true;
+  if (m_sstv) m_sstv->set_transmitting (true);
+  ui->tuneButton->setChecked (true);
+  on_tuneButton_clicked (true);
+  m_sstvTxTimer.start ();
+}
+
+void MainWindow::sstv_stop_tx ()
+{
+  m_sstvTxTimer.stop ();
+  Modulator::clear_external_wave ();
+  if (m_tune) stop_tuning ();
+  m_sstvSending = false;
+  if (m_sstv) m_sstv->set_transmitting (false);
 }

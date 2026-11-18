@@ -3,6 +3,8 @@
 
 #include <QAudio>
 #include <QPointer>
+#include <QVector>
+#include <atomic>
 
 #include "Audio/AudioDevice.hpp"
 
@@ -43,6 +45,13 @@ public:
   Q_SLOT void tune (bool newState = true);
   Q_SLOT void setFrequency (double newFrequency) {m_frequency = newFrequency;}
   Q_SIGNAL void stateChanged (ModulatorState) const;
+
+  // SSTV: while Tune is on, send this audio (48 kHz, -1..1) instead of a
+  // tone; done () turns true when all of it has gone out
+  static void set_external_wave (QVector<float> const&);
+  static void clear_external_wave ();
+  static bool external_wave_done ();
+  static double external_wave_progress ();
 
 protected:
   qint64 readData (char * data, qint64 maxSize) override;

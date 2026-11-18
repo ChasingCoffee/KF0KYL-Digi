@@ -61,7 +61,7 @@ if (POLICY CMP0075)
 endif ()
 
 project (wsjtx
-  VERSION 1.2.0.0
+  VERSION 1.2.1.0
   LANGUAGES C CXX Fortran
   )
 # KF0KYL Digi is a modified version of WSJT-X. Per the WSJT trademark policy
@@ -353,6 +353,8 @@ set (wsjtx_CXXSRCS
   widgets/Win11Theme.cpp
   widgets/CallsignInfo.cpp
   widgets/ConditionsWindow.cpp
+  widgets/SstvCodec.cpp
+  widgets/SstvPanel.cpp
   Configuration.cpp
   main.cpp
   Network/wsprnet.cpp

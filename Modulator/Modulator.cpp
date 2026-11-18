@@ -25,6 +25,36 @@ extern float gran();		// Noise generator (for tests only)
 
 double constexpr Modulator::m_twoPi;
 
+namespace
+{
+  QVector<float> external_wave;
+  std::atomic<bool> external_on {false};
+  std::atomic<int> external_pos {0};
+}
+
+void Modulator::set_external_wave (QVector<float> const& wave)
+{
+  external_on = false;
+  external_wave = wave;
+  external_pos = 0;
+  external_on = !wave.isEmpty ();
+}
+
+void Modulator::clear_external_wave ()
+{
+  external_on = false;
+}
+
+bool Modulator::external_wave_done ()
+{
+  return external_on && external_pos >= external_wave.size ();
+}
+
+double Modulator::external_wave_progress ()
+{
+  return external_wave.isEmpty () ? 0. : double (external_pos) / external_wave.size ();
+}
+
 //    float wpm=20.0;
 //    unsigned m_nspd=1.2*48000.0/wpm;
 //    m_nspd=3072;                           //18.75 WPM
@@ -198,6 +228,21 @@ qint64 Modulator::readData (char * data, qint64 maxSize)
 
     case Active:
       {
+        if (external_on && m_tuning)
+          {
+            // SSTV picture audio
+            int pos = external_pos;
+            int const size = external_wave.size ();
+            while (samples != end)
+              {
+                qint16 const sample = pos < size ? qint16 (qRound (32767.f * external_wave[pos])) : qint16 (0);
+                if (pos < size) ++pos;
+                samples = load (sample, samples);
+                ++framesGenerated;
+              }
+            external_pos = pos;
+            return framesGenerated * bytesPerFrame ();
+          }
         unsigned int isym=0;
 
         if(!m_tuning) isym=m_ic/(4.0*m_nsps);            // Actual fsample=48000
