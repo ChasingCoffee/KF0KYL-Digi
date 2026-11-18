@@ -393,9 +393,6 @@ public:
   // Set transceiver mode.
   Q_SLOT void transceiver_mode (MODE);
 
-  // SSTV: use the lower sideband (LSB or data LSB) instead of the upper
-  void set_lower_sideband (bool);
-
   // Set/unset PTT.
   //
   // Note that this must be called even if VOX PTT is selected since

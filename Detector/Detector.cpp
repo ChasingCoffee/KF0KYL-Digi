@@ -13,8 +13,6 @@ extern "C" {
 
 extern dec_data_t dec_data;
 
-std::atomic<bool> Detector::tap {false};
-
 Detector::Detector (unsigned frameRate, double periodLengthInSeconds,
                     unsigned downSampleFactor, QObject * parent)
   : AudioDevice (parent)
@@ -97,11 +95,6 @@ qint64 Detector::writeData (char const * data, qint64 maxSize)
              dec_data.params.kin < (NTMAX*12000 - framesAfterDownSample)) {
             fil4_(&m_buffer[0], &framesToProcess, &dec_data.d2[dec_data.params.kin],
                 &framesAfterDownSample);
-            if (tap)
-              {
-                short const * first = &dec_data.d2[dec_data.params.kin];
-                Q_EMIT samples (QVector<short> (first, first + framesAfterDownSample));
-              }
             dec_data.params.kin += framesAfterDownSample;
           } else {
             // qDebug() << "framesToProcess     = " << framesToProcess;

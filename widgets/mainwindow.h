@@ -86,7 +86,6 @@ class QActionGroup;
 class QSpinBox;
 class QScrollArea;
 class ConditionsWindow;
-class SstvPanel;
 class QSettings;
 class QLineEdit;
 class QFont;
@@ -1009,20 +1008,6 @@ private:
   // N times in a row with no reply (0 = no limit)
   QSpinBox * m_txLimit[7] {};
   void setup_tx_limits ();
-  // SSTV: a screen of its own over the main window
-  void setup_sstv ();
-  void enter_sstv ();
-  void leave_sstv ();
-  void sstv_go (qint64 dial_hz, bool lsb);
-  void sstv_send (QVector<float> const&);
-  void sstv_stop_tx ();
-  QMap<QString, QAction *> sstv_mode_actions () const;
-  SstvPanel * m_sstv {nullptr};
-  QAction * m_actionSSTV {nullptr};
-  bool m_sstvActive {false};
-  bool m_sstvSending {false};
-  int m_sstvPrevTxFreq {1500};
-  QTimer m_sstvTxTimer;
   // keep the main window on the screen; anything that doesn't fit scrolls
   QScrollArea * m_centralScroll {nullptr};
   void fit_window_to_screen ();

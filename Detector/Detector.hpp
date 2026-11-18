@@ -2,8 +2,6 @@
 #define DETECTOR_HPP__
 #include "Audio/AudioDevice.hpp"
 #include <QScopedArrayPointer>
-#include <QVector>
-#include <atomic>
 
 //
 // output device that distributes data in predefined chunks via a signal
@@ -31,10 +29,6 @@ public:
   bool reset () override;
 
   Q_SIGNAL void framesWritten (qint64) const;
-
-  // a copy of every block of 12 kHz samples, for SSTV, while switched on
-  static std::atomic<bool> tap;
-  Q_SIGNAL void samples (QVector<short> const&) const;
   Q_SLOT void setBlockSize (unsigned);
 
 protected:

@@ -992,7 +992,6 @@ private:
   bool udpWindowToFront_;
   bool udpWindowRestore_;
   DataMode data_mode_;
-  bool lower_sideband_ {false};   // SSTV on 160, 80 and 40 m
   bool bLowSidelobes_;
   bool sortAlphabetically_;
   bool hideCARD_;
@@ -1295,18 +1294,6 @@ void Configuration::transceiver_mode (MODE mode)
 {
   LOG_TRACE (mode << ' ' << m_->cached_rig_state_);
   m_->transceiver_mode (mode);
-}
-
-void Configuration::set_lower_sideband (bool lower)
-{
-  if (lower == m_->lower_sideband_) return;
-  m_->lower_sideband_ = lower;
-  // tell the rig now, unless the rig's mode is left alone (Mode: None)
-  if (m_->data_mode_ == data_mode_USB || m_->data_mode_ == data_mode_data)
-    {
-      m_->set_cached_mode ();
-      if (transceiver_online ()) m_->transceiver_mode (m_->cached_rig_state_.mode ());
-    }
 }
 
 void Configuration::transceiver_ptt (bool on)
@@ -5272,8 +5259,8 @@ void Configuration::impl::set_cached_mode ()
   // UNK (unknown) where we want to leave the rig mode untouched
   switch (data_mode_)
     {
-    case data_mode_USB: mode = lower_sideband_ ? Transceiver::LSB : Transceiver::USB; break;
-    case data_mode_data: mode = lower_sideband_ ? Transceiver::DIG_L : Transceiver::DIG_U; break;
+    case data_mode_USB: mode = Transceiver::USB; break;
+    case data_mode_data: mode = Transceiver::DIG_U; break;
     default: break;
     }
 
