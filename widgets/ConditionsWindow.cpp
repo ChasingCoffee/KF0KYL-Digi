@@ -593,6 +593,7 @@ public:
   QVector<Beacon> beacons;
   std::function<void (QString const&, Qt::KeyboardModifiers)> on_double_click;
   std::function<void (int)> on_legend;        // a legend chip clicked: 0 CQ, 1 you, 2 called, 3 others, 4 worked
+  std::function<void (QString const&, QString const&)> on_colour;   // a colour in the legend double-clicked: key, name
 
   // something under the stations changed: build the picture again
   void changed ()
@@ -700,6 +701,24 @@ public:
     reset_view ();
   }
 
+  // the flat map's zoom with the whole world in view, poles and all
+  double min_zoom () const
+  {
+    if (Flat != projection || width () <= 0 || height () <= 0) return 1.;
+    return qMin (width () / 360., height () / 180.) / qMax (width () / 360., height () / 180.);
+  }
+
+  // Fit: the whole world, pole to pole
+  void fit_world ()
+  {
+    zoom_ = min_zoom ();
+    clon_ = 0.;
+    clat_ = 0.;
+    az_pan_ = QPointF {};
+    clamp_view ();
+    view_changed ();
+  }
+
   // back to the whole map
   void reset_view ()
   {
@@ -742,6 +761,7 @@ protected:
   void clamp_view ()
   {
     if (width () <= 0 || height () <= 0) return;
+    zoom_ = qMax (zoom_, min_zoom ());
     double const s = flat_scale ();
     double const hw = width () / 2. / s, hh = height () / 2. / s;
     clon_ = hw >= 180. ? 0. : qBound (-180. + hw, clon_, 180. - hw);
@@ -754,7 +774,7 @@ protected:
 
   void zoom_at (QPointF const& pt, double factor)
   {
-    double const nz = qBound (1., zoom_ * factor, 12.);
+    double const nz = qBound (min_zoom (), zoom_ * factor, 12.);
     if (std::abs (nz - zoom_) < 1e-6) return;
     if (Flat == projection)
       {
@@ -863,7 +883,7 @@ protected:
         p.setPen (QPen {QColor {255, 255, 255, 40}, 1});
         p.setBrush (QColor {13, 17, 23, 190});
         p.drawRoundedRect (r, 9, 9);
-        p.setPen (i == 0 && zoom_ <= 1.0001 ? QColor {233, 236, 241, 90} : QColor {233, 236, 241});
+        p.setPen (i == 0 && zoom_ <= min_zoom () + 0.0001 ? QColor {233, 236, 241, 90} : QColor {233, 236, 241});
         p.drawText (r, Qt::AlignCenter, labels[i]);
         x -= b + gap + (i == 0 ? 10 : 0);
       }
@@ -882,6 +902,13 @@ protected:
       {
         QPainterPath world;
         world.addEllipse (az_centre (), az_radius (), az_radius ());
+        shape = shape.intersected (world);
+      }
+    else if (zoom_ < 0.9999)
+      {
+        // zoomed out to the whole world: nothing in the margins beside it
+        QPainterPath world;
+        world.addRect (world_rect ());
         shape = shape.intersected (world);
       }
     p.setClipPath (shape);
@@ -1086,6 +1113,7 @@ protected:
     double const h = fm.height () + 8;
     double x = 8;
     legend_rects_.clear ();
+    key_rects_.clear ();
     QVector<QRectF> chips;
     for (auto const& it : items)
       {
@@ -1125,7 +1153,7 @@ protected:
       {
         // what the Heard me line colours mean: strength, or the band when
         // every band is shown
-        struct Key {QString text; QColor color;};
+        struct Key {QString text; QColor color; QString colour_key;};
         QVector<Key> keys;
         if (psk_all_bands)
           {
@@ -1133,15 +1161,15 @@ protected:
             for (auto const& sp : psk_spots) present << sp.band;
             for (auto const& b : band_order ())
               {
-                if (present.contains (b)) keys << Key {b, band_color (b)};
+                if (present.contains (b)) keys << Key {b, band_color (b), "Band_" + b};
               }
-            if (keys.isEmpty ()) keys << Key {QObject::tr ("no reports yet"), QColor {"#9AA4B2"}};
+            if (keys.isEmpty ()) keys << Key {QObject::tr ("no reports yet"), QColor {"#9AA4B2"}, QString {}};
           }
         else
           {
-            keys << Key {QObject::tr ("Strong  %1 dB or better").arg (QString {"\u2212"} + "5"), psk_strong}
-                 << Key {QObject::tr ("Fair  %1 to %2 dB").arg (QString {"\u2212"} + "6", QString {"\u2212"} + "15"), psk_fair}
-                 << Key {QObject::tr ("Weak  below %1 dB").arg (QString {"\u2212"} + "15"), psk_weak};
+            keys << Key {QObject::tr ("Strong  %1 dB or better").arg (QString {"\u2212"} + "5"), psk_strong, "Strong"}
+                 << Key {QObject::tr ("Fair  %1 to %2 dB").arg (QString {"\u2212"} + "6", QString {"\u2212"} + "15"), psk_fair, "Fair"}
+                 << Key {QObject::tr ("Weak  below %1 dB").arg (QString {"\u2212"} + "15"), psk_weak, "Weak"};
           }
         auto bold = f;
         bold.setBold (true);
@@ -1172,6 +1200,11 @@ protected:
             p.drawPolygon (d);
             p.setPen (QColor {233, 236, 241});
             p.drawText (QPointF {kx + 22, cy + fm.ascent () / 2 - 1}, k.text);
+            if (k.colour_key.size ())
+              {
+                key_rects_ << qMakePair (QRectF {kx - 3, key_panel.top () + 3, 24 + fm.horizontalAdvance (k.text) + 6, key_panel.height () - 6},
+                                         qMakePair (k.colour_key, k.text.section ("  ", 0, 0)));
+              }
             kx += 24 + fm.horizontalAdvance (k.text) + 12;
           }
       }
@@ -1192,7 +1225,7 @@ protected:
             QPointF const middle {width () / 2., height () / 2.};
             if (0 == i) zoom_at (middle, 1.5);
             else if (1 == i) zoom_at (middle, 1. / 1.5);
-            else reset_view ();
+            else fit_world ();
             return;
           }
       }
@@ -1254,6 +1287,30 @@ protected:
 
   void mouseDoubleClickEvent (QMouseEvent * e) override
   {
+    // a colour in the legend or the Heard me key: change it
+    static char const * const legend_keys[] = {"CQ", "CallingMe", "Called", "Others", "Worked"};
+    for (int i = 0; i < legend_rects_.size () && i < 5; ++i)
+      {
+        if (legend_rects_[i].contains (e->pos ()))
+          {
+            // the first click switched it: put that back
+            if (on_legend)
+              {
+                on_legend (i);
+                if (4 == i) on_legend (i);
+              }
+            if (on_colour) on_colour (legend_keys[i], QString {});
+            return;
+          }
+      }
+    for (auto const& k : key_rects_)
+      {
+        if (k.first.contains (e->pos ()))
+          {
+            if (on_colour) on_colour (k.second.first, k.second.second);
+            return;
+          }
+      }
     auto const call = station_at (e->pos ());
     if (call.size () && on_double_click) on_double_click (call, e->modifiers ());
   }
@@ -1263,7 +1320,7 @@ protected:
     if (pressed_ && (e->buttons () & Qt::LeftButton))
       {
         QPoint const d = e->pos () - press_pos_;
-        if (!dragging_ && d.manhattanLength () > 4 && zoom_ > 1.0001) dragging_ = true;
+        if (!dragging_ && d.manhattanLength () > 4 && (zoom_ > 1.0001 || Flat == projection)) dragging_ = true;
         if (dragging_)
           {
             if (Flat == projection)
@@ -1286,6 +1343,7 @@ protected:
     bool over_legend = false;
     for (auto const& lr : legend_rects_) over_legend = over_legend || lr.contains (e->pos ());
     for (auto const& zr : zoom_rects_) over_legend = over_legend || zr.contains (e->pos ());
+    for (auto const& k : key_rects_) over_legend = over_legend || k.first.contains (e->pos ());
     setCursor (over_legend || station_at (e->pos ()).size () ? Qt::PointingHandCursor : Qt::ArrowCursor);
     // keep the place under the pointer up to date while a tip is showing
     if (QToolTip::isVisible ()) show_tip (e->pos (), e->globalPos ());
@@ -1305,6 +1363,22 @@ protected:
 
   void show_tip (QPoint const& pos, QPoint const& global)
   {
+    for (int i = 0; i < legend_rects_.size (); ++i)
+      {
+        if (legend_rects_[i].contains (pos))
+          {
+            QToolTip::showText (global, QObject::tr ("Click to show or hide. Double-click to change the colour."), this);
+            return;
+          }
+      }
+    for (auto const& k : key_rects_)
+      {
+        if (k.first.contains (pos))
+          {
+            QToolTip::showText (global, QObject::tr ("Double-click to change the colour"), this);
+            return;
+          }
+      }
     auto const call = station_at (pos);
     if (call.size ())
       {
@@ -2295,6 +2369,7 @@ private:
   QImage rain_;
   QImage prop_;
   QVector<QRectF> legend_rects_;
+  QVector<QPair<QRectF, QPair<QString, QString>>> key_rects_;     // Heard me key: where, colour key, name
   QString grid_key_;
   QPainterPath grid_major_;
   QPainterPath grid_minor_;
@@ -3611,6 +3686,7 @@ QWidget * ConditionsWindow::build_map_bar ()
     map_->psk_all_bands = psk_all_action_->isChecked ();
     map_->psk_minutes = psk_minutes_group_->checkedAction ()->data ().toInt ();
     load_map_colours ();
+    map_->on_colour = [this] (QString const& key, QString const& name) {pick_map_colour (key, name);};
   }
   for (auto * b : {gray_box_, aurora_box_, rain_box_, cities_box_, beacons_box_, worked_grids_box_, psk_box_, prop_box_}) row2->addWidget (b);
   row2->addStretch ();
@@ -3819,6 +3895,30 @@ void ConditionsWindow::apply_map_colours ()
     }
   update_legend ();
   map_->update ();
+}
+
+// a colour double-clicked in the map's legend or Heard me key
+void ConditionsWindow::pick_map_colour (QString const& key, QString const& name)
+{
+  QString title = name;
+  for (auto const& m : map_colour_list ()) if (key == m.key) title = tr (m.text);
+  QColor now = map_colours_.value (key);
+  if (!now.isValid ())
+    {
+      if ("CQ" == key) now = cq_color_;
+      else if ("CallingMe" == key) now = my_call_color_;
+      else if ("Called" == key) now = tx_color_;
+      else if ("Others" == key) now = Win11Theme::isDark () ? QColor {"#9AA4B2"} : QColor {"#5A6472"};
+      else if (key.startsWith ("Band_")) now = map_->band_color (key.mid (5));
+      else for (auto const& m : map_colour_list ()) if (key == m.key) now = m.fallback;
+    }
+  QColor const c = QColorDialog::getColor (now, this, tr ("Map colour: %1").arg (title));
+  if (!c.isValid ()) return;
+  map_colours_[key] = c;
+  settings_->beginGroup ("MapColours");
+  settings_->setValue (key, c.name ());
+  settings_->endGroup ();
+  apply_map_colours ();
 }
 
 // Map colours: the dots, the worked grids and the Heard me lines

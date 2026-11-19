@@ -127,6 +127,7 @@
 #include <QSoundEffect>
 #include <QDialogButtonBox>
 #include <QTreeWidget>
+#include <QColorDialog>
 #include <QHeaderView>
 #include <QPushButton>
 #include <QDialog>
@@ -18205,6 +18206,26 @@ void MainWindow::setup_extras ()
     row->addWidget (m_colourKey, 1);
     ui->verticalLayout_3->insertLayout (at, row);
     m_colourKey->set_items (m_config.decode_highlighting ().items ());
+    // double-click a colour in the key to change it there and then
+    connect (m_colourKey, &ColourKeyStrip::colour_clicked, this, [this] (DecodeHighlightingModel::Highlight type) {
+        auto items = m_config.decode_highlighting ().items ();
+        for (auto& item : items)
+          {
+            if (item.type_ != type) continue;
+            bool const has_bg = Qt::NoBrush != item.background_.style ();
+            QColor const was = has_bg ? item.background_.color () : item.foreground_.color ();
+            auto const name = DecodeHighlightingModel::highlight_name (type);
+            QColor const c = QColorDialog::getColor (was, this, has_bg ? tr ("%1: highlight colour").arg (name)
+                                                                       : tr ("%1: text colour").arg (name));
+            if (!c.isValid () || c == was) return;
+            if (has_bg) item.background_ = QBrush {c};
+            else item.foreground_ = QBrush {c};
+            m_config.set_decode_highlighting (items);
+            m_colourKey->set_items (items);
+            update_conditions_colors ();
+            return;
+          }
+      });
     connect (m_colourKey, &ColourKeyStrip::edit, this, [this] {
         m_config.select_colors_tab ();
         on_actionSettings_triggered ();

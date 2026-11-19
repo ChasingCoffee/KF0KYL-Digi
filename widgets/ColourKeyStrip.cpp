@@ -56,7 +56,7 @@ void ColourKeyStrip::set_items (DecodeHighlightingModel::HighlightItems const& i
       QColor const bg = Qt::NoBrush != item.background_.style () ? item.background_.color () : QColor {};
       QColor const fg = Qt::NoBrush != item.foreground_.style () ? item.foreground_.color () : QColor {};
       if (!bg.isValid () && !fg.isValid ()) continue;
-      chips_ << Chip {short_name (item.type_), fg, bg};
+      chips_ << Chip {short_name (item.type_), fg, bg, item.type_, QRectF {}};
     }
   updateGeometry ();
   update ();
@@ -91,9 +91,10 @@ void ColourKeyStrip::paintEvent (QPaintEvent *)
   // as many chips as fit, then a count of the rest
   double x = 0.;
   hidden_ = 0;
+  for (auto& c : chips_) c.rect = QRectF {};
   for (int i = 0; i < chips_.size (); ++i)
     {
-      auto const& c = chips_[i];
+      auto& c = chips_[i];
       double const w = fm.horizontalAdvance (c.text) + 2 * pad;
       double const more_w = i + 1 < chips_.size () ? fm.horizontalAdvance ("+99") + 2 * pad + gap : 0.;
       if (x + w + more_w + edit_w > width ())
@@ -102,6 +103,7 @@ void ColourKeyStrip::paintEvent (QPaintEvent *)
           break;
         }
       QRectF const r {x, top, w, h};
+      c.rect = r;
       QColor fg = c.fg;
       if (c.bg.isValid ())
         {
@@ -149,6 +151,18 @@ void ColourKeyStrip::mouseMoveEvent (QMouseEvent * e)
   update ();
 }
 
+void ColourKeyStrip::mouseDoubleClickEvent (QMouseEvent * e)
+{
+  for (auto const& c : chips_)
+    {
+      if (c.rect.contains (e->pos ()))
+        {
+          Q_EMIT colour_clicked (c.type);
+          return;
+        }
+    }
+}
+
 void ColourKeyStrip::mouseReleaseEvent (QMouseEvent * e)
 {
   if (Qt::LeftButton == e->button () && edit_rect_.contains (e->pos ())) Q_EMIT edit ();
@@ -166,7 +180,7 @@ bool ColourKeyStrip::event (QEvent * e)
       else
         {
           // every colour, first one wins when more than one applies
-          QString text = tr ("<b>Band Activity colours</b>, top one wins:");
+          QString text = tr ("<b>Band Activity colours</b>, top one wins. Double-click one to change it:");
           for (auto const& c : chips_)
             {
               QColor const swatch = c.bg.isValid () ? c.bg : c.fg;

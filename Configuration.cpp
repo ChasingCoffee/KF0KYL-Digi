@@ -1057,6 +1057,13 @@ QDir Configuration::temp_dir () const {return m_->temp_dir_;}
 
 void Configuration::select_tab (int index) {m_->ui_->configuration_tabs->setCurrentIndex (index);}
 void Configuration::select_colors_tab () {m_->ui_->configuration_tabs->setCurrentWidget (m_->ui_->colors_tab);}
+void Configuration::set_decode_highlighting (DecodeHighlightingModel::HighlightItems const& items)
+{
+  m_->decode_highlighing_model_.items (items);
+  m_->next_decode_highlighing_model_.items (items);
+  m_->settings_->setValue ("DecodeHighlighting", QVariant::fromValue (items));
+  Q_EMIT decode_highlighting_changed (m_->decode_highlighing_model_);
+}
 int Configuration::exec () {return m_->exec ();}
 bool Configuration::is_active () const {return m_->isVisible ();}
 

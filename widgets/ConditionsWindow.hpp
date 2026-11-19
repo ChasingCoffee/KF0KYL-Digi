@@ -211,6 +211,7 @@ private:
   void fetch_psk ();
   void update_psk_live ();
   void map_colours_dialog ();
+  void pick_map_colour (QString const& key, QString const& name);
   void load_map_colours ();
   void apply_map_colours ();
   QHash<QString, QColor> map_colours_;     // the ones chosen in Map colours, by key

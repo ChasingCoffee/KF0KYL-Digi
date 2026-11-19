@@ -25,15 +25,18 @@ public:
   QSize minimumSizeHint () const override;
 
   Q_SIGNAL void edit ();
+  // a chip double-clicked: the highlight it stands for
+  Q_SIGNAL void colour_clicked (DecodeHighlightingModel::Highlight);
 
 protected:
   void paintEvent (QPaintEvent *) override;
   void mouseMoveEvent (QMouseEvent *) override;
   void mouseReleaseEvent (QMouseEvent *) override;
+  void mouseDoubleClickEvent (QMouseEvent *) override;
   bool event (QEvent *) override;
 
 private:
-  struct Chip {QString text; QColor fg; QColor bg;};
+  struct Chip {QString text; QColor fg; QColor bg; DecodeHighlightingModel::Highlight type; QRectF rect;};
   static QString short_name (DecodeHighlightingModel::Highlight);
   QVector<Chip> chips_;
   QRectF edit_rect_;

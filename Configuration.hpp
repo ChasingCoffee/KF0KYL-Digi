@@ -8,6 +8,7 @@
 
 #include "Radio.hpp"
 #include "models/IARURegions.hpp"
+#include "models/DecodeHighlightingModel.hpp"
 #include "Audio/AudioDevice.hpp"
 #include "Transceiver/Transceiver.hpp"
 #include "otpgenerator.h"
@@ -80,6 +81,8 @@ public:
 
   void select_tab (int);
   void select_colors_tab ();
+  // change the highlight colours from outside Settings (they're saved)
+  void set_decode_highlighting (DecodeHighlightingModel::HighlightItems const&);
   int exec ();
   bool is_active () const;
 
