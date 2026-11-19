@@ -38,6 +38,9 @@ rebuilt to be easier on the eyes and to put more of your station in front of you
 | Live space weather, solar images and NCDXF beacons | | ✅ |
 | World map of everyone you're hearing, with gray line and aurora | | ✅ |
 | VOACAP propagation for your power and mode, painted on the map | | ✅ |
+| Worked stations and worked grids on the map, today or all time | | ✅ |
+| Lines to the stations that heard you (PSK Reporter) | | ✅ |
+| Tells you about new versions and downloads them | | ✅ |
 | Click a station on the map to call it | | ✅ |
 | Automatic upload to your QRZ Logbook, no duplicates | | ✅ |
 | Name, location and QRZ photo of the station you're working | | ✅ |
@@ -118,6 +121,17 @@ No website, no separate program. KF0KYL Digi runs the VOACAP engine itself.
 
 ---
 
+### 🟣 Worked stations, worked grids and who heard you *(new in 1.2.1)*
+
+![Worked grids and Heard me on the map](docs/images/heard-me.png)
+
+- **Worked:** stations already in your log on this band get their own colour. Click the
+  **Worked** chip in the legend to switch between *Worked before*, *Worked today* and hidden.
+- **Worked grids:** shades every grid square you've logged on the band, or just today's.
+- **Heard me:** a line to every station that reported hearing you in the last 30 minutes,
+  from PSK Reporter. Green is a strong signal, yellow fair, orange weak; a key on the map
+  explains it, and pointing at a station shows its call, dB and distance.
+
 ## 📈 A better waterfall
 
 - **Built into the main window**, so there's one window to manage. Prefer it on a second
@@ -164,6 +178,25 @@ Tx1–Tx4 and Tx6.
 - The count starts over as soon as the message changes (the other station answered
   and Auto Seq moved on) or when you turn Enable Tx back on.
 - Your limits are remembered between sessions.
+
+## 🔎 Filters for what you want *(new in 1.2.1)*
+
+At the top of the **Filters** menu:
+
+- **Show only new DXCC and grids on this band** hides everyone whose country and grid
+  you've already got on the band, the way GridTracker does.
+- **Hide signals weaker than** a level you pick, from −20 to 0 dB.
+
+Anything sent to you always shows, whatever the filters say.
+
+## 🔔 A sound when you log, and updates that find you *(new in 1.2.1)*
+
+- **Tools → Sound when a QSO is logged…** plays a .wav file of your choice through your
+  computer's speakers each time a contact goes in the log.
+- **Help → Check for updates…** and a quiet check when the program starts (once a day,
+  and you can turn it off). When a new version is out you see what's new and can download
+  it right there. On Windows, KF0KYL Digi closes and the installer starts; on Linux and the
+  Pi the file is saved and you get the one-line install command.
 
 ## 🧳 Lives alongside WSJT-X
 

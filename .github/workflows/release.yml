@@ -115,10 +115,14 @@ jobs:
           - **Raspberry Pi 4/5 (64-bit Raspberry Pi OS, Trixie):** \`kf0kyldigi-${VERSION}-linux-aarch64.deb\`, install with \`sudo apt install ./kf0kyldigi-${VERSION}-linux-aarch64.deb\`
           - **Linux PC:** the \`linux-x86_64\` AppImage or .deb
 
-          See the [README](https://github.com/${GITHUB_REPOSITORY}#readme) for what's new and how to set up the QRZ features.
+          See the [README](https://github.com/${GITHUB_REPOSITORY}#readme) for everything it does and how to set up the QRZ features.
 
           KF0KYL Digi is a modified version of WSJT-X and is not endorsed by the WSJT Development Team. Free software under the GNU GPL v3; source code included below.
           NOTES
+          # what's new in this version, if it's written up, goes at the top
+          if [ -f "docs/release-notes/${VERSION}.md" ]; then
+            { head -n 3 notes.md; cat "docs/release-notes/${VERSION}.md"; echo; tail -n +4 notes.md; } > notes.new && mv notes.new notes.md
+          fi
           gh release create "v${VERSION}" release/* \
             --target "${GITHUB_SHA}" \
             --title "KF0KYL Digi ${VERSION}" \
