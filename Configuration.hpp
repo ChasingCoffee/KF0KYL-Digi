@@ -79,6 +79,7 @@ public:
   ~Configuration ();
 
   void select_tab (int);
+  void select_colors_tab ();
   int exec ();
   bool is_active () const;
 

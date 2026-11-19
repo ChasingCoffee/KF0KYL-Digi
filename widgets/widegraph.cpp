@@ -742,12 +742,16 @@ void WideGraph::resizeEvent (QResizeEvent * e)
   if (m_controlsScroll)
     {
       // tall enough for the controls, plus the scroll bar when it shows
+      // when the window is too short for them, they scroll up and down
+      // too and the waterfall keeps some room
+      int const bar = m_controlsScroll->horizontalScrollBar ()->sizeHint ().height ();
+      int const room = qMax (40, height () - 110);
       int h = ui->controls_widget->minimumSizeHint ().height ();
-      if (ui->controls_widget->minimumSizeHint ().width () > m_controlsScroll->width ())
-        {
-          h += m_controlsScroll->horizontalScrollBar ()->sizeHint ().height ();
-        }
-      m_controlsScroll->setFixedHeight (h);
+      bool const too_short = h > room;
+      int const width_left = m_controlsScroll->width () - (too_short ? m_controlsScroll->verticalScrollBar ()->sizeHint ().width () : 0);
+      if (ui->controls_widget->minimumSizeHint ().width () > width_left) h += bar;
+      m_controlsScroll->setVerticalScrollBarPolicy (too_short ? Qt::ScrollBarAsNeeded : Qt::ScrollBarAlwaysOff);
+      m_controlsScroll->setFixedHeight (qMin (h, room));
     }
   if (m_fitBand && m_fitBand->isChecked ()) m_fitTimer->start ();
 }

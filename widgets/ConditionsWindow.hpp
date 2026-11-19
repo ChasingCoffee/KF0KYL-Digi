@@ -56,8 +56,10 @@ public:
   void set_my_call (QString const& call);
   void set_my_grid (QString const& grid);
   // the log on the band the radio is on: calls and grids worked there
+  // all_grids and today_all_grids are the same on every band
   void set_worked (QString const& band, QSet<QString> const& calls, QSet<QString> const& grids,
-                   QSet<QString> const& today_calls, QSet<QString> const& today_grids);
+                   QSet<QString> const& today_calls, QSet<QString> const& today_grids,
+                   QSet<QString> const& all_grids, QSet<QString> const& today_all_grids);
   void set_dx (QString const& call, QString const& grid);
   void set_miles (bool miles);         // Settings > General > Display distance in miles
   // a decoded station; grid may be empty, then lat/lon come from the
@@ -199,8 +201,19 @@ private:
   QAbstractButton * psk_box_;
   int worked_mode_ {0};          // 0 worked before, 1 worked today, 2 hidden
   QTimer * psk_timer_ {nullptr};
+  QTimer * psk_tick_ {nullptr};
   QDateTime psk_asked_;
+  class PskLive * psk_live_ {nullptr};
+  class QAction * grids_all_action_ {nullptr};
+  class QAction * psk_all_action_ {nullptr};
+  class QAction * psk_live_action_ {nullptr};
+  class QActionGroup * psk_minutes_group_ {nullptr};
   void fetch_psk ();
+  void update_psk_live ();
+  void map_colours_dialog ();
+  void load_map_colours ();
+  void apply_map_colours ();
+  QHash<QString, QColor> map_colours_;     // the ones chosen in Map colours, by key
   QAbstractButton * aurora_box_;
   QAbstractButton * rain_box_;
   class QCheckBox * show_cq_;

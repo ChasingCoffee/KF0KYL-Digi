@@ -162,11 +162,11 @@ void DisplayText::insertText(QString const& text, QColor bg, QColor fg
       block_format.setBackground (bg);
     }
   format.clearForeground ();
-  if (bg.isValid () && (!fg.isValid () || std::abs (fg.lightness () - bg.lightness ()) < 100))
+  if (bg.isValid () && !fg.isValid ())
     {
-      // no usable text colour for this highlight: dark text on a light
+      // no text colour chosen for this highlight: dark text on a light
       // highlight, light text on a dark one, so the line can be read in
-      // any colour scheme
+      // any colour scheme (a colour that was chosen is always used)
       fg = bg.lightness () > 140 ? QColor {"#000000"} : QColor {"#FFFFFF"};
     }
   if (fg.isValid ())

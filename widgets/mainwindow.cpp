@@ -123,8 +123,13 @@
 #include "widgets/qsymonitor.h"
 #include "Network/eqsl.h"
 #include "widgets/UpdateChecker.hpp"
+#include "widgets/ColourKeyStrip.hpp"
 #include <QSoundEffect>
 #include <QDialogButtonBox>
+#include <QTreeWidget>
+#include <QHeaderView>
+#include <QPushButton>
+#include <QDialog>
 #include <QSlider>
 
 #define FCL fortran_charlen_t
@@ -5210,6 +5215,7 @@ QString MainWindow::tx_repeat_key () const
 
 void MainWindow::apply_display_colors ()
 {
+  if (m_colourKey) m_colourKey->set_items (m_config.decode_highlighting ().items ());
   auto recolor = [] (QLabel * label, QString const& text, QColor const& background) {
     // keep the rest of the style (font, out-of-band red) and swap the colours
     static QHash<QLabel *, QString> originals;
@@ -5388,6 +5394,7 @@ void MainWindow::trim_view (bool checked)
   }
   if (m_mode != "FreqCal" && m_mode != "WSPR" && m_mode != "FST4W") {
     ui->lh_decodes_title_label->setVisible(!checked);
+    if (m_colourKey) m_colourKey->setVisible ((!checked) && m_settings->value ("ColourKey", true).toBool ());
     ui->rh_decodes_title_label->setVisible(!checked);
   }
   ui->lh_decodes_headings_label->setVisible(!checked);
@@ -12412,6 +12419,7 @@ void MainWindow::switch_mode (Mode mode)
     ui->DX_controls_widget->setVisible(false);
     ui->rh_decodes_widget->setVisible (false);     // UR disable for AL + widescreen versions
     ui->lh_decodes_title_label->setVisible(false);
+    if (m_colourKey) m_colourKey->setVisible ((false) && m_settings->value ("ColourKey", true).toBool ());
   }
   QTimer::singleShot (500, [=] {
     if (!(m_mode=="Echo" or ((m_mode=="Q65" or m_mode=="JT65") && m_config.decode_at_52s()))
@@ -12429,6 +12437,7 @@ void MainWindow::WSPR_config(bool b)
   ui->DX_controls_widget->setVisible (!b or (m_mode=="Echo"));
   ui->WSPR_controls_widget->setVisible (b);
   ui->lh_decodes_title_label->setVisible(!b and ui->cbMenus->isChecked());
+  if (m_colourKey) m_colourKey->setVisible ((!b and ui->cbMenus->isChecked()) && m_settings->value ("ColourKey", true).toBool ());
   ui->logQSOButton->setVisible(!b);
   ui->DecodeButton->setEnabled(!b);
   bool bFST4W=(m_mode=="FST4W");
@@ -18171,6 +18180,46 @@ void MainWindow::setup_extras ()
   ui->menuTools->addAction (sound);
   connect (sound, &QAction::triggered, this, &MainWindow::qso_sound_dialog);
 
+  // other logs whose QSOs count as worked (read only)
+  auto * logs = new QAction {tr ("Logs that count as worked..."), this};
+  logs->setToolTip (tr ("Add ADIF files, such as an old log or one from another program, whose QSOs count as worked"));
+  ui->menuTools->addAction (logs);
+  connect (logs, &QAction::triggered, this, &MainWindow::extra_logs_dialog);
+  if (!m_settings->value ("ExtraLogs").toStringList ().isEmpty ()) apply_extra_logs ();
+
+  // what the Band Activity colours mean, beside its title
+  {
+    auto * row = new QHBoxLayout;
+    row->setContentsMargins (0, 0, 0, 0);
+    row->setSpacing (10);
+    int const at = ui->verticalLayout_3->indexOf (ui->lh_decodes_title_label);
+    ui->verticalLayout_3->removeWidget (ui->lh_decodes_title_label);
+    ui->lh_decodes_title_label->setAlignment (Qt::AlignLeft | Qt::AlignVCenter);
+    ui->lh_decodes_title_label->setSizePolicy (QSizePolicy::Fixed, QSizePolicy::Preferred);
+    row->addWidget (ui->lh_decodes_title_label);
+    m_colourKey = new ColourKeyStrip {ui->layoutWidget};
+    m_colourKey->setVisible (m_settings->value ("ColourKey", true).toBool ());
+    m_colourKey->setContextMenuPolicy (Qt::ActionsContextMenu);
+    auto * hide_key = new QAction {tr ("Hide the colour key (View menu brings it back)"), m_colourKey};
+    m_colourKey->addAction (hide_key);
+    row->addWidget (m_colourKey, 1);
+    ui->verticalLayout_3->insertLayout (at, row);
+    m_colourKey->set_items (m_config.decode_highlighting ().items ());
+    connect (m_colourKey, &ColourKeyStrip::edit, this, [this] {
+        m_config.select_colors_tab ();
+        on_actionSettings_triggered ();
+      });
+    auto * show_key = new QAction {tr ("Colour key beside Band Activity"), this};
+    show_key->setCheckable (true);
+    show_key->setChecked (m_colourKey->isVisible () || m_settings->value ("ColourKey", true).toBool ());
+    ui->menuView->addAction (show_key);
+    connect (show_key, &QAction::toggled, this, [this] (bool on) {
+        m_settings->setValue ("ColourKey", on);
+        m_colourKey->setVisible (on && ui->lh_decodes_title_label->isVisible ());
+      });
+    connect (hide_key, &QAction::triggered, show_key, [show_key] {show_key->setChecked (false);});
+  }
+
   // updates
   m_updates = new UpdateChecker {m_settings, this};
   auto * check = new QAction {tr ("Check for updates..."), this};
@@ -18216,7 +18265,10 @@ void MainWindow::update_conditions_worked (bool force)
   m_workedBand = band;
   QSet<QString> today_calls, today_grids;
   worked_today (band, today_calls, today_grids);
-  m_conditions->set_worked (band, m_logBook.worked_calls (band), m_logBook.worked_grids (band), today_calls, today_grids);
+  QSet<QString> any_calls, today_all_grids;
+  worked_today (QString {}, any_calls, today_all_grids);
+  m_conditions->set_worked (band, m_logBook.worked_calls (band), m_logBook.worked_grids (band), today_calls, today_grids,
+                            m_logBook.worked_grids (QString {}), today_all_grids);
 }
 
 // calls and grids logged on this band since 00:00 UTC, read from the log file
@@ -18252,6 +18304,123 @@ void MainWindow::worked_today (QString const& band, QSet<QString>& calls, QSet<Q
       if (call.size ()) calls << call;
       auto const grid = field (rec, "GRIDSQUARE").left (4).toUpper ();
       if (grid.size () == 4) grids << grid;
+    }
+}
+
+void MainWindow::apply_extra_logs ()
+{
+  QStringList paths;
+  for (auto const& path : m_settings->value ("ExtraLogs").toStringList ())
+    {
+      if (QFileInfo::exists (path)) paths << path;
+    }
+  WorkedBefore::set_extra_logs (paths);
+  m_logBook.rescan ();
+}
+
+// ADIF files whose QSOs count as worked as well as the log; they're only
+// ever read
+void MainWindow::extra_logs_dialog ()
+{
+  QDialog dialog {this};
+  dialog.setWindowTitle (tr ("Logs that count as worked"));
+  dialog.resize (620, 360);
+  auto * v = new QVBoxLayout {&dialog};
+  auto * intro = new QLabel {tr ("QSOs in these ADIF files count as worked, as well as the ones in your log. "
+                                 "They're read when the program starts and never written to."), &dialog};
+  intro->setWordWrap (true);
+  v->addWidget (intro);
+  auto * list = new QTreeWidget {&dialog};
+  list->setColumnCount (2);
+  list->setHeaderLabels ({tr ("File"), tr ("QSOs")});
+  list->setRootIsDecorated (false);
+  list->header ()->setStretchLastSection (false);
+  list->header ()->setSectionResizeMode (0, QHeaderView::Stretch);
+  list->header ()->setSectionResizeMode (1, QHeaderView::ResizeToContents);
+  v->addWidget (list, 1);
+  auto * total = new QLabel {&dialog};
+  v->addWidget (total);
+
+  auto count = [] (QString const& path) {
+    QFile file {path};
+    if (!file.open (QIODevice::ReadOnly)) return -1;
+    return QString::fromUtf8 (file.readAll ()).count (QRegularExpression {"<eor>", QRegularExpression::CaseInsensitiveOption});
+  };
+  auto add_row = [&] (QString const& path, bool is_log) {
+    auto * item = new QTreeWidgetItem {list};
+    item->setText (0, is_log ? tr ("%1  (your log)").arg (QDir::toNativeSeparators (path)) : QDir::toNativeSeparators (path));
+    item->setData (0, Qt::UserRole, is_log ? QString {} : path);
+    int const n = count (path);
+    item->setText (1, n < 0 ? tr ("can't be read") : QLocale {}.toString (n));
+    item->setData (1, Qt::UserRole, qMax (0, n));
+    item->setTextAlignment (1, Qt::AlignRight | Qt::AlignVCenter);
+    if (is_log) item->setFlags (item->flags () & ~Qt::ItemIsSelectable);
+  };
+  auto update_total = [&] {
+    int sum = 0;
+    for (int i = 0; i < list->topLevelItemCount (); ++i) sum += list->topLevelItem (i)->data (1, Qt::UserRole).toInt ();
+    total->setText (tr ("%L1 QSOs in %2 files count as worked.").arg (sum).arg (list->topLevelItemCount ()));
+  };
+  add_row (m_logBook.path (), true);
+  for (auto const& path : m_settings->value ("ExtraLogs").toStringList ()) add_row (path, false);
+  update_total ();
+
+  auto * buttons = new QHBoxLayout;
+  auto * add = new QPushButton {tr ("Add..."), &dialog};
+  auto * remove = new QPushButton {tr ("Remove"), &dialog};
+  auto * again = new QPushButton {tr ("Read again now"), &dialog};
+  remove->setEnabled (false);
+  buttons->addWidget (add);
+  buttons->addWidget (remove);
+  buttons->addStretch ();
+  buttons->addWidget (again);
+  v->addLayout (buttons);
+  auto * box = new QDialogButtonBox {QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog};
+  v->addWidget (box);
+  connect (box, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+  connect (box, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+  connect (list, &QTreeWidget::itemSelectionChanged, &dialog, [&] {
+      auto const sel = list->selectedItems ();
+      remove->setEnabled (!sel.isEmpty () && !sel[0]->data (0, Qt::UserRole).toString ().isEmpty ());
+    });
+  connect (add, &QPushButton::clicked, &dialog, [&] {
+      auto const files = QFileDialog::getOpenFileNames (&dialog, tr ("Add logs"), QDir::homePath (),
+                                                        tr ("ADIF logs (*.adi *.adif *.ADI *.ADIF);;All files (*)"));
+      for (auto const& f : files)
+        {
+          bool there = f == m_logBook.path ();
+          for (int i = 0; i < list->topLevelItemCount (); ++i) there |= list->topLevelItem (i)->data (0, Qt::UserRole).toString () == f;
+          if (!there) add_row (f, false);
+        }
+      update_total ();
+    });
+  connect (remove, &QPushButton::clicked, &dialog, [&] {
+      for (auto * item : list->selectedItems ())
+        {
+          if (!item->data (0, Qt::UserRole).toString ().isEmpty ()) delete item;
+        }
+      update_total ();
+    });
+  auto paths = [&] {
+    QStringList out;
+    for (int i = 0; i < list->topLevelItemCount (); ++i)
+      {
+        auto const p = list->topLevelItem (i)->data (0, Qt::UserRole).toString ();
+        if (!p.isEmpty ()) out << p;
+      }
+    return out;
+  };
+  connect (again, &QPushButton::clicked, &dialog, [&] {
+      m_settings->setValue ("ExtraLogs", paths ());
+      apply_extra_logs ();
+      statusBar ()->showMessage (tr ("Reading the logs again..."), 4000);
+    });
+  if (QDialog::Accepted != dialog.exec ()) return;
+  auto const chosen = paths ();
+  if (chosen != m_settings->value ("ExtraLogs").toStringList ())
+    {
+      m_settings->setValue ("ExtraLogs", chosen);
+      apply_extra_logs ();
     }
 }
 

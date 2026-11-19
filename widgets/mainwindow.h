@@ -95,6 +95,7 @@ class FastGraph;
 class WideGraph;
 class LogQSO;
 class UpdateChecker;
+class ColourKeyStrip;
 class QSoundEffect;
 class Transceiver;
 class MessageAveraging;
@@ -1025,6 +1026,9 @@ private:
   void worked_today (QString const& band, QSet<QString>& calls, QSet<QString>& grids) const;
   QSoundEffect * m_qsoSound {nullptr};
   UpdateChecker * m_updates {nullptr};
+  ColourKeyStrip * m_colourKey {nullptr};
+  void extra_logs_dialog ();
+  void apply_extra_logs ();
   // keep the main window on the screen; anything that doesn't fit scrolls
   QScrollArea * m_centralScroll {nullptr};
   void fit_window_to_screen ();

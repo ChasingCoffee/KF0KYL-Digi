@@ -35,6 +35,8 @@ public:
   bool grid_worked (QString const& grid, QString const& mode, QString const& band) const;
   // every four-character grid in the log on this band (any band if empty), any mode
   QSet<QString> grids (QString const& band) const;
+  // other ADIF logs read along with this program's own (takes effect on reload)
+  static void set_extra_logs (QStringList const&);
   // every call in the log on this band (any band if empty), any mode
   QSet<QString> calls (QString const& band) const;
   bool call_worked (QString const& call, QString const& mode, QString const& band) const;

@@ -279,9 +279,24 @@ namespace
     return QString {};
   }
 
-  worked_before_database_type loader (QString const& path, AD1CCty const * prefixes)
+  // other loggers may leave out BAND: work it out from FREQ (MHz)
+  QString band_from_freq (QString const& freq)
   {
-    worked_before_database_type worked;
+    bool ok;
+    double const f = freq.toDouble (&ok);
+    if (!ok) return QString {};
+    struct Band {double lo, hi; char const * name;};
+    static Band const bands[] = {
+      {1.8, 2.0, "160M"}, {3.5, 4.0, "80M"}, {5.25, 5.45, "60M"}, {7.0, 7.3, "40M"}, {10.1, 10.15, "30M"},
+      {14.0, 14.35, "20M"}, {18.068, 18.168, "17M"}, {21.0, 21.45, "15M"}, {24.89, 24.99, "12M"},
+      {28.0, 29.7, "10M"}, {50.0, 54.0, "6M"}, {70.0, 71.0, "4M"}, {144.0, 148.0, "2M"}, {420.0, 450.0, "70CM"},
+    };
+    for (auto const& b : bands) if (f >= b.lo && f <= b.hi) return b.name;
+    return QString {};
+  }
+
+  void load_file (QString const& path, AD1CCty const * prefixes, worked_before_database_type& worked)
+  {
     QFile inputFile {path};
     if (inputFile.exists ())
       {
@@ -342,9 +357,11 @@ namespace
                           {
                             mode = extractField (record, "SUBMODE").toUpper ();
                           }
+                        auto band = extractField (record, "BAND").toUpper ();
+                        if (band.isEmpty ()) band = band_from_freq (extractField (record, "FREQ"));
                         worked.emplace (call.toUpper ()
                                         , extractField (record, "GRIDSQUARE").left (4).toUpper () // not interested in 6-digit grids
-                                        , extractField (record, "BAND").toUpper ()
+                                        , band
                                         , mode
                                         , entity.entity_name
                                         , entity.continent
@@ -359,8 +376,32 @@ namespace
             throw LoaderException (std::runtime_error {QCoreApplication::translate ("WorkedBefore", "Error opening ADIF log file for read: %0").arg (inputFile.errorString ()).toLocal8Bit ()});
           }
       }
+  }
+
+  // this program's log, then any other logs the user added (Tools > Logs
+  // that count as worked); a problem with one of those is skipped
+  worked_before_database_type loader (QStringList const& paths, AD1CCty const * prefixes)
+  {
+    worked_before_database_type worked;
+    for (int i = 0; i < paths.size (); ++i)
+      {
+        if (0 == i)
+          {
+            load_file (paths[i], prefixes, worked);
+            continue;
+          }
+        try
+          {
+            load_file (paths[i], prefixes, worked);
+          }
+        catch (...)
+          {
+          }
+      }
     return worked;
   }
+
+  QStringList extra_logs;
 }
 
 class WorkedBefore::impl final
@@ -376,7 +417,7 @@ public:
   void reload ()
   {
     prefixes_.reload (configuration_);
-    async_loader_ = QtConcurrent::run (loader, path_, &prefixes_);
+    async_loader_ = QtConcurrent::run (loader, QStringList {path_} + extra_logs, &prefixes_);
     loader_watcher_.setFuture (async_loader_);
   }
 
@@ -414,6 +455,11 @@ WorkedBefore::WorkedBefore (Configuration const * configuration)
 QString WorkedBefore::cty_version () const
 {
   return m_->prefixes_.version ();
+}
+
+void WorkedBefore::set_extra_logs (QStringList const& paths)
+{
+  extra_logs = paths;
 }
 
 void WorkedBefore::reload ()

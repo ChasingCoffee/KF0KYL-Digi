@@ -59,6 +59,13 @@
 #include <QFontMetricsF>
 #include <QPolygonF>
 #include <QButtonGroup>
+#include <QActionGroup>
+#include <QColorDialog>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QPushButton>
+#include <QSlider>
+#include "PskLive.hpp"
 #include <QPushButton>
 #include <QProgressBar>
 #include <QColorDialog>
@@ -535,11 +542,47 @@ public:
   QSet<QString> today_calls;         // the same, logged since 00:00 UTC
   QSet<QString> today_grids;
   QSet<QString> const& calls_shown () const {return 1 == worked_mode ? today_calls : worked_calls;}
-  QSet<QString> const& grids_shown () const {return 1 == worked_mode ? today_grids : worked_grids;}
-  struct Spot {QString call; QString grid; double lat; double lon; int snr; double mhz; QDateTime when;};
-  QVector<Spot> psk_spots;           // stations that heard you (PSK Reporter)
+  QSet<QString> all_grids;           // the same on every band
+  QSet<QString> today_all_grids;
+  bool grids_all_bands {false};
+  QSet<QString> const& grids_shown () const
+  {
+    if (grids_all_bands) return 1 == worked_mode ? today_all_grids : all_grids;
+    return 1 == worked_mode ? today_grids : worked_grids;
+  }
+  QColor grid_color;                 // invalid: the scheme's second accent
+  int grid_opacity {40};             // percent
+  struct Spot {QString call; QString grid; QString band; double lat; double lon; int snr; double mhz; QDateTime when;};
+  QVector<Spot> psk_spots;           // stations that heard you (PSK Reporter), the ones shown
   QDateTime psk_updated;
   QString psk_error;
+  bool psk_all_bands {false};        // every band, each in its own colour
+  bool psk_live {false};             // the live feed is connected
+  QDateTime psk_last;                // when the last report came in
+  int psk_minutes {30};
+  QColor psk_strong {"#3DDC84"}, psk_fair {"#FFD54A"}, psk_weak {"#FF7A45"};
+  QHash<QString, QColor> band_colors;
+  QColor others_color;               // invalid: grey
+  QHash<QString, Spot> psk_store;    // every report kept, one per station and band
+
+  // the reports to draw: recent enough, and on this band unless all bands
+  void rebuild_psk ()
+  {
+    auto const cutoff = QDateTime::currentDateTimeUtc ().addSecs (-60 * qMax (60, psk_minutes));
+    for (auto it = psk_store.begin (); it != psk_store.end (); )
+      {
+        if (it->when < cutoff) it = psk_store.erase (it);
+        else ++it;
+      }
+    auto const shown_from = QDateTime::currentDateTimeUtc ().addSecs (-60 * psk_minutes);
+    psk_spots.clear ();
+    for (auto const& sp : psk_store)
+      {
+        if (sp.when < shown_from) continue;
+        if (!psk_all_bands && !band_label.isEmpty () && sp.band != band_label) continue;
+        psk_spots << sp;
+      }
+  }
   bool miles {false};
   QColor cq_color {"#3FB950"};
   QColor my_call_color {"#FF4D4D"};
@@ -904,7 +947,7 @@ protected:
 
     // stations heard in the last 30 minutes, in Band Activity's colours
     auto const now = QDateTime::currentDateTimeUtc ();
-    QColor const neutral = Win11Theme::isDark () ? QColor {"#9AA4B2"} : QColor {"#5A6472"};
+    QColor const neutral = others_color.isValid () ? others_color : Win11Theme::isDark () ? QColor {"#9AA4B2"} : QColor {"#5A6472"};
     for (auto it = stations.cbegin (); it != stations.cend (); ++it)
       {
         auto const& s = it.value ();
@@ -1028,7 +1071,7 @@ protected:
   // click one to hide or show those stations
   void draw_legend (QPainter& p, QRect const& r)
   {
-    QColor const neutral = Win11Theme::isDark () ? QColor {"#9AA4B2"} : QColor {"#5A6472"};
+    QColor const neutral = others_color.isValid () ? others_color : Win11Theme::isDark () ? QColor {"#9AA4B2"} : QColor {"#5A6472"};
     struct Item {QString text; QColor color; bool on;};
     Item const items[] = {
       {QObject::tr ("CQ"), cq_color, show_cq},
@@ -1080,19 +1123,32 @@ protected:
     p.setFont (f);
     if (show_psk)
       {
-        // what the Heard me line colours mean
-        struct Key {QString text; int snr;};
-        Key const keys[] = {
-          {QObject::tr ("Strong  %1 dB or better").arg (QString {"\u2212"} + "5"), 0},
-          {QObject::tr ("Fair  %1 to %2 dB").arg (QString {"\u2212"} + "6", QString {"\u2212"} + "15"), -10},
-          {QObject::tr ("Weak  below %1 dB").arg (QString {"\u2212"} + "15"), -20},
-        };
+        // what the Heard me line colours mean: strength, or the band when
+        // every band is shown
+        struct Key {QString text; QColor color;};
+        QVector<Key> keys;
+        if (psk_all_bands)
+          {
+            QSet<QString> present;
+            for (auto const& sp : psk_spots) present << sp.band;
+            for (auto const& b : band_order ())
+              {
+                if (present.contains (b)) keys << Key {b, band_color (b)};
+              }
+            if (keys.isEmpty ()) keys << Key {QObject::tr ("no reports yet"), QColor {"#9AA4B2"}};
+          }
+        else
+          {
+            keys << Key {QObject::tr ("Strong  %1 dB or better").arg (QString {"\u2212"} + "5"), psk_strong}
+                 << Key {QObject::tr ("Fair  %1 to %2 dB").arg (QString {"\u2212"} + "6", QString {"\u2212"} + "15"), psk_fair}
+                 << Key {QObject::tr ("Weak  below %1 dB").arg (QString {"\u2212"} + "15"), psk_weak};
+          }
         auto bold = f;
         bold.setBold (true);
         QFontMetricsF const bfm {bold};
         auto const title = QObject::tr ("Heard me:");
         double kw = 14 + bfm.horizontalAdvance (title) + 10;
-        for (auto const& k : keys) kw += 24 + fm.horizontalAdvance (k.text) + 16;
+        for (auto const& k : keys) kw += 24 + fm.horizontalAdvance (k.text) + 12;
         QRectF const key_panel {panel.right () + 8, panel.top (), kw, panel.height ()};
         p.setPen (QPen {QColor {255, 255, 255, 40}, 1});
         p.setBrush (QColor {13, 17, 23, 190});
@@ -1106,7 +1162,7 @@ protected:
         p.setFont (f);
         for (auto const& k : keys)
           {
-            QColor const c = psk_color (k.snr);
+            QColor const c = k.color;
             p.setPen (QPen {c, 2.5});
             p.drawLine (QPointF {kx, cy}, QPointF {kx + 16, cy});
             p.setPen (QPen {QColor {0, 0, 0, 190}, 1});
@@ -1116,7 +1172,7 @@ protected:
             p.drawPolygon (d);
             p.setPen (QColor {233, 236, 241});
             p.drawText (QPointF {kx + 22, cy + fm.ascent () / 2 - 1}, k.text);
-            kx += 24 + fm.horizontalAdvance (k.text) + 16;
+            kx += 24 + fm.horizontalAdvance (k.text) + 12;
           }
       }
     QPointF const ring {origin.x () + x + 10, origin.y () + 6 + h / 2};
@@ -1274,9 +1330,9 @@ protected:
         double const km = dist * 6371.;
         int const mins = int (sp.when.secsTo (QDateTime::currentDateTimeUtc ()) / 60);
         QToolTip::showText (global,
-                            QObject::tr ("<b>%1</b> heard you at %2 dB<br/>%3 MHz · %4 %5 · %6 min ago<br/><i>PSK Reporter</i>")
+                            QObject::tr ("<b>%1</b> heard you at %2 dB<br/>%3 MHz (%7) · %4 %5 · %6 min ago<br/><i>PSK Reporter</i>")
                             .arg (slashed (sp.call)).arg (sp.snr).arg (sp.mhz, 0, 'f', 3)
-                            .arg (qRound (miles ? km * 0.621371 : km)).arg (miles ? "mi" : "km").arg (mins), this);
+                            .arg (qRound (miles ? km * 0.621371 : km)).arg (miles ? "mi" : "km").arg (mins).arg (sp.band), this);
         return;
       }
     int const b = beacon_at (pos);
@@ -1878,10 +1934,10 @@ private:
   // grid squares in the log on this band, shaded
   void draw_worked_grids (QPainter& p)
   {
-    QColor fill {Win11Theme::token ("accent2")};
+    QColor fill = grid_color.isValid () ? grid_color : QColor {Win11Theme::token ("accent2")};
     QColor edge = fill;
-    fill.setAlpha (105);
-    edge.setAlpha (200);
+    fill.setAlpha (qBound (5, grid_opacity, 100) * 255 / 100);
+    edge.setAlpha (qMin (255, fill.alpha () + 95));
     p.save ();
     p.setRenderHint (QPainter::Antialiasing);
     p.setPen (QPen {edge, 1});
@@ -1927,12 +1983,43 @@ private:
 
   // stations that heard you, from PSK Reporter: a line to each, coloured
   // by how well they heard you
-  static QColor psk_color (int snr)
+public:
+  QColor psk_color (int snr) const
   {
-    if (snr >= -5) return QColor {"#3DDC84"};
-    if (snr >= -15) return QColor {"#FFD54A"};
-    return QColor {"#FF7A45"};
+    if (snr >= -5) return psk_strong;
+    if (snr >= -15) return psk_fair;
+    return psk_weak;
   }
+
+  static QStringList const& band_order ()
+  {
+    static QStringList const bands {"160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m", "70cm"};
+    return bands;
+  }
+
+  static QColor default_band_color (QString const& band)
+  {
+    static QHash<QString, QColor> const colours {
+      {"160m", QColor {"#A78BFA"}}, {"80m", QColor {"#F472B6"}}, {"60m", QColor {"#FB923C"}}, {"40m", QColor {"#EF4444"}},
+      {"30m", QColor {"#FACC15"}}, {"20m", QColor {"#3DDC84"}}, {"17m", QColor {"#22D3EE"}}, {"15m", QColor {"#3B82F6"}},
+      {"12m", QColor {"#A3E635"}}, {"10m", QColor {"#E879F9"}}, {"6m", QColor {"#F97316"}}, {"2m", QColor {"#FFFFFF"}},
+      {"70cm", QColor {"#94A3B8"}},
+    };
+    return colours.value (band, QColor {"#9AA4B2"});
+  }
+
+  QColor band_color (QString const& band) const
+  {
+    auto const c = band_colors.value (band);
+    return c.isValid () ? c : default_band_color (band);
+  }
+
+  QColor spot_color (Spot const& sp) const
+  {
+    return psk_all_bands ? band_color (sp.band) : psk_color (sp.snr);
+  }
+
+private:
 
   void draw_psk (QPainter& p)
   {
@@ -1941,7 +2028,7 @@ private:
     p.setRenderHint (QPainter::Antialiasing);
     for (auto const& sp : psk_spots)
       {
-        QColor c = psk_color (sp.snr);
+        QColor c = spot_color (sp);
         c.setAlpha (150);
         p.setPen (QPen {c, 1.4});
         draw_great_circle (p, my_lat_, my_lon_, sp.lat, sp.lon);
@@ -1950,7 +2037,7 @@ private:
       {
         auto const pt = to_point (sp.lat, sp.lon);
         p.setPen (QPen {QColor {0, 0, 0, 190}, 1});
-        p.setBrush (psk_color (sp.snr));
+        p.setBrush (spot_color (sp));
         // a small diamond, so they don't look like stations you hear
         QPolygonF d;
         d << pt + QPointF {0, -5} << pt + QPointF {5, 0} << pt + QPointF {0, 5} << pt + QPointF {-5, 0};
@@ -1976,9 +2063,28 @@ private:
     QStringList lines;
     if (show_psk)
       {
-        if (!psk_error.isEmpty ()) lines << QObject::tr ("PSK Reporter: %1").arg (psk_error);
-        else if (!psk_updated.isValid ()) lines << QObject::tr ("PSK Reporter: asking who heard you…");
-        else if (psk_spots.isEmpty ()) lines << QObject::tr ("PSK Reporter: nobody reported hearing you on %1 in the last 30 min").arg (band_label);
+        auto const now = QDateTime::currentDateTimeUtc ();
+        QString head = QObject::tr ("Heard me");
+        if (psk_live)
+          {
+            head += QObject::tr (" · live");
+            if (psk_last.isValid ())
+              {
+                qint64 const secs = qMax<qint64> (0, psk_last.secsTo (now));
+                head += secs < 120 ? QObject::tr (" · last report %1 s ago").arg (secs)
+                                   : QObject::tr (" · last report %1 min ago").arg (secs / 60);
+              }
+          }
+        QSet<QString> bands;
+        for (auto const& sp : psk_spots) bands << sp.band;
+        QString const where = psk_all_bands ? QObject::tr ("all bands") : band_label;
+        QString const span = QObject::tr ("the last %1 min").arg (psk_minutes);
+        if (psk_spots.isEmpty ())
+          {
+            if (!psk_live && !psk_error.isEmpty ()) lines << QObject::tr ("Heard me: PSK Reporter %1").arg (psk_error);
+            else if (!psk_live && !psk_updated.isValid ()) lines << QObject::tr ("Heard me: asking PSK Reporter who heard you…");
+            else lines << head + QObject::tr (" · nobody reported hearing you on %1 in %2").arg (where, span);
+          }
         else
           {
             QString best;
@@ -1990,15 +2096,26 @@ private:
                 if (dist * 6371. > best_km) {best_km = dist * 6371.; best = sp.call;}
               }
             double const shown = miles ? best_km * 0.621371 : best_km;
-            lines << (1 == psk_spots.size () ? QObject::tr ("PSK Reporter: 1 station heard you on %1 in the last 30 min").arg (band_label)
-                      : QObject::tr ("PSK Reporter: %1 stations heard you on %2 in the last 30 min").arg (psk_spots.size ()).arg (band_label))
+            QString count;
+            if (psk_all_bands)
+              {
+                count = 1 == psk_spots.size () ? QObject::tr ("1 station") : QObject::tr ("%1 stations").arg (psk_spots.size ());
+                count += 1 == bands.size () ? QObject::tr (" on 1 band") : QObject::tr (" on %1 bands").arg (bands.size ());
+              }
+            else
+              {
+                count = 1 == psk_spots.size () ? QObject::tr ("1 station on %1").arg (band_label)
+                                               : QObject::tr ("%1 stations on %2").arg (psk_spots.size ()).arg (band_label);
+              }
+            lines << head + QObject::tr (" · %1 in %2").arg (count, span)
                   + QObject::tr (" · farthest %1, %L2 %3").arg (slashed (best)).arg (qRound (shown)).arg (miles ? "mi" : "km");
           }
       }
     if (show_worked_grids)
       {
-        lines << (1 == worked_mode ? QObject::tr ("Grids worked today on %1: %2").arg (band_label).arg (today_grids.size ())
-                                   : QObject::tr ("Worked grids on %1: %2").arg (band_label).arg (worked_grids.size ()));
+        QString const where = grids_all_bands ? QObject::tr ("all bands") : band_label;
+        lines << (1 == worked_mode ? QObject::tr ("Grids worked today on %1: %2").arg (where).arg (grids_shown ().size ())
+                                   : QObject::tr ("Worked grids on %1: %2").arg (where).arg (grids_shown ().size ()));
       }
     if (lines.isEmpty ()) return;
     auto f = font ();
@@ -3416,10 +3533,85 @@ QWidget * ConditionsWindow::build_map_bar ()
   prop_box_ = make_chip (tr ("Propagation"), tr ("<p>VOACAP's map for one band from you: how likely it is to reach each part of the world "
                                                   "this hour, at the power, mode and take-off angle set in the VOACAP box.</p>"
                                                   "<p>Click a band in the VOACAP box to choose it.</p>"), bar);
-  worked_grids_box_ = make_chip (tr ("Worked grids"), tr ("Shade the grid squares in your log on the band you're on"), bar);
-  psk_box_ = make_chip (tr ("Heard me"), tr ("<p>Lines to the stations that reported hearing you on this band in the last "
-                                             "30 minutes, from PSK Reporter. Green: strong, yellow: fair, orange: weak.</p>"
-                                             "<p>Updated every 5 minutes while the map is open.</p>"), bar);
+  worked_grids_box_ = make_chip (tr ("Worked grids"), tr ("<p>Shade the grid squares in your log, on the band you're on or on every band.</p>"
+                                                          "<p>Click the arrow for the choices.</p>"), bar);
+  psk_box_ = make_chip (tr ("Heard me"), tr ("<p>Lines to the stations that reported hearing you, from PSK Reporter. "
+                                             "Reports arrive live, seconds after a station hears you.</p>"
+                                             "<p>Click the arrow to choose the band, how far back to show and the colours.</p>"), bar);
+  {
+    // the arrow beside Worked grids and Heard me opens their choices
+    auto * grids_menu = new QMenu {worked_grids_box_};
+    auto * grids_bands = new QActionGroup {grids_menu};
+    auto * grids_this = grids_menu->addAction (tr ("This band only"));
+    grids_all_action_ = grids_menu->addAction (tr ("All bands"));
+    for (auto * a : {grids_this, grids_all_action_}) {a->setCheckable (true); grids_bands->addAction (a);}
+    grids_menu->addSeparator ();
+    auto * later = grids_menu->addAction (tr ("Confirmed (LoTW, QSL) colours are coming in 1.3.0"));
+    later->setEnabled (false);
+    grids_menu->addSeparator ();
+    connect (grids_menu->addAction (tr ("Colours…")), &QAction::triggered, this, &ConditionsWindow::map_colours_dialog);
+
+    auto * psk_menu = new QMenu {psk_box_};
+    auto * psk_bands = new QActionGroup {psk_menu};
+    auto * psk_this = psk_menu->addAction (tr ("This band only"));
+    psk_all_action_ = psk_menu->addAction (tr ("All bands (lines coloured by band)"));
+    for (auto * a : {psk_this, psk_all_action_}) {a->setCheckable (true); psk_bands->addAction (a);}
+    psk_menu->addSeparator ();
+    psk_live_action_ = psk_menu->addAction (tr ("Live (reports as they arrive)"));
+    psk_live_action_->setCheckable (true);
+    auto * minutes = psk_menu->addMenu (tr ("Show the last"));
+    psk_minutes_group_ = new QActionGroup {minutes};
+    for (int m : {15, 30, 60})
+      {
+        auto * a = minutes->addAction (tr ("%1 minutes").arg (m));
+        a->setCheckable (true);
+        a->setData (m);
+        psk_minutes_group_->addAction (a);
+      }
+    psk_menu->addSeparator ();
+    connect (psk_menu->addAction (tr ("Colours…")), &QAction::triggered, this, &ConditionsWindow::map_colours_dialog);
+
+    for (auto * chip : {worked_grids_box_, psk_box_})
+      {
+        static_cast<QToolButton *> (chip)->setPopupMode (QToolButton::MenuButtonPopup);
+      }
+    static_cast<QToolButton *> (worked_grids_box_)->setMenu (grids_menu);
+    static_cast<QToolButton *> (psk_box_)->setMenu (psk_menu);
+
+    settings_->beginGroup ("Conditions");
+    (settings_->value ("WorkedGridsAllBands", false).toBool () ? grids_all_action_ : grids_this)->setChecked (true);
+    (settings_->value ("HeardMeAllBands", false).toBool () ? psk_all_action_ : psk_this)->setChecked (true);
+    psk_live_action_->setChecked (settings_->value ("HeardMeLive", true).toBool ());
+    int const mins = settings_->value ("HeardMeMinutes", 30).toInt ();
+    bool picked = false;
+    for (auto * a : psk_minutes_group_->actions ()) if (a->data ().toInt () == mins) {a->setChecked (true); picked = true;}
+    if (!picked) psk_minutes_group_->actions ()[1]->setChecked (true);
+    settings_->endGroup ();
+
+    auto options = [this] {
+      map_->grids_all_bands = grids_all_action_->isChecked ();
+      map_->psk_all_bands = psk_all_action_->isChecked ();
+      map_->psk_minutes = psk_minutes_group_->checkedAction () ? psk_minutes_group_->checkedAction ()->data ().toInt () : 30;
+      map_->rebuild_psk ();
+      settings_->beginGroup ("Conditions");
+      settings_->setValue ("WorkedGridsAllBands", map_->grids_all_bands);
+      settings_->setValue ("HeardMeAllBands", map_->psk_all_bands);
+      settings_->setValue ("HeardMeLive", psk_live_action_->isChecked ());
+      settings_->setValue ("HeardMeMinutes", map_->psk_minutes);
+      settings_->endGroup ();
+      update_psk_live ();
+      map_->update ();
+    };
+    for (auto * a : {grids_this, grids_all_action_, psk_this, psk_all_action_, psk_live_action_})
+      {
+        connect (a, &QAction::triggered, this, options);
+      }
+    for (auto * a : psk_minutes_group_->actions ()) connect (a, &QAction::triggered, this, options);
+    map_->grids_all_bands = grids_all_action_->isChecked ();
+    map_->psk_all_bands = psk_all_action_->isChecked ();
+    map_->psk_minutes = psk_minutes_group_->checkedAction ()->data ().toInt ();
+    load_map_colours ();
+  }
   for (auto * b : {gray_box_, aurora_box_, rain_box_, cities_box_, beacons_box_, worked_grids_box_, psk_box_, prop_box_}) row2->addWidget (b);
   row2->addStretch ();
   row1->addStretch ();
@@ -3491,7 +3683,11 @@ QWidget * ConditionsWindow::build_map_bar ()
     map_->show_worked_grids = worked_grids_box_->isChecked ();
     bool const psk_was = map_->show_psk;
     map_->show_psk = psk_box_->isChecked ();
-    if (map_->show_psk && !psk_was) fetch_psk ();
+    if (map_->show_psk != psk_was)
+      {
+        update_psk_live ();
+        if (map_->show_psk) fetch_psk ();
+      }
     gray_box_->setEnabled (style_group_->checkedId () != ConditionsMap::DayNight);
     // the buttons are in the order people look for them; the map's own
     // numbers are the ones saved by earlier betas
@@ -3561,11 +3757,201 @@ void ConditionsWindow::set_highlight_colors (QColor const& cq, QColor const& my_
   if (cq.isValid ()) cq_color_ = cq;
   if (my_call.isValid ()) my_call_color_ = my_call;
   if (tx.isValid ()) tx_color_ = tx;
-  map_->cq_color = cq_color_;
-  map_->my_call_color = my_call_color_;
-  map_->tx_color = tx_color_;
+  apply_map_colours ();
+}
+
+namespace
+{
+  // what can be chosen in Map colours, with the built in colours (an
+  // invalid colour follows Settings > Colors or the scheme)
+  struct MapColour {char const * key; char const * text; char const * group; QColor fallback;};
+  QVector<MapColour> const& map_colour_list ()
+  {
+    static QVector<MapColour> const list {
+      {"CQ", QT_TRANSLATE_NOOP ("ConditionsWindow", "Calling CQ"), "Stations", QColor {}},
+      {"CallingMe", QT_TRANSLATE_NOOP ("ConditionsWindow", "Calling you"), "Stations", QColor {}},
+      {"Called", QT_TRANSLATE_NOOP ("ConditionsWindow", "You called"), "Stations", QColor {}},
+      {"Worked", QT_TRANSLATE_NOOP ("ConditionsWindow", "Worked"), "Stations", QColor {"#B58CFF"}},
+      {"Others", QT_TRANSLATE_NOOP ("ConditionsWindow", "Others"), "Stations", QColor {}},
+      {"Grid", QT_TRANSLATE_NOOP ("ConditionsWindow", "Worked grids"), "Layers", QColor {}},
+      {"Strong", QT_TRANSLATE_NOOP ("ConditionsWindow", "Heard me, strong"), "Layers", QColor {"#3DDC84"}},
+      {"Fair", QT_TRANSLATE_NOOP ("ConditionsWindow", "Heard me, fair"), "Layers", QColor {"#FFD54A"}},
+      {"Weak", QT_TRANSLATE_NOOP ("ConditionsWindow", "Heard me, weak"), "Layers", QColor {"#FF7A45"}},
+    };
+    return list;
+  }
+}
+
+void ConditionsWindow::load_map_colours ()
+{
+  map_colours_.clear ();
+  settings_->beginGroup ("MapColours");
+  for (auto const& k : settings_->childKeys ())
+    {
+      if ("GridOpacity" == k) continue;
+      QColor const c {settings_->value (k).toString ()};
+      if (c.isValid ()) map_colours_[k] = c;
+    }
+  map_->grid_opacity = qBound (5, settings_->value ("GridOpacity", 40).toInt (), 100);
+  settings_->endGroup ();
+  apply_map_colours ();
+}
+
+void ConditionsWindow::apply_map_colours ()
+{
+  auto pick = [this] (char const * key, QColor const& otherwise) {
+    auto const c = map_colours_.value (key);
+    return c.isValid () ? c : otherwise;
+  };
+  map_->cq_color = pick ("CQ", cq_color_);
+  map_->my_call_color = pick ("CallingMe", my_call_color_);
+  map_->tx_color = pick ("Called", tx_color_);
+  map_->worked_color = pick ("Worked", QColor {"#B58CFF"});
+  map_->others_color = map_colours_.value ("Others");
+  map_->grid_color = map_colours_.value ("Grid");
+  map_->psk_strong = pick ("Strong", QColor {"#3DDC84"});
+  map_->psk_fair = pick ("Fair", QColor {"#FFD54A"});
+  map_->psk_weak = pick ("Weak", QColor {"#FF7A45"});
+  map_->band_colors.clear ();
+  for (auto it = map_colours_.cbegin (); it != map_colours_.cend (); ++it)
+    {
+      if (it.key ().startsWith ("Band_")) map_->band_colors[it.key ().mid (5)] = it.value ();
+    }
   update_legend ();
   map_->update ();
+}
+
+// Map colours: the dots, the worked grids and the Heard me lines
+void ConditionsWindow::map_colours_dialog ()
+{
+  QDialog dialog {this};
+  dialog.setWindowTitle (tr ("Map colours"));
+  auto * outer = new QVBoxLayout {&dialog};
+  auto * intro = new QLabel {tr ("Colours for the map. Ones you leave alone follow Settings > Colors and the colour scheme."), &dialog};
+  intro->setWordWrap (true);
+  outer->addWidget (intro);
+  auto * columns = new QHBoxLayout;
+  outer->addLayout (columns);
+  auto chosen = map_colours_;
+  int opacity = map_->grid_opacity;
+
+  // the colour each button shows now
+  auto current = [this, &chosen] (QString const& key) -> QColor {
+    auto const c = chosen.value (key);
+    if (c.isValid ()) return c;
+    if ("CQ" == key) return cq_color_;
+    if ("CallingMe" == key) return my_call_color_;
+    if ("Called" == key) return tx_color_;
+    if ("Others" == key) return Win11Theme::isDark () ? QColor {"#9AA4B2"} : QColor {"#5A6472"};
+    if ("Grid" == key) return QColor {Win11Theme::token ("accent2")};
+    if (key.startsWith ("Band_")) return ConditionsMap::default_band_color (key.mid (5));
+    for (auto const& m : map_colour_list ()) if (key == m.key) return m.fallback;
+    return QColor {};
+  };
+  QVector<QPair<QPushButton *, QString>> buttons;
+  auto paint = [&] (QPushButton * b, QString const& key) {
+    QColor const c = current (key);
+    b->setStyleSheet (QString {"QPushButton {background: %1; border: 1px solid %2; border-radius: 4px; min-width: 44px; min-height: 18px;}"}
+                      .arg (c.name ()).arg (c.lightness () > 140 ? "#00000060" : "#FFFFFF60"));
+    b->setProperty ("w11_keep", true);
+  };
+  auto add_button = [&] (QGridLayout * grid, int row, int col, QString const& key, QString const& text) {
+    auto * label = new QLabel {text, &dialog};
+    auto * b = new QPushButton {&dialog};
+    b->setCursor (Qt::PointingHandCursor);
+    b->setToolTip (tr ("Choose a colour"));
+    paint (b, key);
+    connect (b, &QPushButton::clicked, &dialog, [&, b, key, text] {
+        QColor const c = QColorDialog::getColor (current (key), &dialog, text);
+        if (c.isValid ())
+          {
+            chosen[key] = c;
+            paint (b, key);
+          }
+      });
+    buttons << qMakePair (b, key);
+    grid->addWidget (label, row, col);
+    grid->addWidget (b, row, col + 1);
+  };
+
+  auto * left = new QVBoxLayout;
+  auto * right = new QVBoxLayout;
+  columns->addLayout (left);
+  columns->addSpacing (18);
+  columns->addLayout (right);
+  auto heading = [&dialog] (QString const& text) {
+    auto * l = new QLabel {text, &dialog};
+    auto f = l->font ();
+    f.setBold (true);
+    l->setFont (f);
+    return l;
+  };
+  left->addWidget (heading (tr ("Stations")));
+  auto * stations = new QGridLayout;
+  left->addLayout (stations);
+  int row = 0;
+  for (auto const& m : map_colour_list ())
+    {
+      if (QLatin1String {"Stations"} == m.group) add_button (stations, row++, 0, m.key, tr (m.text));
+    }
+  left->addSpacing (8);
+  left->addWidget (heading (tr ("Layers")));
+  auto * layers = new QGridLayout;
+  left->addLayout (layers);
+  row = 0;
+  for (auto const& m : map_colour_list ())
+    {
+      if (QLatin1String {"Layers"} == m.group) add_button (layers, row++, 0, m.key, tr (m.text));
+      if (QLatin1String {"Grid"} == m.key)
+        {
+          auto * slider = new QSlider {Qt::Horizontal, &dialog};
+          slider->setRange (5, 100);
+          slider->setValue (opacity);
+          auto * shown = new QLabel {tr ("%1%").arg (opacity), &dialog};
+          connect (slider, &QSlider::valueChanged, &dialog, [&opacity, shown] (int v) {
+              opacity = v;
+              shown->setText (QString {"%1%"}.arg (v));
+            });
+          layers->addWidget (new QLabel {tr ("Worked grids, how solid"), &dialog}, row, 0);
+          auto * h = new QHBoxLayout;
+          h->addWidget (slider);
+          h->addWidget (shown);
+          layers->addLayout (h, row++, 1);
+        }
+    }
+  left->addStretch ();
+  right->addWidget (heading (tr ("Heard me on all bands")));
+  auto * bands = new QGridLayout;
+  right->addLayout (bands);
+  row = 0;
+  for (auto const& b : ConditionsMap::band_order ())
+    {
+      add_button (bands, row / 2, (row % 2) * 2, "Band_" + b, b);
+      ++row;
+    }
+  right->addStretch ();
+
+  auto * box = new QDialogButtonBox {QDialogButtonBox::Ok | QDialogButtonBox::Cancel | QDialogButtonBox::RestoreDefaults, &dialog};
+  box->button (QDialogButtonBox::RestoreDefaults)->setText (tr ("Reset to defaults"));
+  connect (box, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+  connect (box, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+  connect (box->button (QDialogButtonBox::RestoreDefaults), &QPushButton::clicked, &dialog, [&] {
+      chosen.clear ();
+      opacity = 40;
+      for (auto const& b : buttons) paint (b.first, b.second);
+      for (auto * s : dialog.findChildren<QSlider *> ()) s->setValue (40);
+    });
+  outer->addWidget (box);
+  if (QDialog::Accepted != dialog.exec ()) return;
+
+  settings_->beginGroup ("MapColours");
+  settings_->remove ("");
+  for (auto it = chosen.cbegin (); it != chosen.cend (); ++it) settings_->setValue (it.key (), it.value ().name ());
+  settings_->setValue ("GridOpacity", opacity);
+  settings_->endGroup ();
+  map_colours_ = chosen;
+  map_->grid_opacity = opacity;
+  apply_map_colours ();
 }
 
 void ConditionsWindow::mark_called (QString const& call)
@@ -3667,6 +4053,11 @@ QToolButton#chip {background: transparent; color: %4; border: 1px solid %3; bord
 QToolButton#chip:hover {border-color: %5; color: %6;}
 QToolButton#chip:checked {background: %7; color: %6; border: 1px solid transparent; font-weight: normal;}
 QToolButton#chip:disabled {color: %10; border-color: %3; background: transparent;}
+QToolButton#chip[popupMode="1"] {padding-right: 25px;}
+QToolButton#chip::menu-button {background: transparent; border: none; border-left: 1px solid %3; width: 20px;
+                                border-top-right-radius: 13px; border-bottom-right-radius: 13px;}
+QToolButton#chip::menu-button:hover {background: %8;}
+QToolButton#chip::menu-arrow {image: url(:/win11/down_@theme.png); width: 9px; height: 9px;}
 QFrame#seg {background: %8; border: 1px solid %3; border-radius: 14px;}
 QPushButton#segButton {background: transparent; color: %4; border: none; border-radius: 11px; padding: 3px 11px; font-weight: normal;}
 QPushButton#segButton:hover {color: %6;}
@@ -3688,7 +4079,8 @@ QToolButton#doneButton {background: %5; color: %11; border: none; border-radius:
                  .arg (Win11Theme::isDark () ? "#5A6170" : "#A6ADB9")
                  .arg (tok ("accent_text"))
                  .arg (tok ("border_strong"))
-                 .arg (tok ("title")));
+                 .arg (tok ("title"))
+                 .replace ("@theme", Win11Theme::isDark () ? "dark" : "light"));
   utc_date_->setStyleSheet (QString {});
   // the font may have changed size: give each picker button room for its text
   for (auto * b : findChildren<QPushButton *> ("segButton"))
@@ -4594,7 +4986,14 @@ void ConditionsWindow::on_voacap (QString const& path)
 
 void ConditionsWindow::set_my_call (QString const& call)
 {
+  auto const was = my_call_;
   my_call_ = call.trimmed ().toUpper ();
+  if (my_call_ != was && psk_live_action_)
+    {
+      map_->psk_store.clear ();
+      map_->rebuild_psk ();
+      update_psk_live ();
+    }
   call_label_->text = slashed (my_call_);
   call_label_->updateGeometry ();
   call_label_->update ();
@@ -4697,20 +5096,19 @@ bool ConditionsWindow::grid_to_latlon (QString const& grid_in, double& lat, doub
 }
 
 void ConditionsWindow::set_worked (QString const& band, QSet<QString> const& calls, QSet<QString> const& grids,
-                                   QSet<QString> const& today_calls, QSet<QString> const& today_grids)
+                                   QSet<QString> const& today_calls, QSet<QString> const& today_grids,
+                                   QSet<QString> const& all_grids, QSet<QString> const& today_all_grids)
 {
+  map_->all_grids = all_grids;
+  map_->today_all_grids = today_all_grids;
   map_->today_calls = today_calls;
   map_->today_grids = today_grids;
   bool const band_changed = band != map_->band_label;
   map_->band_label = band;
   map_->worked_calls = calls;
   map_->worked_grids = grids;
-  if (band_changed && map_->show_psk)
-    {
-      map_->psk_spots.clear ();
-      psk_asked_ = QDateTime {};
-      fetch_psk ();
-    }
+  // every band's reports are kept, so changing band just picks others
+  if (band_changed) map_->rebuild_psk ();
   map_->update ();
 }
 
@@ -4729,8 +5127,56 @@ namespace
   }
 }
 
-// who heard you, from PSK Reporter; they ask that it's not checked more
-// often than every five minutes
+// the live feed from PSK Reporter: on while Heard me is shown and Live is
+// ticked
+void ConditionsWindow::update_psk_live ()
+{
+  bool const want = map_->show_psk && psk_live_action_ && psk_live_action_->isChecked () && !my_call_.isEmpty ();
+  if (!psk_live_)
+    {
+      if (!want) return;
+      psk_live_ = new PskLive {this};
+      connect (psk_live_, &PskLive::report, this, [this] (PskLive::Report const& r) {
+          ConditionsMap::Spot sp;
+          sp.call = r.receiver;
+          sp.grid = r.grid;
+          sp.snr = r.snr;
+          sp.mhz = r.mhz;
+          sp.band = r.band.isEmpty () ? mhz_band (r.mhz) : r.band;
+          sp.when = r.when.isValid () ? r.when : QDateTime::currentDateTimeUtc ();
+          if (!grid_to_latlon (sp.grid, sp.lat, sp.lon)) return;
+          auto const key = sp.call + '|' + sp.band;
+          auto it = map_->psk_store.find (key);
+          if (it == map_->psk_store.end () || it->when <= sp.when) map_->psk_store[key] = sp;
+          map_->psk_last = QDateTime::currentDateTimeUtc ();
+          map_->rebuild_psk ();
+          if (isVisible ()) map_->update ();
+        });
+      connect (psk_live_, &PskLive::state_changed, this, [this] {
+          map_->psk_live = psk_live_->connected ();
+          if (map_->psk_live) map_->psk_error.clear ();
+          map_->update ();
+        });
+    }
+  psk_live_->listen (want ? my_call_ : QString {});
+  map_->psk_live = want && psk_live_->connected ();
+  // the note says how long ago the last report was: keep it current
+  if (!psk_tick_)
+    {
+      psk_tick_ = new QTimer {this};
+      psk_tick_->setInterval (5000);
+      connect (psk_tick_, &QTimer::timeout, this, [this] {
+          map_->rebuild_psk ();
+          if (isVisible ()) map_->update ();
+        });
+    }
+  if (map_->show_psk) psk_tick_->start ();
+  else psk_tick_->stop ();
+}
+
+// who heard you over the last hour, from PSK Reporter's query: when Heard
+// me is switched on, then every 15 minutes (every 5 while the live feed is
+// down); they ask that it's not checked more often than every five minutes
 void ConditionsWindow::fetch_psk ()
 {
   if (!psk_timer_)
@@ -4746,12 +5192,13 @@ void ConditionsWindow::fetch_psk ()
     }
   if (!psk_timer_->isActive ()) psk_timer_->start ();
   auto const now = QDateTime::currentDateTimeUtc ();
-  if (psk_asked_.isValid () && psk_asked_.secsTo (now) < 120) return;
+  int const wait = map_->psk_live ? 15 * 60 - 30 : 5 * 60 - 30;
+  if (psk_asked_.isValid () && psk_asked_.secsTo (now) < wait) return;
   psk_asked_ = now;
   QUrl url {"https://retrieve.pskreporter.info/query"};
   QUrlQuery q;
   q.addQueryItem ("senderCallsign", my_call_);
-  q.addQueryItem ("flowStartSeconds", "-1800");
+  q.addQueryItem ("flowStartSeconds", "-3600");
   q.addQueryItem ("rronly", "1");
   q.addQueryItem ("appcontact", "KF0KYL Digi");
   url.setQuery (q);
@@ -4762,14 +5209,12 @@ void ConditionsWindow::fetch_psk ()
       reply->deleteLater ();
       if (reply->error ())
         {
+          // only worth saying when the live feed isn't working either
           map_->psk_error = tr ("couldn't be reached, will try again");
           map_->update ();
           return;
         }
       map_->psk_error.clear ();
-      // the band the radio is on, as a frequency range
-      auto const band = map_->band_label;
-      QHash<QString, ConditionsMap::Spot> best;
       QXmlStreamReader xml {reply->readAll ()};
       while (!xml.atEnd ())
         {
@@ -4781,14 +5226,15 @@ void ConditionsWindow::fetch_psk ()
           sp.grid = a.value ("receiverLocator").toString ();
           sp.snr = a.value ("sNR").toInt ();
           sp.mhz = a.value ("frequency").toDouble () / 1e6;
+          sp.band = mhz_band (sp.mhz);
           sp.when = QDateTime::fromSecsSinceEpoch (a.value ("flowStartSeconds").toLongLong (), Qt::UTC);
-          if (sp.call.isEmpty () || !grid_to_latlon (sp.grid, sp.lat, sp.lon)) continue;
-          if (!band.isEmpty () && mhz_band (sp.mhz) != band) continue;
-          // one line per station: the most recent report
-          auto it = best.find (sp.call);
-          if (it == best.end () || it->when < sp.when) best[sp.call] = sp;
+          if (sp.call.isEmpty () || sp.band.isEmpty () || !grid_to_latlon (sp.grid, sp.lat, sp.lon)) continue;
+          // one line per station and band: the most recent report
+          auto const key = sp.call + '|' + sp.band;
+          auto it = map_->psk_store.find (key);
+          if (it == map_->psk_store.end () || it->when < sp.when) map_->psk_store[key] = sp;
         }
-      map_->psk_spots = best.values ().toVector ();
+      map_->rebuild_psk ();
       map_->psk_updated = QDateTime::currentDateTimeUtc ();
       map_->update ();
     });

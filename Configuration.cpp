@@ -1056,6 +1056,7 @@ QDir Configuration::writeable_data_dir () const {return m_->writeable_data_dir_;
 QDir Configuration::temp_dir () const {return m_->temp_dir_;}
 
 void Configuration::select_tab (int index) {m_->ui_->configuration_tabs->setCurrentIndex (index);}
+void Configuration::select_colors_tab () {m_->ui_->configuration_tabs->setCurrentWidget (m_->ui_->colors_tab);}
 int Configuration::exec () {return m_->exec ();}
 bool Configuration::is_active () const {return m_->isVisible ();}
 
