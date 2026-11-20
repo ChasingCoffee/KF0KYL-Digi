@@ -145,7 +145,8 @@ private:
   QTimer * clock_timer_;
   ConditionsMap * map_;
 
-  struct Tile {QLabel * value {nullptr}; QLabel * caption {nullptr}; QString tip;};
+  struct Tile {QLabel * value {nullptr}; QLabel * caption {nullptr}; QLabel * note {nullptr}; QString tip;};
+  QLabel * spacewx_time_ {nullptr};
   QHash<QString, Tile> tiles_;
   QLabel * band_cells_[4][2] {};
   CallSign * call_label_;

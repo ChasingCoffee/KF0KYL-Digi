@@ -4114,7 +4114,7 @@ void ConditionsWindow::build_ui ()
                              "Hover over a reading for what it means.</p>"));
     auto * grid = new QGridLayout;
     grid->setHorizontalSpacing (10);
-    grid->setVerticalSpacing (6);
+    grid->setVerticalSpacing (0);
     struct {char const * key; char const * caption; char const * tip; int row; int col;} const defs[] = {
       {"sfi", QT_TR_NOOP ("SFI"), QT_TR_NOOP ("10.7 cm solar flux index. Higher is better for the high bands."), 0, 0},
       {"ssn", QT_TR_NOOP ("SSN"), QT_TR_NOOP ("Sunspot number reported by NOAA for the last full day."), 1, 0},
@@ -4131,16 +4131,25 @@ void ConditionsWindow::build_ui ()
         t.caption->setObjectName ("muted");
         t.caption->setToolTip (tr (d.tip));
         t.value = new QLabel {QString {QChar {0x2014}}, spacewx};
+        t.value->setTextFormat (Qt::RichText);
         t.value->setToolTip (tr (d.tip));
+        t.note = new QLabel {spacewx};
+        t.note->setObjectName ("muted");
+        t.note->setToolTip (tr (d.tip));
         t.tip = tr (d.tip);
-        grid->addWidget (t.caption, d.row, d.col, Qt::AlignLeft | Qt::AlignVCenter);
-        grid->addWidget (t.value, d.row, d.col + 1, Qt::AlignLeft | Qt::AlignVCenter);
+        // each reading takes two rows: the value, then a word on what it means
+        grid->addWidget (t.caption, 2 * d.row, d.col, Qt::AlignLeft | Qt::AlignVCenter);
+        grid->addWidget (t.value, 2 * d.row, d.col + 1, Qt::AlignLeft | Qt::AlignVCenter);
+        grid->addWidget (t.note, 2 * d.row + 1, d.col + 1, Qt::AlignLeft | Qt::AlignTop);
         tiles_[d.key] = t;
       }
     grid->setColumnStretch (1, 1);
     grid->setColumnStretch (3, 1);
     body->addLayout (grid);
     body->addStretch ();
+    spacewx_time_ = new QLabel {spacewx};
+    spacewx_time_->setObjectName ("muted");
+    body->addWidget (spacewx_time_, 0, Qt::AlignRight);
     top->addWidget (spacewx, 13);
   }
 
@@ -6011,45 +6020,54 @@ void ConditionsWindow::update_tiles ()
 {
   // a reading, with its meaning in the tooltip; K and A always show their
   // colour, X-ray, wind and Bz only when they're a worry
-  auto set = [this] (QString const& key, QString const& value, QString const& note, int level) {
+  auto set = [this] (QString const& key, QString const& value, QString const& note, int level, QString const& unit) {
     auto const& t = tiles_[key];
     if (!t.value) return;
-    t.value->setText (value);
-    t.value->setToolTip (note.isEmpty () ? t.tip : QString {"%1<br><b>%2</b>"}.arg (t.tip, note));
     bool const always = "k" == key || "a" == key;
     bool const plain = "sfi" == key || "ssn" == key;
     QString colour = Win11Theme::token ("text");
     if (level >= 0 && !plain && (always || level < 2)) colour = level_color (level).name ();
-    t.value->setStyleSheet (QString {"QLabel {color: %1; font-weight: 600; font-size: %2pt;}"}
-                            .arg (colour).arg (QApplication::font ().pointSizeF () * 1.15, 0, 'f', 1));
+    double const base = QApplication::font ().pointSizeF () > 0 ? QApplication::font ().pointSizeF () : 9.;
+    QString text = QString {"<span style=\"color: %1; font-weight: 600; font-size: %2pt;\">%3</span>"}
+      .arg (colour).arg (base * 1.15, 0, 'f', 1).arg (value.toHtmlEscaped ());
+    if (unit.size ())
+      {
+        text += QString {"<span style=\"color: %1; font-size: %2pt;\">&nbsp;%3</span>"}
+          .arg (Win11Theme::token ("text_secondary")).arg (base * 0.85, 0, 'f', 1).arg (unit);
+      }
+    t.value->setText (text);
+    t.note->setText (note);
+    t.note->setStyleSheet (QString {"QLabel {font-size: %1pt; padding-bottom: 4px;}"}.arg (base * 0.85, 0, 'f', 1));
   };
   QString const none {QChar {0x2014}};
-  if (qIsNaN (sfi_)) set ("sfi", none, {}, -1);
+  if (qIsNaN (sfi_)) set ("sfi", none, {}, -1, {});
   else set ("sfi", QString::number (qRound (sfi_)), sfi_ >= 150 ? tr ("high") : sfi_ >= 100 ? tr ("moderate") : tr ("low"),
-            sfi_ >= 150 ? 2 : sfi_ >= 90 ? 1 : 0);
-  if (qIsNaN (ssn_)) set ("ssn", none, {}, -1);
-  else set ("ssn", QString::number (qRound (ssn_)), {}, -1);
-  if (qIsNaN (kp_)) set ("k", none, {}, -1);
+            sfi_ >= 150 ? 2 : sfi_ >= 90 ? 1 : 0, {});
+  if (qIsNaN (ssn_)) set ("ssn", none, {}, -1, {});
+  else set ("ssn", QString::number (qRound (ssn_)), {}, -1, {});
+  if (qIsNaN (kp_)) set ("k", none, {}, -1, {});
   else set ("k", QString::number (kp_, 'f', kp_ < 10 && std::fmod (kp_, 1.) > 0.01 ? 1 : 0),
             kp_ >= 5 ? tr ("storm") : kp_ >= 4 ? tr ("active") : kp_ >= 3 ? tr ("unsettled") : tr ("quiet"),
-            kp_ >= 5 ? 0 : kp_ >= 3 ? 1 : 2);
-  if (qIsNaN (a_index_)) set ("a", none, {}, -1);
+            kp_ >= 5 ? 0 : kp_ >= 3 ? 1 : 2, {});
+  if (qIsNaN (a_index_)) set ("a", none, {}, -1, {});
   else set ("a", QString::number (qRound (a_index_)),
             a_index_ >= 30 ? tr ("stormy") : a_index_ >= 10 ? tr ("unsettled") : tr ("quiet"),
-            a_index_ >= 30 ? 0 : a_index_ >= 10 ? 1 : 2);
-  if (qIsNaN (xray_)) set ("xray", none, {}, -1);
+            a_index_ >= 30 ? 0 : a_index_ >= 10 ? 1 : 2, {});
+  if (qIsNaN (xray_)) set ("xray", none, {}, -1, {});
   else
     {
       int level;
       auto const cls = xray_class (xray_, &level);
-      set ("xray", cls, level < 2 ? tr ("flare") : tr ("normal"), level);
+      set ("xray", cls, level < 2 ? tr ("flare") : tr ("normal"), level, {});
     }
-  if (qIsNaN (wind_)) set ("wind", none, {}, -1);
-  else set ("wind", QString::number (qRound (wind_)), tr ("km/s"), wind_ >= 600 ? 0 : wind_ >= 500 ? 1 : 2);
-  if (qIsNaN (bz_)) set ("bz", none, {}, -1);
+  if (qIsNaN (wind_)) set ("wind", none, {}, -1, {});
+  else set ("wind", QString::number (qRound (wind_)), wind_ >= 500 ? tr ("fast") : tr ("normal"),
+            wind_ >= 600 ? 0 : wind_ >= 500 ? 1 : 2, tr ("km/s"));
+  if (qIsNaN (bz_)) set ("bz", none, {}, -1, {});
   else set ("bz", QString {"%1"}.arg (bz_, 0, 'f', 0).replace ('-', QChar {0x2212}),
-            bz_ <= -10 ? tr ("south, storms likely") : bz_ < 0 ? tr ("southward") : tr ("northward"),
-            bz_ <= -10 ? 0 : bz_ <= -5 ? 1 : 2);
+            bz_ <= -10 ? tr ("south, storms") : bz_ < 0 ? tr ("south") : tr ("north"),
+            bz_ <= -10 ? 0 : bz_ <= -5 ? 1 : 2, tr ("nT"));
+  if (spacewx_time_) spacewx_time_->setText (updated_.isValid () ? tr ("NOAA \u00B7 %1 UTC").arg (updated_.toString ("hh:mm")) : QString {});
 }
 
 void ConditionsWindow::update_bands ()
