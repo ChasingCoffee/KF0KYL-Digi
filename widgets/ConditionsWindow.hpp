@@ -248,6 +248,7 @@ private:
   QTimer * news_timer_ {nullptr};
   void fetch_news ();
   void fit_dx_box ();
+  void update_sun_corners (QDateTime const& now);
   void fetch_conditions_map ();          // DRAP or the MUF, whichever colours the map
   void fit_outlook ();
   void update_status ();

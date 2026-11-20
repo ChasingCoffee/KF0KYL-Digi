@@ -3025,14 +3025,17 @@ public:
   explicit SunImage (QWidget * parent)
     : QWidget {parent}
   {
-    setMinimumSize (100, 100);
+    // big enough to see the detail in the pictures
+    int const side = qMax (210, 11 * QFontMetrics {font ()}.height ());
+    setMinimumSize (side, side);
     setSizePolicy (QSizePolicy::Expanding, QSizePolicy::Expanding);
   }
-  QSize sizeHint () const override {return {150, 150};}
+  QSize sizeHint () const override {return minimumSize ();}
 
   void set_image (QImage const& img) {image_ = img; scaled_ = QImage {}; update ();}
   void set_message (QString const& m) {message_ = m; update ();}
   void set_caption (QString const& c) {caption_ = c; update ();}
+  void set_corners (QStringList const& c) {if (c != corners_) {corners_ = c; update ();}}
 
 protected:
   void paintEvent (QPaintEvent *) override
@@ -3040,7 +3043,7 @@ protected:
     QPainter p {this};
     p.setRenderHint (QPainter::Antialiasing);
     p.setRenderHint (QPainter::SmoothPixmapTransform);
-    int const s = qMin (width (), height ()) - 8;
+    int const s = qMin (width (), height ()) - 2;
     QRectF const r {(width () - s) / 2., (height () - s) / 2., double (s), double (s)};
     if (image_.isNull ())
       {
@@ -3048,46 +3051,53 @@ protected:
         p.drawText (rect (), Qt::AlignCenter | Qt::TextWordWrap, message_);
         return;
       }
-    // glow
-    QRadialGradient glow {r.center (), s * 0.62};
-    glow.setColorAt (0.70, QColor {255, 165, 56, 110});
-    glow.setColorAt (1.0, QColor {255, 165, 56, 0});
-    p.setPen (Qt::NoPen);
-    p.setBrush (glow);
-    p.drawEllipse (r.center (), s * 0.62, s * 0.62);
-    // the disk fills about 80% of the SDO picture; show it a little larger
-    QRectF const src_r = r.adjusted (-s * 0.06, -s * 0.06, s * 0.06, s * 0.06);
-    if (scaled_.size () != src_r.size ().toSize ())
+    // the whole picture, square, trimmed only of the black sky round the
+    // edge so the disk is as big as it can be with nothing cut off: the
+    // disk fills about 78% of an SDO picture, so keep the middle 90%
+    if (scaled_.size () != r.size ().toSize ())
       {
-        scaled_ = image_.scaled (src_r.size ().toSize (), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        int const w = image_.width (), h = image_.height ();
+        int const keep = qRound (qMin (w, h) * 0.90);
+        QImage const middle = image_.copy ((w - keep) / 2, (h - keep) / 2, keep, keep);
+        scaled_ = middle.scaled (r.size ().toSize (), Qt::KeepAspectRatio, Qt::SmoothTransformation);
       }
-    QPainterPath clip;
-    clip.addEllipse (r);
-    p.setClipPath (clip);
-    p.drawImage (src_r.topLeft (), scaled_);
+    QPainterPath frame;
+    frame.addRoundedRect (r, 6, 6);
+    p.setClipPath (frame);
+    p.fillRect (r, Qt::black);
+    p.drawImage (r.topLeft (), scaled_);
+    // where the Sun is from you, in the corners like HamClock
+    auto f = font ();
+    f.setBold (true);
+    f.setPointSizeF (qMax (7., f.pointSizeF () * 0.95));
+    p.setFont (f);
+    QFontMetricsF const fm {f};
+    auto corner = [&] (QString const& text, Qt::Alignment align) {
+      if (text.isEmpty ()) return;
+      QRectF const area = r.adjusted (6, 4, -6, -4);
+      QRectF box {0, 0, fm.horizontalAdvance (text) + 8, fm.height () + 2};
+      box.moveLeft (align & Qt::AlignLeft ? area.left () : area.right () - box.width ());
+      box.moveTop (align & Qt::AlignTop ? area.top () : area.bottom () - box.height ());
+      p.setPen (Qt::NoPen);
+      p.setBrush (QColor {0, 0, 0, 120});
+      p.drawRoundedRect (box, 4, 4);
+      p.setPen (QColor {255, 170, 60});
+      p.drawText (box, Qt::AlignCenter, text);
+    };
+    corner (corners_.value (0), Qt::AlignTop | Qt::AlignLeft);
+    corner (corners_.value (1), Qt::AlignTop | Qt::AlignRight);
+    corner (corners_.value (2), Qt::AlignBottom | Qt::AlignLeft);
+    corner (caption_.size () ? caption_ : corners_.value (3), Qt::AlignBottom | Qt::AlignRight);
     p.setClipping (false);
-    p.setPen (QPen {QColor {255, 181, 74, 90}, 1});
+    p.setPen (QPen {QColor {Win11Theme::token ("border")}, 1});
     p.setBrush (Qt::NoBrush);
-    p.drawEllipse (r);
-    if (caption_.size ())
-      {
-        // a movie frame's time, bottom left, on a dark band so it reads over the glow
-        auto f = font ();
-        f.setPointSizeF (qMax (6.5, f.pointSizeF () * 0.85));
-        p.setFont (f);
-        QFontMetricsF const fm {f};
-        QRectF const box {0, height () - fm.height () - 4, fm.horizontalAdvance (caption_) + 10, fm.height () + 4};
-        p.setPen (Qt::NoPen);
-        p.setBrush (QColor {0, 0, 0, 170});
-        p.drawRoundedRect (box, 4, 4);
-        p.setPen (QColor {Win11Theme::token ("text")});
-        p.drawText (box, Qt::AlignCenter, caption_);
-      }
+    p.drawRoundedRect (r, 6, 6);
   }
 
 private:
   QImage image_;
   QImage scaled_;
+  QStringList corners_;
   QString message_;
   QString caption_;
 };
@@ -3921,7 +3931,7 @@ void ConditionsWindow::build_ui ()
   top->setContentsMargins (0, 0, 0, 0);
   top->setSpacing (12);
   // tall enough for its text at any text size
-  top_row_->setMaximumHeight (qMax (215, 14 * QFontMetrics {QApplication::font ()}.height ()));
+  top_row_->setMaximumHeight (qMax (265, 16 * QFontMetrics {QApplication::font ()}.height ()));
 
   auto * clock_box = make_box ("clock", {}, body);
   auto * clock_row = new QHBoxLayout;
@@ -5476,6 +5486,31 @@ void ConditionsWindow::fix_clock_width ()
   clock_column_->setFixedWidth (width);
 }
 
+// the Sun's bearing and height from you, and its next rise or set
+void ConditionsWindow::update_sun_corners (QDateTime const& now)
+{
+  double lat, lon;
+  if (!sun_image_ || !grid_to_latlon (my_grid_, lat, lon))
+    {
+      if (sun_image_) sun_image_->set_corners ({});
+      return;
+    }
+  double slat, slon, dist, bearing;
+  subsolar_point (now, slat, slon);
+  path_to (lat, lon, slat, slon, dist, bearing);
+  double const el = sun_elevation (now, lat, lon);
+  QDateTime rise, set;
+  sun_times (lat, lon, rise, set);
+  // the next of the two still to come; tomorrow's when both have passed
+  QString next;
+  if (rise.isValid () && rise > now && (!set.isValid () || set < now || rise < set)) next = tr ("Rise %1").arg (rise.toString ("hh:mm"));
+  else if (set.isValid () && set > now) next = tr ("Set %1").arg (set.toString ("hh:mm"));
+  else if (rise.isValid ()) next = tr ("Rise %1").arg (rise.toString ("hh:mm"));
+  sun_image_->set_corners ({tr ("Az %1%2").arg (qRound (bearing)).arg (QChar {0x00B0}),
+                            tr ("El %1%2").arg (qRound (el)).arg (QChar {0x00B0}),
+                            next, {}});
+}
+
 void ConditionsWindow::tick ()
 {
   auto const now = QDateTime::currentDateTimeUtc ();
@@ -5490,6 +5525,7 @@ void ConditionsWindow::tick ()
                        .arg (now.toString ("ss")).arg (base * 1.3, 0, 'f', 1));
   utc_date_->setText (tr ("%1 · Local %2").arg (QLocale {}.toString (now.date (), "ddd d MMM yyyy"))
                       .arg (now.toLocalTime ().toString ("h:mm AP")));
+  update_sun_corners (now);
   update_beacons ();
   if (0 == now.time ().second ())
     {
@@ -5550,7 +5586,7 @@ namespace
 {
   QString sun_url (QString const& channel)
   {
-    return QString {"%1assets/img/latest/latest_512_%2.jpg"}.arg (sdo_base (), channel);
+    return QString {"%1assets/img/latest/latest_1024_%2.jpg"}.arg (sdo_base (), channel);
   }
 }
 
