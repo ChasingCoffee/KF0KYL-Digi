@@ -299,15 +299,6 @@ namespace
       .arg (std::abs (lon), 0, 'f', 1).arg (QChar {0x00B0}).arg (lon >= 0 ? 'E' : 'W');
   }
 
-  // the main window's style sheet sets the font, so big text has to be
-  // asked for in a style sheet too
-  QString big_css (double factor)
-  {
-    double base = QApplication::font ().pointSizeF ();
-    if (base <= 0) base = 9.;
-    return QString {"font-size: %1pt; font-weight: bold;"}.arg (base * factor, 0, 'f', 1);
-  }
-
   // call signs are shown with a slashed zero, like a QSL card
   QString slashed (QString call)
   {
@@ -3915,8 +3906,7 @@ void ConditionsWindow::update_containers ()
 }
 
 // The DX box keeps one height whatever station is in it, so VOACAP below
-// it never changes size. With the space weather tiles closed it is taller
-// by just the room they leave, and that room goes to a bigger photo.
+// it never changes size, and its extra room goes to a big photo.
 void ConditionsWindow::fit_dx_box ()
 {
   auto * dx = boxes_.value ("dx");
@@ -3927,8 +3917,9 @@ void ConditionsWindow::fit_dx_box ()
   // of grid, local time, sun, short and long path
   int const details = info ? info->compactHeight () : 2 * line + 24;
   int const normal = 22 + line + 4 + details + 8 + 5 * (line + 2) + 6;
-  bool const roomy = !box_on ("spacewx") && box_on ("dx");
-  int const freed = roomy ? boxes_["spacewx"]->sizeHint ().height () + 12 : 0;
+  // the room the old row of space weather tiles took now goes to the photo
+  bool const roomy = box_on ("dx");
+  int const freed = roomy ? qRound (line * 5.5) + 12 : 0;
   if (info)
     {
       info->setBigPhoto (roomy);
@@ -4003,7 +3994,7 @@ void ConditionsWindow::build_ui ()
   clock_left->addSpacing (2);
   clock_left->addWidget (de_info_);
   clock_left->addStretch ();
-  top->addWidget (clock_box, 5);
+  top->addWidget (clock_box, 32);
   settings_->beginGroup ("Conditions");
   station_picture_ = settings_->value ("StationPicture", QString {}).toString ();
   settings_->endGroup ();
@@ -4019,7 +4010,7 @@ void ConditionsWindow::build_ui ()
   xray_graph_ = new XRayGraph {xray_box};
   xray_graph_->setObjectName ("plain");
   body->addWidget (xray_graph_);
-  top->addWidget (xray_box, 4);
+  top->addWidget (xray_box, 30);
 
   // the picture fills the box: no title row, the menu sits on the picture
   auto * sun_box = make_box ("sun", {}, body);
@@ -4114,7 +4105,44 @@ void ConditionsWindow::build_ui ()
   // the picture's menu sits beside it so nothing covers the Sun
   sun_image_->set_side_widget (sun_pick_);
   body->addWidget (sun_image_, 1);
-  top->addWidget (sun_box, 2);
+  top->addWidget (sun_box, 15);
+
+  // ---- space weather: a small box of readouts in the top bar ----
+  {
+    auto * spacewx = make_box ("spacewx", tr ("Space weather"), body);
+    spacewx->setToolTip (tr ("<p>Space weather from NOAA's Space Weather Prediction Center. "
+                             "Hover over a reading for what it means.</p>"));
+    auto * grid = new QGridLayout;
+    grid->setHorizontalSpacing (10);
+    grid->setVerticalSpacing (6);
+    struct {char const * key; char const * caption; char const * tip; int row; int col;} const defs[] = {
+      {"sfi", QT_TR_NOOP ("SFI"), QT_TR_NOOP ("10.7 cm solar flux index. Higher is better for the high bands."), 0, 0},
+      {"ssn", QT_TR_NOOP ("SSN"), QT_TR_NOOP ("Sunspot number reported by NOAA for the last full day."), 1, 0},
+      {"k", QT_TR_NOOP ("K"), QT_TR_NOOP ("Planetary K index, 0 to 9. Low is quiet; 5 or more is a geomagnetic storm."), 2, 0},
+      {"a", QT_TR_NOOP ("A"), QT_TR_NOOP ("Planetary A index for the last 24 hours. Under 10 is quiet."), 3, 0},
+      {"xray", QT_TR_NOOP ("X-ray"), QT_TR_NOOP ("Solar X-ray level now. M and X class flares can black out HF on the daylight side."), 0, 2},
+      {"wind", QT_TR_NOOP ("Wind"), QT_TR_NOOP ("Solar wind speed in km/s. Fast wind (over 500) can disturb the bands."), 1, 2},
+      {"bz", QT_TR_NOOP ("Bz"), QT_TR_NOOP ("North-south part of the solar magnetic field, in nT. Strongly negative (southward) means storms are more likely."), 2, 2},
+    };
+    for (auto const& d : defs)
+      {
+        Tile t;
+        t.caption = new QLabel {tr (d.caption), spacewx};
+        t.caption->setObjectName ("muted");
+        t.caption->setToolTip (tr (d.tip));
+        t.value = new QLabel {QString {QChar {0x2014}}, spacewx};
+        t.value->setToolTip (tr (d.tip));
+        t.tip = tr (d.tip);
+        grid->addWidget (t.caption, d.row, d.col, Qt::AlignLeft | Qt::AlignVCenter);
+        grid->addWidget (t.value, d.row, d.col + 1, Qt::AlignLeft | Qt::AlignVCenter);
+        tiles_[d.key] = t;
+      }
+    grid->setColumnStretch (1, 1);
+    grid->setColumnStretch (3, 1);
+    body->addLayout (grid);
+    body->addStretch ();
+    top->addWidget (spacewx, 13);
+  }
 
   auto * beacon_box = make_box ("beacons", tr ("NCDXF beacons"), body);
   beacon_box->setToolTip (tr ("<p>The NCDXF/IARU beacons take turns sending for ten seconds on each band, "
@@ -4133,44 +4161,9 @@ void ConditionsWindow::build_ui ()
   beacon_next_->setObjectName ("muted");
   body->addWidget (beacon_next_);
   body->addStretch ();
-  top->addWidget (beacon_box, 2);
+  top->addWidget (beacon_box, 10);
   outer->addWidget (top_row_);
 
-  // ---- space weather tiles ----
-  auto * spacewx = new QWidget {this};
-  boxes_["spacewx"] = spacewx;
-  auto * tiles = new QGridLayout {spacewx};
-  tiles->setContentsMargins (0, 0, 0, 0);
-  tiles->setSpacing (12);
-  struct {char const * key; char const * caption; char const * tip;} const defs[] = {
-    {"sfi", QT_TR_NOOP ("Solar flux"), QT_TR_NOOP ("10.7 cm solar flux index (SFI). Higher is better for the high bands.")},
-    {"ssn", QT_TR_NOOP ("Sunspots"), QT_TR_NOOP ("Sunspot number reported by NOAA for the last full day.")},
-    {"k", QT_TR_NOOP ("K index"), QT_TR_NOOP ("Planetary K index, 0 to 9. Low is quiet; 5 or more is a geomagnetic storm.")},
-    {"a", QT_TR_NOOP ("A index"), QT_TR_NOOP ("Planetary A index for the last 24 hours. Under 10 is quiet.")},
-    {"xray", QT_TR_NOOP ("X-ray"), QT_TR_NOOP ("Solar X-ray level now. M and X class flares can black out HF on the daylight side.")},
-    {"wind", QT_TR_NOOP ("Solar wind"), QT_TR_NOOP ("Solar wind speed in km/s. Fast wind (over 500) can disturb the bands.")},
-    {"bz", QT_TR_NOOP ("Bz"), QT_TR_NOOP ("North-south part of the solar magnetic field, in nT. Strongly negative (southward) means storms are more likely.")},
-  };
-  int col = 0;
-  for (auto const& d : defs)
-    {
-      auto * frame = new QFrame {spacewx};
-      frame->setObjectName ("conditionsTile");
-      frame->setToolTip (tr (d.tip));
-      auto * v = new QVBoxLayout {frame};
-      v->setContentsMargins (14, 9, 14, 9);
-      v->setSpacing (2);
-      Tile t;
-      t.caption = box_title (tr (d.caption), frame);
-      t.value = new QLabel {QString {QChar {0x2014}}, frame};
-      t.note = new QLabel {frame};
-      v->addWidget (t.caption);
-      v->addWidget (t.value);
-      v->addWidget (t.note, 0, Qt::AlignLeft);
-      tiles_[d.key] = t;
-      tiles->addWidget (frame, 0, col++);
-    }
-  outer->addWidget (spacewx);
 
   // ---- you, the DX station and the band outlook beside the map ----
   auto * middle = new QHBoxLayout;
@@ -5142,7 +5135,8 @@ void ConditionsWindow::fetch_conditions_map ()
       reply->deleteLater ();
       if (QNetworkReply::NoError != reply->error ())
         {
-          overlay_status_ = tr ("The MUF (prop.kc2g.com) couldn't be reached.");
+          // the footer says when VOACAP's prediction is standing in
+          predicted_muf ();
           return;
         }
       struct P {double lat; double lon; double muf;};
@@ -5163,7 +5157,7 @@ void ConditionsWindow::fetch_conditions_map ()
         }
       if (points.isEmpty ())
         {
-          overlay_status_ = tr ("No recent MUF readings.");
+          predicted_muf ();
           return;
         }
       // weighted by distance; far from any ionosonde it fades out
@@ -5198,7 +5192,9 @@ void ConditionsWindow::fetch_conditions_map ()
               img.setPixel (x, y, qPremultiply (qRgba (c.red (), c.green (), c.blue (), a)));
             }
         }
+      muf_predicted_ = false;
       map_->set_conditions (img.scaled (720, 360, Qt::IgnoreAspectRatio, Qt::SmoothTransformation), tr ("MUF now · prop.kc2g.com (KC2G)"), 35.);
+      update_status ();
     });
 }
 
@@ -5916,7 +5912,9 @@ void ConditionsWindow::update_status ()
                      "Sun: NASA SDO. Maps: NASA Blue Marble and Black Marble, NASA GIBS when zoomed, Natural Earth; rain and snow: NASA GIBS.")
     .arg (updated_.toString ("hh:mm"));
   if (map_->colour_by == 1) text += ' ' + tr ("D-region absorption: NOAA SWPC D-RAP.");
-  if (map_->colour_by == 2) text += ' ' + tr ("MUF: prop.kc2g.com, by Andrew Rodland, KC2G.");
+  if (map_->colour_by == 2) text += ' ' + (muf_predicted_
+                                           ? tr ("MUF: predicted from you by VOACAP, as prop.kc2g.com couldn't be reached.")
+                                           : tr ("MUF: prop.kc2g.com, by Andrew Rodland, KC2G."));
   if (ConditionsMap::CQZones == map_->grid || ConditionsMap::ITUZones == map_->grid) text += ' ' + tr ("Zones: HB9HIL (MIT licence).");
   if (overlay_status_.size ()) text += ' ' + overlay_status_;
   if (failed_) text += ' ' + tr ("(%n item(s) couldn't be reached; will try again in 15 minutes)", "", failed_);
@@ -6009,32 +6007,21 @@ void ConditionsWindow::on_daily (QByteArray const& data)
     }
 }
 
-namespace
-{
-  // a little rounded tag in a status colour
-  QString pill_css (QColor const& c)
-  {
-    return QString {"QLabel {color: %1; background-color: rgba(%2, %3, %4, 38); border: 1px solid rgba(%2, %3, %4, 80);"
-                    " border-radius: 9px; padding: 1px 9px; font-weight: 600;}"}
-      .arg (c.name ()).arg (c.red ()).arg (c.green ()).arg (c.blue ());
-  }
-}
-
 void ConditionsWindow::update_tiles ()
 {
+  // a reading, with its meaning in the tooltip; K and A always show their
+  // colour, X-ray, wind and Bz only when they're a worry
   auto set = [this] (QString const& key, QString const& value, QString const& note, int level) {
     auto const& t = tiles_[key];
+    if (!t.value) return;
     t.value->setText (value);
-    t.note->setText (note.isEmpty () ? QString {QChar {0x00A0}} : note);
-    t.value->setStyleSheet (big_css (2.0) + " font-family: \"Inter Display\", \"Segoe UI Variable Display\", \"Segoe UI\";");
-    if (level < 0 || note.isEmpty ())
-      {
-        t.note->setStyleSheet (QString {"QLabel {color: %1;}"}.arg (Win11Theme::token ("text_secondary")));
-      }
-    else
-      {
-        t.note->setStyleSheet (pill_css (level_color (level)));
-      }
+    t.value->setToolTip (note.isEmpty () ? t.tip : QString {"%1<br><b>%2</b>"}.arg (t.tip, note));
+    bool const always = "k" == key || "a" == key;
+    bool const plain = "sfi" == key || "ssn" == key;
+    QString colour = Win11Theme::token ("text");
+    if (level >= 0 && !plain && (always || level < 2)) colour = level_color (level).name ();
+    t.value->setStyleSheet (QString {"QLabel {color: %1; font-weight: 600; font-size: %2pt;}"}
+                            .arg (colour).arg (QApplication::font ().pointSizeF () * 1.15, 0, 'f', 1));
   };
   QString const none {QChar {0x2014}};
   if (qIsNaN (sfi_)) set ("sfi", none, {}, -1);
@@ -6224,15 +6211,9 @@ void ConditionsWindow::select_prop_band (int band)
     }
 }
 
-void ConditionsWindow::run_area ()
+// the sunspot number VOACAP is given: worked out from today's solar flux
+double ConditionsWindow::effective_ssn () const
 {
-  if (!prop_box_->isChecked () || !isVisible ()) return;
-  if (area_process_) {area_again_ = true; return;}
-  double lat, lon;
-  if (!grid_to_latlon (my_grid_, lat, lon)) return;
-  auto const program = voacap_program ();
-  if (program.isEmpty ()) return;
-  static double const freqs[VoacapGrid::bands] = {3.573, 5.357, 7.074, 10.136, 14.074, 18.100, 21.074, 24.915, 28.074};
   double ssn = 100.;
   if (!qIsNaN (sfi_))
     {
@@ -6240,7 +6221,134 @@ void ConditionsWindow::run_area ()
       ssn = disc > 0 ? (-0.728 + std::sqrt (disc)) / (2. * 0.00089) : 0.;
     }
   else if (!qIsNaN (ssn_)) ssn = ssn_;
-  ssn = qBound (0., ssn, 300.);
+  return qBound (0., ssn, 300.);
+}
+
+// When prop.kc2g.com can't be reached, the MUF layer shows VOACAP's
+// prediction instead: the highest frequency from you to each place,
+// worked out for this month, hour and sunspot number
+void ConditionsWindow::predicted_muf ()
+{
+  if (muf_process_ || !colour_by_ || !colour_by_->checkedAction ()
+      || 2 != colour_by_->checkedAction ()->data ().toInt ()) return;
+  // one VOACAP at a time
+  if (area_process_)
+    {
+      QTimer::singleShot (5000, this, &ConditionsWindow::predicted_muf);
+      return;
+    }
+  double lat, lon;
+  if (!grid_to_latlon (my_grid_, lat, lon)) return;
+  auto const program = voacap_program ();
+  if (program.isEmpty ()) return;
+  auto const now = QDateTime::currentDateTimeUtc ();
+  int const hour = now.time ().hour () ? now.time ().hour () : 24;
+  auto pos = [] (double v, char p, char n) {return QString {"%1%2"}.arg (std::abs (v), 6, 'f', 2).arg (v >= 0 ? p : n);};
+  auto nine = [] (QString const& first, QString const& rest) {
+    QString s = first;
+    for (int i = 0; i < 8; ++i) s += rest;
+    return s;
+  };
+  QStringList const lines {
+    "Model    :VOACAP",
+    "Colors   :Black    :Blue     :Ignore   :Ignore   :Red      :Black with shading",
+    "Cities   :Receive.cty",
+    "Nparms   :    1",
+    "Parameter:MUF      0",
+    QString {"Transmit :%1   %2   %3 %4"}.arg (pos (lat, 'N', 'S')).arg (pos (lon, 'E', 'W')).arg ("DE", -20).arg ("Short"),
+    QString {"Pcenter  :%1   %2   %3"}.arg (pos (lat, 'N', 'S')).arg (pos (lon, 'E', 'W')).arg ("DE", -20),
+    "Area     :    -180.0     180.0     -90.0      90.0",
+    "Gridsize :   91    1",
+    "Method   :   30",
+    "Coeffs   :CCIR",
+    "Months   :" + nine (QString {"%1"}.arg (double (now.date ().month ()), 7, 'f', 2), "   0.00"),
+    "Ssns     :" + nine (QString {"%1"}.arg (qRound (effective_ssn ()), 7), "      0"),
+    "Hours    :" + nine (QString {"%1"}.arg (hour, 7), "      0"),
+    "Freqs    :" + nine (QString {"%1"}.arg (14.074, 7, 'f', 3), "  0.000"),
+    "System   :  145     3.000   90    3.000     0.100",
+    "Fprob    : 1.00 1.00 1.00 0.00",
+    QString {"Rec Ants :[%1]  gain=   0.0   0.0"}.arg ("default /isotrope", -21),
+    QString {"Tx Ants  :[%1]  0.000  -1.0 %2"}.arg ("default /isotrope", -21).arg (0.1, 10, 'f', 4),
+  };
+  auto const root = voacap_root ();
+  QDir {root}.mkpath ("areadata/kf0kylmuf");
+  QFile input {root + "/areadata/kf0kylmuf/muf.voa"};
+  if (!input.open (QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) return;
+  input.write (lines.join ('\n').toLatin1 () + '\n');
+  input.close ();
+  QFile::remove (root + "/areadata/kf0kylmuf/muf.vg1");
+  muf_process_ = new QProcess {this};
+  muf_process_->setWorkingDirectory (root + "/run");
+  connect (muf_process_, static_cast<void (QProcess::*) (int, QProcess::ExitStatus)> (&QProcess::finished), this,
+           [this, root] (int, QProcess::ExitStatus) {
+             muf_process_->deleteLater ();
+             muf_process_ = nullptr;
+             on_predicted_muf (root + "/areadata/kf0kylmuf/muf.vg1");
+           });
+  connect (muf_process_, &QProcess::errorOccurred, this, [this] (QProcess::ProcessError error) {
+      if (QProcess::FailedToStart != error || !muf_process_) return;
+      muf_process_->deleteLater ();
+      muf_process_ = nullptr;
+    });
+  muf_process_->start (program, {"-s", root, "area", "calc", "kf0kylmuf/muf.voa"});
+}
+
+void ConditionsWindow::on_predicted_muf (QString const& path)
+{
+  if (!colour_by_ || !colour_by_->checkedAction () || 2 != colour_by_->checkedAction ()->data ().toInt ()) return;
+  QFile file {path};
+  if (!file.open (QIODevice::ReadOnly | QIODevice::Text)) return;
+  file.readLine ();
+  file.readLine ();
+  auto const header = QString::fromLatin1 (file.readLine ());
+  int const muf_end = header.indexOf ("   MUF") + 6;
+  if (muf_end < 6) return;
+  int const N = 91;
+  QVector<float> field (N * N, -1.f);
+  while (!file.atEnd ())
+    {
+      auto const line = QString::fromLatin1 (file.readLine ());
+      if (line.size () < muf_end) continue;
+      bool ok1, ok2, ok3;
+      double const lat = line.mid (6, 10).toDouble (&ok1);
+      double const lon = line.mid (16, 10).toDouble (&ok2);
+      double const muf = line.mid (muf_end - 6, 6).toDouble (&ok3);
+      if (!ok1 || !ok2 || !ok3 || muf <= 0.) continue;
+      int const x = qBound (0, qRound ((lon + 180.) / 360. * (N - 1)), N - 1);
+      int const y = qBound (0, qRound ((90. - lat) / 180. * (N - 1)), N - 1);
+      field[y * N + x] = static_cast<float> (muf);
+    }
+  QImage img {N, N, QImage::Format_ARGB32_Premultiplied};
+  int filled = 0;
+  for (int y = 0; y < N; ++y)
+    {
+      for (int x = 0; x < N; ++x)
+        {
+          double const muf = field[y * N + x];
+          if (muf <= 0.) {img.setPixel (x, y, 0); continue;}
+          ++filled;
+          QColor const c = mhz_colour (muf, 35.);
+          img.setPixel (x, y, qPremultiply (qRgba (c.red (), c.green (), c.blue (), 170)));
+        }
+    }
+  if (!filled) return;
+  muf_predicted_ = true;
+  map_->set_conditions (img.scaled (720, 360, Qt::IgnoreAspectRatio, Qt::SmoothTransformation),
+                        tr ("MUF predicted from you \u00B7 VOACAP"), 35.);
+  update_status ();
+}
+
+void ConditionsWindow::run_area ()
+{
+  if (!prop_box_->isChecked () || !isVisible ()) return;
+  if (area_process_) {area_again_ = true; return;}
+  if (muf_process_) {QTimer::singleShot (5000, this, &ConditionsWindow::schedule_area); return;}
+  double lat, lon;
+  if (!grid_to_latlon (my_grid_, lat, lon)) return;
+  auto const program = voacap_program ();
+  if (program.isEmpty ()) return;
+  static double const freqs[VoacapGrid::bands] = {3.573, 5.357, 7.074, 10.136, 14.074, 18.100, 21.074, 24.915, 28.074};
+  double const ssn = effective_ssn ();
   auto const now = QDateTime::currentDateTimeUtc ();
   int const hour = now.time ().hour () ? now.time ().hour () : 24;
   int const watts = voacap_power_->currentData ().toInt ();

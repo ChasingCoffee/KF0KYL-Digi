@@ -112,6 +112,9 @@ private:
   void schedule_area ();
   void select_prop_band (int band);
   void run_area ();
+  double effective_ssn () const;
+  void predicted_muf ();
+  void on_predicted_muf (QString const& path);
   void on_area (QString const& path, QString const& label);
   void run_voacap ();
   void on_voacap (QString const& path);
@@ -142,7 +145,7 @@ private:
   QTimer * clock_timer_;
   ConditionsMap * map_;
 
-  struct Tile {QLabel * value; QLabel * caption; QLabel * note;};
+  struct Tile {QLabel * value {nullptr}; QLabel * caption {nullptr}; QString tip;};
   QHash<QString, Tile> tiles_;
   QLabel * band_cells_[4][2] {};
   CallSign * call_label_;
@@ -208,6 +211,8 @@ private:
   QTimer * area_timer_ {nullptr};
   class QProcess * area_process_ {nullptr};
   bool area_again_ {false};
+  class QProcess * muf_process_ {nullptr};
+  bool muf_predicted_ {false};
   QDateTime voacap_ran_;
   QWidget * left_column_;
   class QScrollArea * left_scroll_ {nullptr};
