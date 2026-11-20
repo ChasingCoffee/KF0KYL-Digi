@@ -412,6 +412,11 @@ void WideGraph::sync_toolbar ()
   for (auto * s : {m_tbGain, m_tbFloor, m_tbSpeed}) s->blockSignals (false);
 }
 
+void WideGraph::clearDecodeLabels ()
+{
+  ui->widePlot->clearDecodeLabels ();
+}
+
 void WideGraph::addDecodeLabel (int freq, QString const& call, int snr, QColor const& colour, QString const& tip, QString const& period)
 {
   ui->widePlot->addDecodeLabel (CPlotter::DecodeLabel {freq, call, snr, colour, tip}, period);

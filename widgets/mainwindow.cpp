@@ -6781,6 +6781,7 @@ void MainWindow::readFromStdout()                             //readFromStdout
   }
   while(proc_jt9.canReadLine()) {
     auto line_read = proc_jt9.readLine ();
+    filtered = false;                   // each decode is filtered on its own
 
     QString the_line = QString(line_read);
     if(ui->actionEnable_QSY_Popups->isChecked() || m_qsymonitorWidget) showQSYMessage(the_line);
@@ -8031,7 +8032,12 @@ void MainWindow::readFromStdout()                             //readFromStdout
       if (bDisplayRight && !block_right_display) {
         // This msg is within 10 hertz of our tuned frequency, or a JT4 or JT65 avg, or contains MyCall
 
-        if(!pounce && (!m_bBestSPArmed or m_mode!="FT4")) {
+        // the Filters hide stations here too, but never your own QSO:
+        // anything to you, or from the station you're working, always shows
+        bool const keep_rx = !filtered || m_config.filters_for_Wait_and_Pounce_only ()
+          || decodedtext0.string ().contains (m_baseCall)
+          || (m_hisCall.size () && decodedtext0.string ().contains (m_hisCall));
+        if(keep_rx && !pounce && (!m_bBestSPArmed or m_mode!="FT4")) {
           // insert blank line when band was changed
           if (m_config.insert_blank () && SpecOp::FOX!=m_specOp && m_band_changed && (m_currentBandPeriod == m_currentBand)) {
             if (ui->actionUse_Dark_Style->isChecked()) {
@@ -18186,6 +18192,23 @@ void MainWindow::setup_extras ()
       m_settings->setValue ("FilterMinSnr", m_minSnr);
       statusChanged ();
     });
+  // when a filter changes, stations it now hides leave the map and the
+  // waterfall straight away; the rest come back with the next decodes
+  {
+    auto filters_changed = [this] {
+      if (m_conditions) m_conditions->clear_stations ();
+      if (m_wideGraph) m_wideGraph->clearDecodeLabels ();
+    };
+    std::function<void (QMenu *)> watch = [&] (QMenu * menu) {
+      for (auto * a : menu->actions ())
+        {
+          if (a->menu ()) watch (a->menu ());
+          else if (a->isCheckable ()) connect (a, &QAction::toggled, this, filters_changed);
+        }
+    };
+    watch (ui->menuFilters);
+    connect (ui->cbBypass, &QCheckBox::toggled, this, filters_changed);
+  }
 
   // a sound of your choosing when a QSO is logged
   auto * sound = new QAction {tr ("Sound when a QSO is logged..."), this};

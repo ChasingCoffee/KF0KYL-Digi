@@ -66,6 +66,7 @@ public:
 
   // a decoded station's call shown on its signal in the waterfall
   void addDecodeLabel (int freq, QString const& call, int snr, QColor const& colour, QString const& tip, QString const& period);
+  void clearDecodeLabels ();
 
 signals:
   void labelDoubleClicked (QString const& call, Qt::KeyboardModifiers);
