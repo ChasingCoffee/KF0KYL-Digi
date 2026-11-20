@@ -247,6 +247,7 @@ private:
   class NewsTicker * news_ {nullptr};
   QTimer * news_timer_ {nullptr};
   void fetch_news ();
+  void fit_dx_box ();
   void fetch_conditions_map ();          // DRAP or the MUF, whichever colours the map
   void fit_outlook ();
   void update_status ();

@@ -3857,18 +3857,42 @@ void ConditionsWindow::update_containers ()
   // when it's shown, otherwise the boxes keep their size at the top
   if (side_)
     {
-      // with the space weather tiles closed, the DX box takes the extra
-      // room and its photo gets bigger; otherwise VOACAP's chart grows
+      // with the space weather tiles closed, the DX box gets the room they
+      // leave and its photo gets bigger; VOACAP keeps the size it had
       bool const roomy = !box_on ("spacewx") && box_on ("dx");
-      bool const grow = box_on ("voacap") && !roomy;
-      side_->setStretchFactor (boxes_["dx"], roomy ? 1 : 0);
+      bool const grow = box_on ("voacap");
+      fit_dx_box ();
+      auto * dx = boxes_["dx"];
+      side_->setStretchFactor (dx, grow ? 0 : (roomy ? 1 : 0));
       side_->setStretchFactor (boxes_["voacap"], grow ? 1 : 0);
       side_->setStretchFactor (side_filler_, grow || roomy ? 0 : 1);
       side_filler_->setVisible (!grow && !roomy);
-      if (auto * info = qobject_cast<CallsignInfo *> (call_info_)) info->setPhotoSize (roomy ? 150 : 64);
     }
   if (box_on ("voacap")) schedule_voacap ();
   if (box_on ("sun") && isVisible ()) sun_timer_->start (); else sun_timer_->stop ();
+}
+
+// with the space weather tiles closed, the DX box is taller by just the
+// room they leave, so VOACAP below it keeps its size, and the photo grows
+void ConditionsWindow::fit_dx_box ()
+{
+  auto * dx = boxes_.value ("dx");
+  if (!dx || !side_) return;
+  auto * info = qobject_cast<CallsignInfo *> (call_info_);
+  if (info) info->setPhotoSize (64);
+  dx->setMinimumHeight (0);
+  if (box_on ("spacewx") || !box_on ("dx")) return;
+  int const freed = boxes_["spacewx"]->sizeHint ().height () + 12;
+  if (info) info->setPhotoSize (qBound (64, 64 + freed, 150));
+  auto height_of = [dx] {
+    int const w = dx->width () > 50 ? dx->width () : 300;
+    return dx->hasHeightForWidth () ? dx->heightForWidth (w) : dx->sizeHint ().height ();
+  };
+  // the box's height with the small photo, measured before it grew
+  if (info) info->setPhotoSize (64);
+  int const normal = height_of ();
+  if (info) info->setPhotoSize (qBound (64, 64 + freed, 150));
+  dx->setMinimumHeight (normal + freed);
 }
 
 void ConditionsWindow::build_ui ()
@@ -4408,7 +4432,7 @@ QWidget * ConditionsWindow::build_map_bar ()
   gray_box_ = make_chip (tr ("Gray line"), tr ("Shade the night side of the Earth"), bar);
   aurora_box_ = make_chip (tr ("Aurora"), tr ("NOAA's 30-minute aurora forecast. Strong aurora can absorb or reflect HF and VHF signals near the poles."), bar);
   rain_box_ = make_chip (tr ("Rain"), tr ("Where it's raining or snowing over the last half hour or so, from NASA satellites"), bar);
-  news_box_ = make_chip (tr ("News"), tr ("Ham radio headlines from ARRL, AMSAT and DX-World scrolling under these buttons. Click one to read it."), bar);
+  news_box_ = make_chip (tr ("News"), tr ("Ham radio headlines from ARRL, AMSAT and DX-World, and news about KF\u00D8KYL Digi, scrolling under these buttons. Click one to read it."), bar);
   cities_box_ = make_chip (tr ("Cities"), tr ("Names of cities. Zoom in to see more of them. Capitals have a square."), bar);
   beacons_box_ = make_chip (tr ("Beacons"), tr ("The 18 NCDXF/IARU beacons. The ones sending now are filled in the color of their band."), bar);
   prop_box_ = make_chip (tr ("Propagation"), tr ("<p>VOACAP's map for one band from you: how likely it is to reach each part of the world "
@@ -5162,7 +5186,54 @@ void ConditionsWindow::fetch_news ()
     {"DX-World", news_base ("https://www.dx-world.net/feed/", "dxworld")},
   };
   auto * got = new QMap<int, QVector<NewsTicker::Item>>;
-  auto * left = new int {int (feeds.size ())};
+  auto * mine = new QVector<NewsTicker::Item>;
+  auto * left = new int {int (feeds.size ()) + 1};
+  // when every request is back: the program's own messages first, then
+  // the headlines taking turns, one from each source
+  auto finish = [this, got, mine, left] {
+    if (--*left) return;
+    QVector<NewsTicker::Item> all {*mine};
+    for (int i = 0; i < 6; ++i)
+      {
+        for (auto it = got->cbegin (); it != got->cend (); ++it) if (i < it->size ()) all << it.value ()[i];
+      }
+    news_->set_items (all);
+    if (all.isEmpty ()) news_->set_message (tr ("The headlines couldn't be reached. Will try again in an hour."));
+    delete got;
+    delete mine;
+    delete left;
+  };
+  // messages from the program's author: a plain text file kept on the
+  // "news" branch of the GitHub repository, one message per line, with an
+  // optional link after a "|"; lines starting with # are notes
+  {
+    QNetworkRequest req {QUrl {news_base ("https://raw.githubusercontent.com/ccoo26/KF0KYL-Digi/news/news.txt", "own")}};
+    req.setRawHeader ("User-Agent", http_user_agent ().toUtf8 ());
+#if QT_VERSION >= QT_VERSION_CHECK (5, 9, 0)
+    req.setAttribute (QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+#endif
+    auto * reply = network_->get (req);
+    connect (reply, &QNetworkReply::finished, this, [reply, mine, finish] {
+        reply->deleteLater ();
+        if (QNetworkReply::NoError == reply->error ())
+          {
+            for (auto const& raw : QString::fromUtf8 (reply->readAll ()).split ('\n'))
+              {
+                auto const line = raw.trimmed ();
+                if (line.isEmpty () || line.startsWith ('#')) continue;
+                int const bar = line.lastIndexOf ('|');
+                NewsTicker::Item item {QString {"KF%1KYL Digi"}.arg (QChar {0x00D8}), line.simplified (), {}};
+                if (bar > 0 && line.mid (bar + 1).trimmed ().startsWith ("http"))
+                  {
+                    item.title = line.left (bar).simplified ();
+                    item.link = line.mid (bar + 1).trimmed ();
+                  }
+                if (item.title.size () && mine->size () < 10) *mine << item;
+              }
+          }
+        finish ();
+      });
+  }
   for (int f = 0; f < feeds.size (); ++f)
     {
       QNetworkRequest req {QUrl {feeds[f].url}};
@@ -5172,7 +5243,7 @@ void ConditionsWindow::fetch_news ()
 #endif
       auto * reply = network_->get (req);
       auto const source = feeds[f].source;
-      connect (reply, &QNetworkReply::finished, this, [this, reply, source, f, got, left] {
+      connect (reply, &QNetworkReply::finished, this, [reply, source, f, got, finish] {
           reply->deleteLater ();
           if (QNetworkReply::NoError == reply->error ())
             {
@@ -5203,17 +5274,7 @@ void ConditionsWindow::fetch_news ()
                 }
               (*got)[f] = items;
             }
-          if (--*left) return;
-          QVector<NewsTicker::Item> all;
-          // take turns: one from each source
-          for (int i = 0; i < 6; ++i)
-            {
-              for (auto it = got->cbegin (); it != got->cend (); ++it) if (i < it->size ()) all << it.value ()[i];
-            }
-          news_->set_items (all);
-          if (all.isEmpty ()) news_->set_message (tr ("The headlines couldn't be reached. Will try again in an hour."));
-          delete got;
-          delete left;
+          finish ();
         });
     }
 }
@@ -6062,6 +6123,7 @@ void ConditionsWindow::update_de_dx ()
         }
     }
   dx_info_->setText (dx);
+  fit_dx_box ();
 }
 
 void ConditionsWindow::schedule_voacap ()
