@@ -8,6 +8,8 @@
 
 class QLabel;
 class QPushButton;
+class QHBoxLayout;
+class QVBoxLayout;
 
 //
 // CallsignInfo - a strip under the decode panes showing who the current
@@ -30,11 +32,18 @@ public:
   void setInfo (CallsignLookup::Info const&);
   void setPhoto (QString const& call, QPixmap const&);
   void setNotFound (QString const& call, QString const& reason);
-  // the photo's size: bigger when there's room for it
-  void setPhotoSize (int);
+  // small photo beside the name, or a big one above it filling the
+  // room it is given; either way the whole photo shows, never trimmed
+  void setBigPhoto (bool);
+  // the height the small-photo layout needs, whatever is in it
+  int compactHeight () const;
+
+protected:
+  bool eventFilter (QObject *, QEvent *) override;
 
 private:
   void openQrzPage ();
+  void refresh_photo ();
 
   QLabel * photo_;
   QLabel * title_;
@@ -43,7 +52,9 @@ private:
   QPushButton * qrz_button_;
   QString call_;
   QPixmap photo_raw_;
-  int photo_size_ {64};
+  bool big_ {false};
+  QHBoxLayout * top_ {nullptr};
+  QVBoxLayout * column_ {nullptr};
   QString country_;
 };
 

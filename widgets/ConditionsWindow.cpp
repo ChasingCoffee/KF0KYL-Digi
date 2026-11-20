@@ -3901,42 +3901,40 @@ void ConditionsWindow::update_containers ()
   // when it's shown, otherwise the boxes keep their size at the top
   if (side_)
     {
-      // with the space weather tiles closed, the DX box gets the room they
-      // leave and its photo gets bigger; VOACAP keeps the size it had
-      bool const roomy = !box_on ("spacewx") && box_on ("dx");
+      // the DX box keeps a set height (see fit_dx_box); VOACAP takes the rest
       bool const grow = box_on ("voacap");
       fit_dx_box ();
       auto * dx = boxes_["dx"];
-      side_->setStretchFactor (dx, grow ? 0 : (roomy ? 1 : 0));
+      side_->setStretchFactor (dx, 0);
       side_->setStretchFactor (boxes_["voacap"], grow ? 1 : 0);
-      side_->setStretchFactor (side_filler_, grow || roomy ? 0 : 1);
-      side_filler_->setVisible (!grow && !roomy);
+      side_->setStretchFactor (side_filler_, grow ? 0 : 1);
+      side_filler_->setVisible (!grow);
     }
   if (box_on ("voacap")) schedule_voacap ();
   if (box_on ("sun") && isVisible ()) sun_timer_->start (); else sun_timer_->stop ();
 }
 
-// with the space weather tiles closed, the DX box is taller by just the
-// room they leave, so VOACAP below it keeps its size, and the photo grows
+// The DX box keeps one height whatever station is in it, so VOACAP below
+// it never changes size. With the space weather tiles closed it is taller
+// by just the room they leave, and that room goes to a bigger photo.
 void ConditionsWindow::fit_dx_box ()
 {
   auto * dx = boxes_.value ("dx");
   if (!dx || !side_) return;
   auto * info = qobject_cast<CallsignInfo *> (call_info_);
-  if (info) info->setPhotoSize (64);
-  dx->setMinimumHeight (0);
-  if (box_on ("spacewx") || !box_on ("dx")) return;
-  int const freed = boxes_["spacewx"]->sizeHint ().height () + 12;
-  if (info) info->setPhotoSize (qBound (64, 64 + freed, 150));
-  auto height_of = [dx] {
-    int const w = dx->width () > 50 ? dx->width () : 300;
-    return dx->hasHeightForWidth () ? dx->heightForWidth (w) : dx->sizeHint ().height ();
-  };
-  // the box's height with the small photo, measured before it grew
-  if (info) info->setPhotoSize (64);
-  int const normal = height_of ();
-  if (info) info->setPhotoSize (qBound (64, 64 + freed, 150));
-  dx->setMinimumHeight (normal + freed);
+  int const line = QFontMetrics {QApplication::font ()}.lineSpacing ();
+  // margins, title, the QRZ details with the small photo, then the table
+  // of grid, local time, sun, short and long path
+  int const details = info ? info->compactHeight () : 2 * line + 24;
+  int const normal = 22 + line + 4 + details + 8 + 5 * (line + 2) + 6;
+  bool const roomy = !box_on ("spacewx") && box_on ("dx");
+  int const freed = roomy ? boxes_["spacewx"]->sizeHint ().height () + 12 : 0;
+  if (info)
+    {
+      info->setBigPhoto (roomy);
+      if (auto * box = qobject_cast<QVBoxLayout *> (dx->layout ())) box->setStretchFactor (info, roomy ? 1000 : 0);
+    }
+  dx->setFixedHeight (normal + freed);
 }
 
 void ConditionsWindow::build_ui ()

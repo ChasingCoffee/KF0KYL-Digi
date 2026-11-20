@@ -9,22 +9,28 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QStringList>
+#include <QEvent>
+#include <QFontMetrics>
 
 #include "moc_CallsignInfo.cpp"
 
 namespace
 {
-  QPixmap rounded (QPixmap const& source, int photo_size)
+  int const small_photo {64};
+
+  // the whole photo, scaled to fit the box, with rounded corners
+  QPixmap rounded (QPixmap const& source, QSize const& box)
   {
-    auto const scaled = source.scaled (photo_size, photo_size, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
-    QPixmap result {photo_size, photo_size};
+    if (box.width () < 8 || box.height () < 8) return {};
+    auto const scaled = source.scaled (box, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    QPixmap result {scaled.size ()};
     result.fill (Qt::transparent);
     QPainter p {&result};
     p.setRenderHint (QPainter::Antialiasing);
     QPainterPath path;
-    path.addRoundedRect (0, 0, photo_size, photo_size, 10, 10);
+    path.addRoundedRect (QRectF {QPointF {}, QSizeF {scaled.size ()}}, 10, 10);
     p.setClipPath (path);
-    p.drawPixmap ((photo_size - scaled.width ()) / 2, (photo_size - scaled.height ()) / 2, scaled);
+    p.drawPixmap (0, 0, scaled);
     return result;
   }
 
@@ -60,8 +66,10 @@ CallsignInfo::CallsignInfo (QWidget * parent)
   setFrameShape (QFrame::NoFrame);
   setSizePolicy (QSizePolicy::Preferred, QSizePolicy::Fixed);
 
-  photo_->setFixedSize (photo_size_, photo_size_);
+  photo_->setFixedSize (small_photo, small_photo);
+  photo_->setAlignment (Qt::AlignCenter);
   photo_->setStyleSheet ("background: transparent;");
+  photo_->installEventFilter (this);
   title_->setTextFormat (Qt::RichText);
   details_->setTextFormat (Qt::PlainText);
   details_->setWordWrap (true);
@@ -83,7 +91,7 @@ CallsignInfo::CallsignInfo (QWidget * parent)
   text->addWidget (details_);
   text->addStretch ();
 
-  auto * top = new QHBoxLayout;
+  auto * top = top_ = new QHBoxLayout;
   top->setSpacing (12);
   top->addWidget (photo_, 0, Qt::AlignTop);
   top->addLayout (text, 1);
@@ -93,7 +101,7 @@ CallsignInfo::CallsignInfo (QWidget * parent)
   bottom->addWidget (qrz_button_);
   bottom->addWidget (source_, 1);
 
-  auto * column = new QVBoxLayout {this};
+  auto * column = column_ = new QVBoxLayout {this};
   column->setContentsMargins (0, 0, 0, 0);
   column->setSpacing (8);
   column->addLayout (top);
@@ -114,7 +122,7 @@ void CallsignInfo::showCall (QString const& call, QString const& country)
   call_ = call.toUpper ();
   country_ = country;
   photo_raw_ = QPixmap {};
-  photo_->setPixmap (initials (call_, photo_size_));
+  refresh_photo ();
   title_->setText (QString {"<span style='font-size:16px; font-weight:600;'>%1</span>"}.arg (call_.toHtmlEscaped ()));
   details_->setText (country_);
   source_->setText (tr ("Looking up…"));
@@ -151,7 +159,7 @@ void CallsignInfo::setPhoto (QString const& call, QPixmap const& pixmap)
 {
   if (!call_.contains (call) || pixmap.isNull ()) return;
   photo_raw_ = pixmap;
-  photo_->setPixmap (rounded (pixmap, photo_size_));
+  refresh_photo ();
 }
 
 void CallsignInfo::setNotFound (QString const& call, QString const& reason)
@@ -167,11 +175,53 @@ void CallsignInfo::openQrzPage ()
   QDesktopServices::openUrl (QUrl {QString {"https://www.qrz.com/db/%1"}.arg (QString::fromLatin1 (QUrl::toPercentEncoding (call_)))});
 }
 
-void CallsignInfo::setPhotoSize (int size)
+void CallsignInfo::setBigPhoto (bool big)
 {
-  if (size == photo_size_) return;
-  photo_size_ = size;
-  photo_->setFixedSize (size, size);
-  if (!photo_raw_.isNull ()) photo_->setPixmap (rounded (photo_raw_, size));
-  else if (call_.size ()) photo_->setPixmap (initials (call_, size));
+  if (big == big_) return;
+  big_ = big;
+  if (big)
+    {
+      // above the name, as big as the room allows
+      top_->removeWidget (photo_);
+      photo_->setMinimumSize (1, 1);
+      photo_->setMaximumSize (QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+      photo_->setSizePolicy (QSizePolicy::Expanding, QSizePolicy::Expanding);
+      column_->insertWidget (0, photo_, 1);
+      setSizePolicy (QSizePolicy::Preferred, QSizePolicy::Expanding);
+    }
+  else
+    {
+      column_->removeWidget (photo_);
+      photo_->setFixedSize (small_photo, small_photo);
+      photo_->setSizePolicy (QSizePolicy::Fixed, QSizePolicy::Fixed);
+      top_->insertWidget (0, photo_, 0, Qt::AlignTop);
+      setSizePolicy (QSizePolicy::Preferred, QSizePolicy::Fixed);
+    }
+  refresh_photo ();
+}
+
+int CallsignInfo::compactHeight () const
+{
+  // the call and name in 16 px type, then up to two lines of place
+  int const text = QFontMetrics {font ()}.lineSpacing () * 2 + 24;
+  return qMax (small_photo, text) + 8 + qrz_button_->sizeHint ().height ();
+}
+
+void CallsignInfo::refresh_photo ()
+{
+  if (call_.isEmpty ()) return;
+  auto const box = photo_->size ();
+  if (!photo_raw_.isNull ()) photo_->setPixmap (rounded (photo_raw_, box));
+  else
+    {
+      int const side = qMin (qMin (box.width (), box.height ()), 150);
+      if (side >= 8) photo_->setPixmap (initials (call_, side));
+    }
+}
+
+bool CallsignInfo::eventFilter (QObject * o, QEvent * e)
+{
+  // the big photo follows the room it's given
+  if (o == photo_ && QEvent::Resize == e->type ()) refresh_photo ();
+  return QFrame::eventFilter (o, e);
 }
