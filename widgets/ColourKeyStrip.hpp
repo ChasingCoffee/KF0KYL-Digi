@@ -21,8 +21,14 @@ public:
   explicit ColourKeyStrip (QWidget * parent = nullptr);
 
   void set_items (DecodeHighlightingModel::HighlightItems const&);
+  // the panel's title, shown first on the top line (the key wraps under it)
+  void set_lead (QWidget *);
+  // the colours shown or just the title
+  void set_chips_shown (bool);
   QSize sizeHint () const override;
   QSize minimumSizeHint () const override;
+  bool hasHeightForWidth () const override {return true;}
+  int heightForWidth (int) const override;
 
   Q_SIGNAL void edit ();
   // a chip double-clicked: the highlight it stands for
@@ -33,14 +39,19 @@ protected:
   void mouseMoveEvent (QMouseEvent *) override;
   void mouseReleaseEvent (QMouseEvent *) override;
   void mouseDoubleClickEvent (QMouseEvent *) override;
+  void resizeEvent (QResizeEvent *) override;
   bool event (QEvent *) override;
 
 private:
-  struct Chip {QString text; QColor fg; QColor bg; DecodeHighlightingModel::Highlight type; QRectF rect;};
+  struct Chip {QString text; QColor fg; QColor bg; DecodeHighlightingModel::Highlight type; mutable QRectF rect;};
   static QString short_name (DecodeHighlightingModel::Highlight);
+  // where everything goes at this width; returns the height needed
+  double place (double width) const;
+  double row_height () const;
   QVector<Chip> chips_;
-  QRectF edit_rect_;
-  int hidden_ {0};
+  mutable QRectF edit_rect_;
+  QWidget * lead_ {nullptr};
+  bool chips_shown_ {true};
 };
 
 #endif

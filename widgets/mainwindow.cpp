@@ -5395,7 +5395,7 @@ void MainWindow::trim_view (bool checked)
   }
   if (m_mode != "FreqCal" && m_mode != "WSPR" && m_mode != "FST4W") {
     ui->lh_decodes_title_label->setVisible(!checked);
-    if (m_colourKey) m_colourKey->setVisible ((!checked) && m_settings->value ("ColourKey", true).toBool ());
+    if (m_colourKey) m_colourKey->setVisible (!checked);
     ui->rh_decodes_title_label->setVisible(!checked);
   }
   ui->lh_decodes_headings_label->setVisible(!checked);
@@ -12420,7 +12420,7 @@ void MainWindow::switch_mode (Mode mode)
     ui->DX_controls_widget->setVisible(false);
     ui->rh_decodes_widget->setVisible (false);     // UR disable for AL + widescreen versions
     ui->lh_decodes_title_label->setVisible(false);
-    if (m_colourKey) m_colourKey->setVisible ((false) && m_settings->value ("ColourKey", true).toBool ());
+    if (m_colourKey) m_colourKey->setVisible (false);
   }
   QTimer::singleShot (500, [=] {
     if (!(m_mode=="Echo" or ((m_mode=="Q65" or m_mode=="JT65") && m_config.decode_at_52s()))
@@ -12438,7 +12438,7 @@ void MainWindow::WSPR_config(bool b)
   ui->DX_controls_widget->setVisible (!b or (m_mode=="Echo"));
   ui->WSPR_controls_widget->setVisible (b);
   ui->lh_decodes_title_label->setVisible(!b and ui->cbMenus->isChecked());
-  if (m_colourKey) m_colourKey->setVisible ((!b and ui->cbMenus->isChecked()) && m_settings->value ("ColourKey", true).toBool ());
+  if (m_colourKey) m_colourKey->setVisible (!b and ui->cbMenus->isChecked());
   ui->logQSOButton->setVisible(!b);
   ui->DecodeButton->setEnabled(!b);
   bool bFST4W=(m_mode=="FST4W");
@@ -18190,21 +18190,16 @@ void MainWindow::setup_extras ()
 
   // what the Band Activity colours mean, beside its title
   {
-    auto * row = new QHBoxLayout;
-    row->setContentsMargins (0, 0, 0, 0);
-    row->setSpacing (10);
     int const at = ui->verticalLayout_3->indexOf (ui->lh_decodes_title_label);
     ui->verticalLayout_3->removeWidget (ui->lh_decodes_title_label);
     ui->lh_decodes_title_label->setAlignment (Qt::AlignLeft | Qt::AlignVCenter);
-    ui->lh_decodes_title_label->setSizePolicy (QSizePolicy::Fixed, QSizePolicy::Preferred);
-    row->addWidget (ui->lh_decodes_title_label);
     m_colourKey = new ColourKeyStrip {ui->layoutWidget};
-    m_colourKey->setVisible (m_settings->value ("ColourKey", true).toBool ());
+    m_colourKey->set_lead (ui->lh_decodes_title_label);
+    m_colourKey->set_chips_shown (m_settings->value ("ColourKey", true).toBool ());
     m_colourKey->setContextMenuPolicy (Qt::ActionsContextMenu);
     auto * hide_key = new QAction {tr ("Hide the colour key (View menu brings it back)"), m_colourKey};
     m_colourKey->addAction (hide_key);
-    row->addWidget (m_colourKey, 1);
-    ui->verticalLayout_3->insertLayout (at, row);
+    ui->verticalLayout_3->insertWidget (at, m_colourKey);
     m_colourKey->set_items (m_config.decode_highlighting ().items ());
     // double-click a colour in the key to change it there and then
     connect (m_colourKey, &ColourKeyStrip::colour_clicked, this, [this] (DecodeHighlightingModel::Highlight type) {
@@ -18232,11 +18227,11 @@ void MainWindow::setup_extras ()
       });
     auto * show_key = new QAction {tr ("Colour key beside Band Activity"), this};
     show_key->setCheckable (true);
-    show_key->setChecked (m_colourKey->isVisible () || m_settings->value ("ColourKey", true).toBool ());
+    show_key->setChecked (m_settings->value ("ColourKey", true).toBool ());
     ui->menuView->addAction (show_key);
     connect (show_key, &QAction::toggled, this, [this] (bool on) {
         m_settings->setValue ("ColourKey", on);
-        m_colourKey->setVisible (on && ui->lh_decodes_title_label->isVisible ());
+        m_colourKey->set_chips_shown (on);
       });
     connect (hide_key, &QAction::triggered, show_key, [show_key] {show_key->setChecked (false);});
   }

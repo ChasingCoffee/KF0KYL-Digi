@@ -76,6 +76,7 @@ public:
   void set_highlight_colors (QColor const& cq, QColor const& my_call, QColor const& tx);
 
   Q_SIGNAL void call_colors_changed ();
+  Q_SIGNAL void dx_changed_for_tools ();
 
   // double-clicking a dot on the map
   Q_SIGNAL void station_double_clicked (QString const& call, Qt::KeyboardModifiers);
@@ -158,8 +159,24 @@ private:
   QLabel * dx_info_;
   XRayGraph * xray_graph_;
   SunImage * sun_image_;
-  QButtonGroup * sun_group_;
   QStringList sun_channels_;
+  class QToolButton * sun_pick_ {nullptr};
+  class QActionGroup * sun_pictures_ {nullptr};
+  class QAction * sun_movie_action_ {nullptr};
+  QString sun_channel_;                    // the picture showing now
+  QTimer * sun_rotate_ {nullptr};
+  QTimer * sun_movie_timer_ {nullptr};
+  QVector<QPair<QDateTime, QImage>> sun_frames_;
+  QString sun_frames_channel_;
+  int sun_frame_ {0};
+  int sun_frames_wanted_ {0};
+  QHash<QString, QPair<QDateTime, QImage>> sun_cache_;
+  QString sun_choice () const;             // a channel, or "rotate"
+  void show_sun_channel (QString const& channel);
+  void load_sun_movie ();
+  void stop_sun_movie ();
+  void gray_line_tool ();
+  class QDialog * gray_line_ {nullptr};
   QProgressBar * beacon_bar_;
   QTimer * sun_timer_;
   QLabel * beacon_rows_[5] {};
@@ -217,6 +234,20 @@ private:
   QHash<QString, QColor> map_colours_;     // the ones chosen in Map colours, by key
   QAbstractButton * aurora_box_;
   QAbstractButton * rain_box_;
+  QAbstractButton * clouds_box_ {nullptr};
+  QAbstractButton * news_box_ {nullptr};
+  class QToolButton * style_button_ {nullptr};
+  class QToolButton * projection_button_ {nullptr};
+  class QToolButton * grid_button_ {nullptr};
+  class QActionGroup * colour_by_ {nullptr};
+  class NewsTicker * news_ {nullptr};
+  QTimer * news_timer_ {nullptr};
+  void fetch_news ();
+  void fetch_conditions_map ();          // DRAP or the MUF, whichever colours the map
+  void fit_outlook ();
+  bool compact_outlook_ {false};
+  QWidget * map_bar_ {nullptr};
+  void resizeEvent (QResizeEvent *) override;
   class QCheckBox * show_cq_;
   class QCheckBox * show_me_;
   class QCheckBox * show_called_;

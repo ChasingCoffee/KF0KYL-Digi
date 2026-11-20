@@ -900,6 +900,7 @@ set (TOP_LEVEL_RESOURCES
   artwork/kf0kyl_logo.png
   artwork/map_land.png
   artwork/map_lines.bin
+  artwork/map_zones.bin
   artwork/map_land.bin
   artwork/map_day.jpg
   artwork/map_night.jpg

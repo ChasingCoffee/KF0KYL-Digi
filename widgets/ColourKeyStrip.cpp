@@ -6,6 +6,7 @@
 #include <QToolTip>
 #include <QFontMetricsF>
 #include <QEvent>
+#include <cmath>
 
 #include "Win11Theme.hpp"
 
@@ -19,7 +20,9 @@ ColourKeyStrip::ColourKeyStrip (QWidget * parent)
   : QWidget {parent}
 {
   setMouseTracking (true);
-  setSizePolicy (QSizePolicy::Expanding, QSizePolicy::Fixed);
+  QSizePolicy policy {QSizePolicy::Expanding, QSizePolicy::Preferred};
+  policy.setHeightForWidth (true);
+  setSizePolicy (policy);
 }
 
 QString ColourKeyStrip::short_name (DecodeHighlightingModel::Highlight h)
@@ -62,87 +65,132 @@ void ColourKeyStrip::set_items (DecodeHighlightingModel::HighlightItems const& i
   update ();
 }
 
-QSize ColourKeyStrip::sizeHint () const
+void ColourKeyStrip::set_lead (QWidget * lead)
+{
+  lead_ = lead;
+  lead_->setParent (this);
+  lead_->show ();
+  updateGeometry ();
+}
+
+void ColourKeyStrip::set_chips_shown (bool on)
+{
+  chips_shown_ = on;
+  updateGeometry ();
+  update ();
+}
+
+double ColourKeyStrip::row_height () const
 {
   QFontMetricsF const fm {font ()};
-  double w = fm.horizontalAdvance (tr ("Edit…")) + 8;
-  for (auto const& c : chips_) w += fm.horizontalAdvance (c.text) + 2 * pad + gap;
-  return QSize {int (w) + 4, int (fm.height ()) + 6};
+  double h = fm.height () + 6;
+  if (lead_) h = qMax (h, double (lead_->sizeHint ().height ()));
+  return h;
+}
+
+// the title, then the chips in order, wrapping onto more lines as needed;
+// Edit… follows the last one
+double ColourKeyStrip::place (double width) const
+{
+  QFontMetricsF const fm {font ()};
+  auto bold = font ();
+  bold.setBold (true);
+  QFontMetricsF const bfm {bold};
+  double const line = row_height () + 3;
+  double const ch = fm.height () + 4;
+  double x = lead_ ? lead_->sizeHint ().width () + 10 : 0.;
+  double y = 0.;
+  for (auto& c : chips_)
+    {
+      c.rect = QRectF {};
+      if (!chips_shown_) continue;
+      double const w = bfm.horizontalAdvance (c.text) + 2 * pad;
+      if (x > 0 && x + w > width)
+        {
+          x = 0;
+          y += line;
+        }
+      c.rect = QRectF {x, y + (row_height () - ch) / 2., w, ch};
+      x += w + gap;
+    }
+  if (chips_shown_)
+    {
+      double const ew = fm.horizontalAdvance (tr ("Edit…")) + 8;
+      if (x > 0 && x + ew > width)
+        {
+          x = 0;
+          y += line;
+        }
+      edit_rect_ = QRectF {x + 2, y + (row_height () - ch) / 2., ew, ch};
+    }
+  else edit_rect_ = QRectF {};
+  return y + row_height ();
+}
+
+int ColourKeyStrip::heightForWidth (int w) const
+{
+  return int (std::ceil (place (w)));
+}
+
+QSize ColourKeyStrip::sizeHint () const
+{
+  return QSize {400, heightForWidth (width () > 0 ? width () : 400)};
 }
 
 QSize ColourKeyStrip::minimumSizeHint () const
 {
-  QFontMetricsF const fm {font ()};
-  return QSize {int (fm.horizontalAdvance (tr ("Edit…"))) + 12, int (fm.height ()) + 6};
+  int const w = lead_ ? lead_->sizeHint ().width () : 60;
+  return QSize {w, int (row_height ())};
+}
+
+void ColourKeyStrip::resizeEvent (QResizeEvent * e)
+{
+  QWidget::resizeEvent (e);
+  if (lead_)
+    {
+      auto const hint = lead_->sizeHint ();
+      lead_->setGeometry (0, int ((row_height () - hint.height ()) / 2.), hint.width (), hint.height ());
+    }
+  // a different width can need a different number of lines
+  if (heightForWidth (width ()) != height ()) updateGeometry ();
 }
 
 void ColourKeyStrip::paintEvent (QPaintEvent *)
 {
   QPainter p {this};
   p.setRenderHint (QPainter::Antialiasing);
-  QFontMetricsF const fm {font ()};
-  double const h = fm.height () + 4;
-  double const top = (height () - h) / 2.;
-  auto const edit_text = tr ("Edit…");
-  double const edit_w = fm.horizontalAdvance (edit_text) + 8;
-  bool const dark = Win11Theme::isDark ();
-  QColor const plain = dark ? QColor {"#E6EAF0"} : QColor {"#1B1F24"};
-
-  // as many chips as fit, then a count of the rest
-  double x = 0.;
-  hidden_ = 0;
-  for (auto& c : chips_) c.rect = QRectF {};
-  for (int i = 0; i < chips_.size (); ++i)
+  place (width ());
+  for (auto const& c : chips_)
     {
-      auto& c = chips_[i];
-      double const w = fm.horizontalAdvance (c.text) + 2 * pad;
-      double const more_w = i + 1 < chips_.size () ? fm.horizontalAdvance ("+99") + 2 * pad + gap : 0.;
-      if (x + w + more_w + edit_w > width ())
-        {
-          hidden_ = chips_.size () - i;
-          break;
-        }
-      QRectF const r {x, top, w, h};
-      c.rect = r;
+      if (c.rect.isNull ()) continue;
       QColor fg = c.fg;
       if (c.bg.isValid ())
         {
           p.setPen (Qt::NoPen);
           p.setBrush (c.bg);
-          p.drawRoundedRect (r, 4, 4);
+          p.drawRoundedRect (c.rect, 4, 4);
           if (!fg.isValid ()) fg = c.bg.lightness () > 140 ? QColor {"#000000"} : QColor {"#FFFFFF"};
         }
       else
         {
           p.setPen (QPen {QColor {fg.red (), fg.green (), fg.blue (), 140}, 1});
           p.setBrush (Qt::NoBrush);
-          p.drawRoundedRect (r.adjusted (0.5, 0.5, -0.5, -0.5), 4, 4);
+          p.drawRoundedRect (c.rect.adjusted (0.5, 0.5, -0.5, -0.5), 4, 4);
         }
       auto f = font ();
       f.setBold (true);
       p.setFont (f);
       p.setPen (fg);
-      p.drawText (r, Qt::AlignCenter, c.text);
-      x += w + gap;
+      p.drawText (c.rect, Qt::AlignCenter, c.text);
     }
-  p.setFont (font ());
-  if (hidden_)
+  if (!edit_rect_.isNull ())
     {
-      auto const t = QString {"+%1"}.arg (hidden_);
-      QRectF const r {x, top, fm.horizontalAdvance (t) + 2 * pad, h};
-      p.setPen (QPen {QColor {plain.red (), plain.green (), plain.blue (), 90}, 1});
-      p.setBrush (Qt::NoBrush);
-      p.drawRoundedRect (r.adjusted (0.5, 0.5, -0.5, -0.5), 4, 4);
-      p.setPen (plain);
-      p.drawText (r, Qt::AlignCenter, t);
-      x += r.width () + gap;
+      auto f = font ();
+      f.setUnderline (underMouse () && edit_rect_.contains (mapFromGlobal (QCursor::pos ())));
+      p.setFont (f);
+      p.setPen (QColor {Win11Theme::token ("accent")});
+      p.drawText (edit_rect_, Qt::AlignVCenter | Qt::AlignLeft, tr ("Edit…"));
     }
-  edit_rect_ = QRectF {x + 2, top, edit_w, h};
-  auto f = font ();
-  f.setUnderline (underMouse () && edit_rect_.contains (mapFromGlobal (QCursor::pos ())));
-  p.setFont (f);
-  p.setPen (QColor {Win11Theme::token ("accent")});
-  p.drawText (edit_rect_, Qt::AlignVCenter | Qt::AlignLeft, edit_text);
 }
 
 void ColourKeyStrip::mouseMoveEvent (QMouseEvent * e)

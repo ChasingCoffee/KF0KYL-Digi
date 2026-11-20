@@ -60,6 +60,8 @@
 #include <QPolygonF>
 #include <QButtonGroup>
 #include <QActionGroup>
+#include <QDesktopServices>
+#include <QLineEdit>
 #include <QColorDialog>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -84,6 +86,10 @@ namespace
   double deg (double r) {return r * 180. / pi;}
 
   QString swpc_base () {return "https://services.swpc.noaa.gov/";}
+  QString gibs_base () {return "https://gibs.earthdata.nasa.gov/";}
+  QString kc2g_base () {return "https://prop.kc2g.com/";}
+  QString news_base (QString const& url, QString const&) {return url;}
+  QString sdo_base () {return "https://sdo.gsfc.nasa.gov/";}
 
   // where the sun is overhead right now (degrees)
   void subsolar_point (QDateTime const& utc, double& lat, double& lon)
@@ -421,6 +427,74 @@ namespace
   }
 
   // the colours for VOACAP reliability, 0 to 1
+  // CQ and ITU zones (HB9HIL/hamradio-zones-geojson, MIT licence), in
+  // degrees: x longitude, y latitude
+  struct Zone {int number; QPointF label; QVector<QPolygonF> rings;};
+  QVector<Zone> const& zones (int set)        // 0 CQ, 1 ITU
+  {
+    static QVector<Zone> z[2];
+    static bool loaded = false;
+    if (!loaded)
+      {
+        loaded = true;
+        QFile f {":/map_zones.bin"};
+        if (f.open (QIODevice::ReadOnly))
+          {
+            auto const b = f.readAll ();
+            int at = 4;
+            auto u32 = [&b, &at] {quint32 n = 0; if (at + 4 <= b.size ()) memcpy (&n, b.constData () + at, 4); at += 4; return qFromLittleEndian (n);};
+            auto pt = [&b, &at] {
+              qint16 xy[2] = {0, 0};
+              if (at + 4 <= b.size ()) memcpy (xy, b.constData () + at, 4);
+              at += 4;
+              return QPointF {qFromLittleEndian (xy[0]) / 100., qFromLittleEndian (xy[1]) / 100.};
+            };
+            quint32 const sets = u32 ();
+            for (quint32 k = 0; k < sets && k < 2; ++k)
+              {
+                quint32 const n = u32 ();
+                for (quint32 i = 0; i < n && at < b.size (); ++i)
+                  {
+                    Zone zone;
+                    zone.number = int (u32 ());
+                    zone.label = pt ();
+                    quint32 const rings = u32 ();
+                    for (quint32 r = 0; r < rings && at < b.size (); ++r)
+                      {
+                        quint32 const m = u32 ();
+                        QPolygonF ring;
+                        for (quint32 j = 0; j < m; ++j) ring << pt ();
+                        zone.rings << ring;
+                      }
+                    z[k] << zone;
+                  }
+              }
+          }
+      }
+    return z[qBound (0, set, 1)];
+  }
+
+  // colours for MHz: DRAP's absorbed frequencies, the MUF
+  QColor mhz_colour (double mhz, double top)
+  {
+    struct Stop {double at; QColor c;};
+    static Stop const stops[] = {{0., QColor {40, 40, 200}}, {0.25, QColor {0, 170, 255}}, {0.45, QColor {0, 220, 110}},
+                                 {0.65, QColor {255, 225, 0}}, {0.85, QColor {255, 120, 0}}, {1., QColor {255, 30, 60}}};
+    double const v = qBound (0., mhz / top, 1.);
+    for (int i = 0; i < 5; ++i)
+      {
+        if (v <= stops[i + 1].at)
+          {
+            double const t = (v - stops[i].at) / (stops[i + 1].at - stops[i].at);
+            auto const& a = stops[i].c;
+            auto const& b = stops[i + 1].c;
+            return QColor::fromRgbF (a.redF () + (b.redF () - a.redF ()) * t, a.greenF () + (b.greenF () - a.greenF ()) * t,
+                                     a.blueF () + (b.blueF () - a.blueF ()) * t);
+          }
+      }
+    return stops[5].c;
+  }
+
   QColor VoacapGrid_colour (double v)
   {
     struct Stop {double at; QColor c;};
@@ -491,8 +565,8 @@ class ConditionsMap final
 {
 public:
   enum Style {DayNight = 0, Satellite = 1, Countries = 2, Terrain = 3};
-  enum Projection {Flat = 0, Azimuthal = 1};
-  enum Grid {NoGrid = 0, LatLong = 1, Maidenhead = 2, MaidenheadFine = 3};
+  enum Projection {Flat = 0, Azimuthal = 1, Robinson = 2, NearHalf = 3};
+  enum Grid {NoGrid = 0, LatLong = 1, Maidenhead = 2, MaidenheadFine = 3, Tropics = 4, Beams = 5, CQZones = 6, ITUZones = 7};
   struct Beacon {QString call; QString place; double lat; double lon; int band;};
 
   explicit ConditionsMap (QWidget * parent)
@@ -691,6 +765,14 @@ public:
   void set_dx (QString const& call, double lat, double lon) {dx_call_ = call; dx_lat_ = lat; dx_lon_ = lon; update ();}
 
   void set_aurora (QImage const& img) {aurora_ = img; changed ();}
+  void set_clouds (QImage const& img) {clouds_ = img; changed ();}
+  // the map coloured by DRAP or the MUF: the picture, what it is and the top of its scale
+  void set_conditions (QImage const& img, QString const& label, double top) {cond_ = img; cond_label = label; cond_top = top; changed ();}
+  bool show_clouds {false};
+  int colour_by {0};                  // 0 nothing, 1 DRAP, 2 MUF now
+  QString cond_label;
+  double cond_top {35.};
+  QVector<QPair<QPointF, double>> muf_points;   // ionosondes: where, MUF
   void set_rain (QImage const& img) {rain_ = img; changed ();}
   void set_prop (QImage const& img) {prop_ = img; changed ();}
 
@@ -755,7 +837,62 @@ protected:
     return {width () / 2. + (-180. - clon_) * s, height () / 2. - (90. - clat_) * s, 360. * s, 180. * s};
   }
   // centred: the radius of the world and where its middle is
-  double az_radius () const {return zoom_ * (qMin (width (), height ()) / 2. - 2.);}
+  double az_radius () const
+  {
+    if (Robinson == projection) return zoom_ * qMin ((width () - 4.) / 5.3326, (height () - 4.) / 2.7046);
+    return zoom_ * (qMin (width (), height ()) / 2. - 2.);
+  }
+  bool round_world () const {return Azimuthal == projection || NearHalf == projection;}
+  // how far from you the edge of a centred map is
+  double edge_distance () const {return NearHalf == projection ? pi / 2. : pi;}
+  // whether a place is on the side of the world this view shows
+  bool on_view (double lat, double lon, double margin = 0.995) const
+  {
+    if (!round_world ()) return true;
+    double dist, bearing;
+    path_to (centre_lat (), centre_lon (), lat, lon, dist, bearing);
+    return dist <= edge_distance () * margin;
+  }
+
+  // Robinson: lengths of the parallels and their heights, every 5 degrees
+  static double robinson_x (double lat)
+  {
+    static double const X[] = {1.0000, 0.9986, 0.9954, 0.9900, 0.9822, 0.9730, 0.9600, 0.9427, 0.9216, 0.8962,
+                               0.8679, 0.8350, 0.7986, 0.7597, 0.7186, 0.6732, 0.6213, 0.5722, 0.5322};
+    double const a = qBound (0., std::abs (lat) / 5., 17.9999);
+    int const i = int (a);
+    return X[i] + (X[i + 1] - X[i]) * (a - i);
+  }
+  static double robinson_y (double lat)
+  {
+    static double const Y[] = {0.0000, 0.0620, 0.1240, 0.1860, 0.2480, 0.3100, 0.3720, 0.4340, 0.4958, 0.5571,
+                               0.6176, 0.6769, 0.7346, 0.7903, 0.8435, 0.8936, 0.9394, 0.9761, 1.0000};
+    double const a = qBound (0., std::abs (lat) / 5., 17.9999);
+    int const i = int (a);
+    double const y = Y[i] + (Y[i + 1] - Y[i]) * (a - i);
+    return lat < 0 ? -y : y;
+  }
+  static double robinson_lat (double y)
+  {
+    static double const Y[] = {0.0000, 0.0620, 0.1240, 0.1860, 0.2480, 0.3100, 0.3720, 0.4340, 0.4958, 0.5571,
+                               0.6176, 0.6769, 0.7346, 0.7903, 0.8435, 0.8936, 0.9394, 0.9761, 1.0000};
+    double const ay = std::abs (y);
+    int i = 0;
+    while (i < 17 && Y[i + 1] < ay) ++i;
+    double const lat = 5. * (i + (ay - Y[i]) / (Y[i + 1] - Y[i]));
+    return y < 0 ? -lat : lat;
+  }
+  // the outline of the Robinson world
+  QPainterPath robinson_outline () const
+  {
+    QPainterPath path;
+    QVector<QPointF> pts;
+    for (int lat = -90; lat <= 90; lat += 2) pts << to_point (lat, 180.);
+    for (int lat = 90; lat >= -90; lat -= 2) pts << to_point (lat, -180.);
+    path.addPolygon (QPolygonF {pts});
+    path.closeSubpath ();
+    return path;
+  }
   QPointF az_centre () const {return QPointF {width () / 2., height () / 2.} + az_pan_;}
 
   void clamp_view ()
@@ -898,11 +1035,15 @@ protected:
     // rounded corners; the round world too when centred on you
     QPainterPath shape;
     shape.addRoundedRect (QRectF {rect ()}, 12, 12);
-    if (Azimuthal == projection)
+    if (round_world ())
       {
         QPainterPath world;
         world.addEllipse (az_centre (), az_radius (), az_radius ());
         shape = shape.intersected (world);
+      }
+    else if (Robinson == projection)
+      {
+        shape = shape.intersected (robinson_outline ());
       }
     else if (zoom_ < 0.9999)
       {
@@ -1054,16 +1195,47 @@ protected:
         outlined_text (p, dx + QPointF {10, 5}, slashed (dx_call_), f, Qt::white);
       }
     p.setClipping (false);
-    if (Azimuthal == projection)
+    if (round_world () || Robinson == projection)
       {
         p.setPen (QPen {QColor {Win11Theme::token ("border")}, 1});
         p.setBrush (Qt::NoBrush);
-        p.drawEllipse (az_centre (), az_radius (), az_radius ());
+        if (Robinson == projection) p.drawPath (robinson_outline ());
+        else p.drawEllipse (az_centre (), az_radius (), az_radius ());
       }
     draw_legend (p, r);
     draw_layer_notes (p);
     draw_zoom_buttons (p);
     if (show_prop) draw_prop_scale (p);
+    if (colour_by && !cond_.isNull ()) draw_mhz_scale (p);
+  }
+
+  // what the DRAP or MUF colours mean, bottom right (above Propagation's)
+  void draw_mhz_scale (QPainter& p)
+  {
+    auto f = font ();
+    f.setPointSizeF (qMax (6.5, f.pointSizeF () * 0.85));
+    QFontMetricsF fm {f};
+    double const bar_w = 140, h = fm.height () + 8;
+    auto const ends = QObject::tr ("0–%1 MHz").arg (cond_top, 0, 'f', 0);
+    double const w = fm.boundingRect (cond_label).width () + bar_w + fm.boundingRect (ends).width () + 40;
+    double const lift = show_prop ? h + 20 : 0.;
+    QRectF const panel {width () - w - 12., height () - h - 36. - lift, w, h + 12};
+    p.setPen (QPen {QColor {255, 255, 255, 40}, 1});
+    p.setBrush (QColor {13, 17, 23, 190});
+    p.drawRoundedRect (panel, 12, 12);
+    p.setFont (f);
+    p.setPen (QColor {233, 236, 241});
+    double x = panel.left () + 12;
+    double const mid = panel.center ().y ();
+    p.drawText (QPointF {x, mid + fm.ascent () / 2 - 1}, cond_label);
+    x += fm.boundingRect (cond_label).width () + 8;
+    QLinearGradient g {QPointF {x, 0}, QPointF {x + bar_w, 0}};
+    for (int i = 0; i <= 5; ++i) g.setColorAt (i / 5., mhz_colour (cond_top * i / 5., cond_top));
+    p.setPen (Qt::NoPen);
+    p.setBrush (g);
+    p.drawRoundedRect (QRectF {x, mid - 4, bar_w, 8}, 4, 4);
+    p.setPen (QColor {233, 236, 241, 190});
+    p.drawText (QPointF {x + bar_w + 8, mid + fm.ascent () / 2 - 1}, ends);
   }
 
   // what the propagation colours mean, bottom right
@@ -1514,6 +1686,13 @@ private:
             p.drawImage (all, night_);
             p.setOpacity (1.);
           }
+        if (colour_by && !cond_.isNull ())
+          {
+            p.setOpacity (0.62);
+            p.drawImage (all, cond_);
+            p.setOpacity (1.);
+          }
+        if (show_clouds && !clouds_.isNull ()) p.drawImage (all, clouds_);
         if (show_rain && !rain_.isNull ()) p.drawImage (all, rain_);
         if (show_prop && !prop_.isNull ()) p.drawImage (all, prop_);
         if (show_aurora && !aurora_.isNull ()) p.drawImage (all, aurora_);
@@ -1579,6 +1758,8 @@ private:
   double view_ppd () const
   {
     double const dpr = devicePixelRatioF ();
+    if (Robinson == projection) return az_radius () * 0.8487 * pi / 180. * dpr;
+    if (NearHalf == projection) return az_radius () / 90. * dpr;
     return (Flat == projection ? flat_scale () : az_radius () / 180.) * dpr;
   }
 
@@ -1769,8 +1950,8 @@ private:
   void project ()
   {
     int const w = width (), h = height ();
-    auto const lut_key = QString {"%1/%2,%3/%4x%5/%6,%7"}.arg (zoom_).arg (az_pan_.x ()).arg (az_pan_.y ())
-      .arg (w).arg (h).arg (centre_lat ()).arg (centre_lon ());
+    auto const lut_key = QString {"%1/%2,%3/%4x%5/%6,%7/%8"}.arg (zoom_).arg (az_pan_.x ()).arg (az_pan_.y ())
+      .arg (w).arg (h).arg (centre_lat ()).arg (centre_lon ()).arg (projection);
     if (lut_key_ != lut_key)
       {
         // where on Earth each pixel is, worked out once for each view
@@ -1781,14 +1962,26 @@ private:
         double const sp0 = std::sin (p0), cp0 = std::cos (p0);
         auto const c = az_centre ();
         double const R = az_radius ();
-        for (int y = 0; y < h; ++y)
+        for (int y = 0; y < h && !round_world (); ++y)
+          {
+            // Robinson and the others: one place at a time
+            for (int x = 0; x < w; ++x)
+              {
+                double lat, lon;
+                if (!from_point (QPointF {x + 0.5, y + 0.5}, lat, lon)) {lut_lat_[y * w + x] = 999.f; continue;}
+                lut_lat_[y * w + x] = static_cast<float> (lat);
+                lut_lon_[y * w + x] = static_cast<float> (lon);
+              }
+          }
+        double const reach = edge_distance ();
+        for (int y = 0; y < h && round_world (); ++y)
           {
             for (int x = 0; x < w; ++x)
               {
                 double const dx = (x + 0.5 - c.x ()) / R, dy = (y + 0.5 - c.y ()) / R;
                 double const rho = std::sqrt (dx * dx + dy * dy);
                 if (rho > 1.) {lut_lat_[y * w + x] = 999.f; continue;}
-                double const ang = rho * pi, az = std::atan2 (dx, -dy);
+                double const ang = rho * reach, az = std::atan2 (dx, -dy);
                 double const sc = std::sin (ang), cc = std::cos (ang);
                 double const lat = std::asin (qBound (-1., sp0 * cc + cp0 * sc * std::cos (az), 1.));
                 double const lon = l0 + std::atan2 (std::sin (az) * sc * cp0, cc - sp0 * std::sin (lat));
@@ -1847,10 +2040,15 @@ private:
 
   QRect map_rect () const
   {
-    if (Azimuthal == projection)
+    if (round_world ())
       {
         double const R = az_radius ();
         return QRectF {az_centre () - QPointF {R, R}, QSizeF {2 * R, 2 * R}}.toAlignedRect ();
+      }
+    if (Robinson == projection)
+      {
+        double const R = az_radius ();
+        return QRectF {az_centre () - QPointF {2.6663 * R, 1.3523 * R}, QSizeF {5.3326 * R, 2.7046 * R}}.toAlignedRect ();
       }
     return world_rect ().toAlignedRect ();
   }
@@ -1863,9 +2061,18 @@ public:
         double const s = flat_scale ();
         return {width () / 2. + (lon - clon_) * s, height () / 2. - (lat - clat_) * s};
       }
+    if (Robinson == projection)
+      {
+        double const R = az_radius ();
+        auto const c = az_centre ();
+        double l = lon;
+        while (l > 180.) l -= 360.;
+        while (l < -180.) l += 360.;
+        return {c.x () + 0.8487 * R * robinson_x (lat) * rad (l), c.y () - 1.3523 * R * robinson_y (lat)};
+      }
     double dist, bearing;
     path_to (centre_lat (), centre_lon (), lat, lon, dist, bearing);
-    double const rho = dist / pi * az_radius ();
+    double const rho = dist / edge_distance () * az_radius ();
     auto const c = az_centre ();
     return {c.x () + rho * std::sin (rad (bearing)), c.y () - rho * std::cos (rad (bearing))};
   }
@@ -1881,10 +2088,18 @@ public:
       }
     auto const c = az_centre ();
     double const R = az_radius ();
+    if (Robinson == projection)
+      {
+        double const y = (c.y () - pt.y ()) / (1.3523 * R);
+        if (std::abs (y) > 1.) return false;
+        lat = robinson_lat (y);
+        lon = deg ((pt.x () - c.x ()) / (0.8487 * R * robinson_x (lat)));
+        return lon >= -180. && lon <= 180.;
+      }
     double const dx = (pt.x () - c.x ()) / R, dy = (pt.y () - c.y ()) / R;
     double const rho = std::sqrt (dx * dx + dy * dy);
     if (rho > 1.) return false;
-    destination (centre_lat (), centre_lon (), deg (std::atan2 (dx, -dy)), rho * pi, lat, lon);
+    destination (centre_lat (), centre_lon (), deg (std::atan2 (dx, -dy)), rho * edge_distance (), lat, lon);
     return true;
   }
 
@@ -1892,7 +2107,7 @@ private:
   // a line through places, broken where it jumps across the map
   void add_line (QPainterPath& path, QVector<QPointF> const& pts) const
   {
-    double const jump = map_rect ().width () / (Flat == projection ? 2. : 4.);
+    double const jump = map_rect ().width () / (Flat == projection || Robinson == projection ? 2. : 4.);
     for (int i = 0; i < pts.size (); ++i)
       {
         if (0 == i || std::hypot (pts[i].x () - pts[i - 1].x (), pts[i].y () - pts[i - 1].y ()) > jump) path.moveTo (pts[i]);
@@ -1918,7 +2133,8 @@ private:
   {
     // the lines only change with the size, the view or where you are
     auto const key = QString {"%1/%2/%3x%4/%5,%6/%7/%8,%9"}.arg (grid).arg (projection).arg (r.width ()).arg (r.height ())
-      .arg (centre_lat ()).arg (centre_lon ()).arg (zoom_).arg (clon_ + az_pan_.x ()).arg (clat_ + az_pan_.y ());
+      .arg (centre_lat ()).arg (centre_lon ()).arg (zoom_).arg (clon_ + az_pan_.x ()).arg (clat_ + az_pan_.y ())
+      + QString {"/%1,%2"}.arg (my_lat_).arg (my_lon_);
     if (key != grid_key_)
       {
         grid_key_ = key;
@@ -1928,6 +2144,65 @@ private:
           {
             for (int lon = -165; lon <= 180; lon += 15) meridian (grid_major_, lon, step);
             for (int lat = -75; lat <= 75; lat += 15) parallel (grid_major_, lat, step);
+          }
+        else if (Tropics == grid)
+          {
+            parallel (grid_major_, 0., step);
+            for (double lat : {23.44, -23.44, 66.56, -66.56}) parallel (grid_minor_, lat, step);
+          }
+        else if (Beams == grid)
+          {
+            // beam headings every 30 degrees and distance every 2,500 km from you
+            if (!qIsNaN (my_lat_))
+              {
+                for (int b = 0; b < 360; b += 30)
+                  {
+                    QVector<QPointF> pts;
+                    for (double d = 0.; d <= 0.999 * pi; d += pi / 180.)
+                      {
+                        double lat, lon;
+                        destination (my_lat_, my_lon_, b, d, lat, lon);
+                        pts << to_point (lat, lon);
+                      }
+                    add_line (0 == b % 90 ? grid_major_ : grid_minor_, pts);
+                  }
+                for (double km = 2500.; km < 20000.; km += 2500.)
+                  {
+                    QVector<QPointF> pts;
+                    for (int b = 0; b <= 360; b += 2)
+                      {
+                        double lat, lon;
+                        destination (my_lat_, my_lon_, b, km / 6371., lat, lon);
+                        pts << to_point (lat, lon);
+                      }
+                    add_line (0 == int (km) % 5000 ? grid_major_ : grid_minor_, pts);
+                  }
+              }
+          }
+        else if (CQZones == grid || ITUZones == grid)
+          {
+            for (auto const& z : zones (CQZones == grid ? 0 : 1))
+              {
+                for (auto const& ring : z.rings)
+                  {
+                    QVector<QPointF> pts;
+                    // long straight edges bend on the centred maps, so fill them in
+                    for (int i = 0; i < ring.size (); ++i)
+                      {
+                        if (i)
+                          {
+                            auto const a = ring[i - 1], b = ring[i];
+                            int const n = Flat == projection ? 1 : qMax (1, int (std::hypot (b.x () - a.x (), b.y () - a.y ()) / 2.));
+                            for (int k = 1; k < n; ++k)
+                              {
+                                pts << to_point (a.y () + (b.y () - a.y ()) * k / n, a.x () + (b.x () - a.x ()) * k / n);
+                              }
+                          }
+                        pts << to_point (ring[i].y (), ring[i].x ());
+                      }
+                    add_line (grid_major_, pts);
+                  }
+              }
           }
         else
           {
@@ -1943,12 +2218,19 @@ private:
           }
       }
     p.setBrush (Qt::NoBrush);
-    if (!grid_minor_.isEmpty ())
+    if (!grid_minor_.isEmpty () && Tropics != grid)
       {
-        p.setPen (QPen {QColor {255, 255, 255, 32}, 0.6});
+        p.setPen (QPen {QColor {255, 255, 255, Beams == grid ? 55 : 32}, 0.6});
         p.drawPath (grid_minor_);
       }
-    p.setPen (QPen {QColor {255, 255, 255, 80}, 1});
+    if (Tropics == grid)
+      {
+        QPen pen {QColor {255, 213, 74, 150}, 1};
+        pen.setDashPattern ({6., 4.});
+        p.setPen (pen);
+        p.drawPath (grid_minor_);
+      }
+    p.setPen (QPen {CQZones == grid || ITUZones == grid ? QColor {255, 235, 140, 150} : QColor {255, 255, 255, 80}, 1});
     p.drawPath (grid_major_);
 
     auto f = font ();
@@ -1966,6 +2248,58 @@ private:
           {
             auto const pt = to_point (-90., lon);
             outlined_text (p, QPointF {pt.x () + 3, qMin (double (height ()), pt.y ()) - 5}, QString {"%1%2"}.arg (lon).arg (QChar {0x00B0}), f, label);
+          }
+        return;
+      }
+    if (Tropics == grid)
+      {
+        if (r.width () < 400) return;
+        struct L {double lat; char const * text;};
+        L const lines[] = {{0., QT_TRANSLATE_NOOP ("ConditionsWindow", "Equator")}, {23.44, QT_TRANSLATE_NOOP ("ConditionsWindow", "Tropic of Cancer")},
+                           {-23.44, QT_TRANSLATE_NOOP ("ConditionsWindow", "Tropic of Capricorn")},
+                           {66.56, QT_TRANSLATE_NOOP ("ConditionsWindow", "Arctic Circle")}, {-66.56, QT_TRANSLATE_NOOP ("ConditionsWindow", "Antarctic Circle")}};
+        for (auto const& l : lines)
+          {
+            double const lon = Flat == projection ? clon_ - width () / 2. / flat_scale () + 2. : -150.;
+            if (!on_view (l.lat, lon, 0.9)) continue;
+            auto const pt = to_point (l.lat, qBound (-178., lon, 178.));
+            outlined_text (p, QPointF {qMax (4., pt.x () + 4), pt.y () - 3}, QCoreApplication::translate ("ConditionsWindow", l.text), f, label);
+          }
+        return;
+      }
+    if (Beams == grid)
+      {
+        if (qIsNaN (my_lat_) || r.width () < 400) return;
+        for (int b = 0; b < 360; b += 30)
+          {
+            double lat, lon;
+            destination (my_lat_, my_lon_, b, 3000. / 6371., lat, lon);
+            if (!on_view (lat, lon)) continue;
+            outlined_text (p, to_point (lat, lon) + QPointF {3, -3}, QString {"%1%2"}.arg (b).arg (QChar {0x00B0}), f, label);
+          }
+        bool const miles = QLocale::system ().measurementSystem () == QLocale::ImperialUSSystem;
+        for (double km = 5000.; km < 20000.; km += 5000.)
+          {
+            double lat, lon;
+            destination (my_lat_, my_lon_, 15., km / 6371., lat, lon);
+            if (!on_view (lat, lon)) continue;
+            auto const text = miles ? QString {"%L1 mi"}.arg (qRound (km * 0.621371 / 100.) * 100) : QString {"%L1 km"}.arg (km, 0, 'f', 0);
+            outlined_text (p, to_point (lat, lon) + QPointF {3, 12}, text, f, label);
+          }
+        return;
+      }
+    if (CQZones == grid || ITUZones == grid)
+      {
+        if (r.width () < 300) return;
+        auto bold = f;
+        bold.setBold (true);
+        QFontMetricsF const fm {bold};
+        for (auto const& z : zones (CQZones == grid ? 0 : 1))
+          {
+            if (!on_view (z.label.y (), z.label.x (), 0.9)) continue;
+            auto const text = QString::number (z.number);
+            auto const pt = to_point (z.label.y (), z.label.x ());
+            outlined_text (p, pt - QPointF {fm.horizontalAdvance (text) / 2., -fm.ascent () / 2.}, text, bold, QColor {255, 235, 140});
           }
         return;
       }
@@ -1987,9 +2321,7 @@ private:
             else
               {
                 double const lat = -90. + j * 10. + 5., lon = -180. + i * 20. + 10.;
-                double dist, bearing;
-                path_to (centre_lat (), centre_lon (), lat, lon, dist, bearing);
-                if (dist > pi * 0.6) continue;      // too squeezed out near the edge
+                if (!on_view (lat, lon, Azimuthal == projection ? 0.6 : 0.9)) continue;      // too squeezed out near the edge
                 auto const pt = to_point (lat, lon);
                 QFontMetricsF fm {f};
                 QRectF const box {pt.x () - fm.boundingRect (field).width () / 2. - 2, pt.y () - fm.ascent () / 2. - 2,
@@ -2027,12 +2359,7 @@ private:
         QPolygonF poly;
         bool ok = true;
         auto add = [&] (double lat, double lon) {
-          if (Azimuthal == projection)
-            {
-              double dist, bearing;
-              path_to (centre_lat (), centre_lon (), lat, lon, dist, bearing);
-              if (dist > M_PI * 0.97) ok = false;
-            }
+          if (!on_view (lat, lon, 0.97)) ok = false;
           poly << to_point (lat, lon);
         };
         for (int i = 0; i <= 4; ++i) add (lat0, lon0 + i * 0.5);
@@ -2237,9 +2564,7 @@ private:
           }
         else
           {
-            double dist, bearing;
-            path_to (centre_lat (), centre_lon (), c.lat, c.lon, dist, bearing);
-            if (dist > pi * 0.995) continue;
+            if (!on_view (c.lat, c.lon)) continue;
           }
         if (!area.contains (pt)) continue;
         QRectF const box {pt.x () - 5, pt.y () - fm.ascent () / 2. - 3, fm.horizontalAdvance (c.label) + 15, fm.height () + 6};
@@ -2366,6 +2691,8 @@ private:
   QImage night_;
   QVector<double> shade_;
   QImage aurora_;
+  QImage clouds_;
+  QImage cond_;
   QImage rain_;
   QImage prop_;
   QVector<QRectF> legend_rects_;
@@ -2386,6 +2713,185 @@ private:
 // Solar X-rays over the last day from the GOES satellites, on a log
 // scale with the flare classes marked
 //
+//
+// Buttons in a row that carries on onto the next line when it runs out
+// of room
+//
+class FlowLayout final
+  : public QLayout
+{
+public:
+  explicit FlowLayout (QWidget * parent, int spacing) : QLayout {parent}, spacing_ {spacing} {setContentsMargins (0, 0, 0, 0);}
+  ~FlowLayout () {while (auto * item = takeAt (0)) delete item;}
+  void addItem (QLayoutItem * item) override {items_ << item;}
+  int count () const override {return items_.size ();}
+  QLayoutItem * itemAt (int i) const override {return items_.value (i);}
+  QLayoutItem * takeAt (int i) override {return i >= 0 && i < items_.size () ? items_.takeAt (i) : nullptr;}
+  Qt::Orientations expandingDirections () const override {return {};}
+  bool hasHeightForWidth () const override {return true;}
+  int heightForWidth (int w) const override {return place (QRect {0, 0, w, 0}, false);}
+  void setGeometry (QRect const& r) override {QLayout::setGeometry (r); place (r, true);}
+  QSize sizeHint () const override {return minimumSize ();}
+  QSize minimumSize () const override
+  {
+    QSize size;
+    for (auto * item : items_) size = size.expandedTo (item->minimumSize ());
+    return size;
+  }
+  // the last one sits at the far right of the last line
+  void set_last_right (bool on) {last_right_ = on;}
+
+private:
+  int place (QRect const& r, bool apply) const
+  {
+    int x = r.x (), y = r.y (), line = 0;
+    for (int i = 0; i < items_.size (); ++i)
+      {
+        auto * item = items_[i];
+        if (item->isEmpty ()) continue;
+        auto const hint = item->sizeHint ();
+        if (x > r.x () && x + hint.width () > r.right () + 1)
+          {
+            x = r.x ();
+            y += line + spacing_;
+            line = 0;
+          }
+        int px = x;
+        if (last_right_ && i == items_.size () - 1) px = qMax (x, r.right () + 1 - hint.width ());
+        if (apply) item->setGeometry (QRect {QPoint {px, y}, hint});
+        x += hint.width () + spacing_;
+        line = qMax (line, hint.height ());
+      }
+    return y + line - r.y ();
+  }
+  QList<QLayoutItem *> items_;
+  int spacing_;
+  bool last_right_ {false};
+};
+
+//
+// Ham radio headlines scrolling along under the map's buttons; click one
+// to read it
+//
+class NewsTicker final
+  : public QWidget
+{
+public:
+  explicit NewsTicker (QWidget * parent)
+    : QWidget {parent}
+    , timer_ {new QTimer {this}}
+  {
+    setMouseTracking (true);
+    setFixedHeight (QFontMetrics {font ()}.height () + 10);
+    timer_->setInterval (30);
+    QObject::connect (timer_, &QTimer::timeout, this, [this] {
+        if (!hover_) offset_ += 1.;
+        if (total_ > 0 && offset_ > total_) offset_ -= total_;
+        update ();
+      });
+  }
+
+  struct Item {QString source; QString title; QString link;};
+  void set_items (QVector<Item> const& items) {items_ = items; update ();}
+  void set_message (QString const& m) {message_ = m; update ();}
+
+protected:
+  void showEvent (QShowEvent *) override {timer_->start ();}
+  void hideEvent (QHideEvent *) override {timer_->stop ();}
+  void enterEvent (QEvent *) override {hover_ = true;}
+  void leaveEvent (QEvent *) override {hover_ = false; setCursor (Qt::ArrowCursor);}
+
+  void paintEvent (QPaintEvent *) override
+  {
+    QPainter p {this};
+    p.setRenderHint (QPainter::Antialiasing);
+    p.setPen (QPen {QColor {Win11Theme::token ("border")}, 1});
+    p.setBrush (QColor {Win11Theme::token ("card")});
+    p.drawRoundedRect (QRectF {rect ()}.adjusted (0.5, 0.5, -0.5, -0.5), 8, 8);
+    auto bold = font ();
+    bold.setBold (true);
+    QFontMetricsF const fm {font ()}, bfm {bold};
+    double const lead = bfm.horizontalAdvance (QObject::tr ("NEWS")) + 22;
+    double const base = height () / 2. + fm.ascent () / 2. - 1;
+    rects_.clear ();
+    p.save ();
+    p.setClipRect (QRectF {lead, 0, width () - lead - 4, double (height ())});
+    if (items_.isEmpty ())
+      {
+        p.setPen (QColor {Win11Theme::token ("text_secondary")});
+        p.drawText (QPointF {lead, base}, message_);
+        total_ = 0;
+      }
+    else
+      {
+        // the headlines in a loop, as often as it takes to fill the width
+        QColor const text {Win11Theme::token ("text")}, muted {Win11Theme::token ("text_secondary")};
+        double total = 0;
+        QVector<double> widths;
+        for (auto const& it : items_)
+          {
+            double const w = bfm.horizontalAdvance (it.source) + 8 + fm.horizontalAdvance (it.title) + 40;
+            widths << w;
+            total += w;
+          }
+        total_ = total;
+        double x = lead - offset_;
+        while (x < width ())
+          {
+            for (int i = 0; i < items_.size () && x < width (); ++i)
+              {
+                if (x + widths[i] > lead)
+                  {
+                    p.setFont (bold);
+                    p.setPen (QColor {Win11Theme::token ("accent")});
+                    p.drawText (QPointF {x, base}, items_[i].source);
+                    double const tx = x + bfm.horizontalAdvance (items_[i].source) + 8;
+                    p.setFont (font ());
+                    p.setPen (text);
+                    p.drawText (QPointF {tx, base}, items_[i].title);
+                    p.setPen (muted);
+                    p.drawText (QPointF {tx + fm.horizontalAdvance (items_[i].title) + 15, base}, QString {QChar {0x25C6}});
+                    rects_ << qMakePair (QRectF {x, 0, widths[i] - 20, double (height ())}, i);
+                  }
+                x += widths[i];
+              }
+          }
+      }
+    p.restore ();
+    p.setFont (bold);
+    p.setPen (QColor {Win11Theme::token ("title")});
+    p.drawText (QPointF {10, base}, QObject::tr ("NEWS"));
+  }
+
+  void mouseMoveEvent (QMouseEvent * e) override
+  {
+    int const i = item_at (e->pos ());
+    setCursor (i >= 0 ? Qt::PointingHandCursor : Qt::ArrowCursor);
+    if (i >= 0) QToolTip::showText (e->globalPos (), QObject::tr ("%1: %2<br/><i>Click to read it</i>").arg (items_[i].source, items_[i].title.toHtmlEscaped ()), this);
+  }
+
+  void mouseReleaseEvent (QMouseEvent * e) override
+  {
+    int const i = item_at (e->pos ());
+    if (i >= 0 && items_[i].link.startsWith ("http")) QDesktopServices::openUrl (QUrl {items_[i].link});
+  }
+
+private:
+  int item_at (QPoint const& pos) const
+  {
+    for (auto const& r : rects_) if (r.first.contains (pos)) return r.second;
+    return -1;
+  }
+
+  QTimer * timer_;
+  QVector<Item> items_;
+  QString message_;
+  double offset_ {0.};
+  double total_ {0.};
+  bool hover_ {false};
+  QVector<QPair<QRectF, int>> rects_;
+};
+
 class XRayGraph final
   : public QWidget
 {
@@ -2523,6 +3029,7 @@ public:
 
   void set_image (QImage const& img) {image_ = img; scaled_ = QImage {}; update ();}
   void set_message (QString const& m) {message_ = m; update ();}
+  void set_caption (QString const& c) {caption_ = c; update ();}
 
 protected:
   void paintEvent (QPaintEvent *) override
@@ -2559,12 +3066,140 @@ protected:
     p.setPen (QPen {QColor {255, 181, 74, 90}, 1});
     p.setBrush (Qt::NoBrush);
     p.drawEllipse (r);
+    if (caption_.size ())
+      {
+        // a movie frame's time, bottom left, on a dark band so it reads over the glow
+        auto f = font ();
+        f.setPointSizeF (qMax (6.5, f.pointSizeF () * 0.85));
+        p.setFont (f);
+        QFontMetricsF const fm {f};
+        QRectF const box {0, height () - fm.height () - 4, fm.horizontalAdvance (caption_) + 10, fm.height () + 4};
+        p.setPen (Qt::NoPen);
+        p.setBrush (QColor {0, 0, 0, 170});
+        p.drawRoundedRect (box, 4, 4);
+        p.setPen (QColor {Win11Theme::token ("text")});
+        p.drawText (box, Qt::AlignCenter, caption_);
+      }
   }
 
 private:
   QImage image_;
   QImage scaled_;
   QString message_;
+  QString caption_;
+};
+
+//
+// The gray line tool: over the next day, when you and the DX station are
+// in twilight, and when you both are at once
+//
+class GrayLineChart final
+  : public QWidget
+{
+public:
+  explicit GrayLineChart (QWidget * parent)
+    : QWidget {parent}
+  {
+    setMinimumSize (520, 150);
+  }
+
+  struct Place {QString name; QString grid; double lat {qQNaN ()}; double lon {qQNaN ()};};
+  Place de, dx;
+  QDateTime start;
+
+  // 0 night, 1 twilight, 2 day, every 5 minutes for a day
+  static QVector<int> states (Place const& pl, QDateTime const& from)
+  {
+    QVector<int> out;
+    for (int i = 0; i < 288; ++i)
+      {
+        if (qIsNaN (pl.lat)) {out << -1; continue;}
+        double const e = sun_elevation (from.addSecs (i * 300), pl.lat, pl.lon);
+        out << (e < -6. ? 0 : e <= 3. ? 1 : 2);
+      }
+    return out;
+  }
+
+  // the times both are in twilight
+  QVector<QPair<QDateTime, QDateTime>> both () const
+  {
+    QVector<QPair<QDateTime, QDateTime>> out;
+    auto const a = states (de, start), b = states (dx, start);
+    int run = -1;
+    for (int i = 0; i <= 288; ++i)
+      {
+        bool const on = i < 288 && 1 == a[i] && 1 == b[i];
+        if (on && run < 0) run = i;
+        if (!on && run >= 0)
+          {
+            out << qMakePair (start.addSecs (run * 300), start.addSecs (i * 300));
+            run = -1;
+          }
+      }
+    return out;
+  }
+
+protected:
+  void paintEvent (QPaintEvent *) override
+  {
+    QPainter p {this};
+    p.setRenderHint (QPainter::Antialiasing);
+    QFontMetricsF const fm {font ()};
+    double const label_w = 110, left = label_w, right = width () - 6.;
+    double const bar_h = 22;
+    QColor const day {242, 193, 78, 90}, dusk {"#FF9F43"}, night {"#16263D"}, both_c {Win11Theme::token ("accent")};
+    QColor const text {Win11Theme::token ("text")}, muted {Win11Theme::token ("text_secondary")};
+    auto draw_row = [&] (double y, Place const& pl) {
+      auto bold = font ();
+      bold.setBold (true);
+      p.setFont (bold);
+      p.setPen (text);
+      p.drawText (QPointF {0, y + fm.ascent () - 2}, slashed (pl.name.isEmpty () ? pl.grid : pl.name));
+      p.setFont (font ());
+      p.setPen (muted);
+      p.drawText (QPointF {0, y + bar_h + 2}, pl.grid);
+      QRectF const bar {left, y, right - left, bar_h};
+      QPainterPath clip;
+      clip.addRoundedRect (bar, 5, 5);
+      p.save ();
+      p.setClipPath (clip);
+      p.fillRect (bar, QColor {12, 19, 14});
+      p.setRenderHint (QPainter::Antialiasing, false);
+      auto const st = states (pl, start);
+      double const step = bar.width () / 288.;
+      for (int i = 0; i < 288; ++i)
+        {
+          if (st[i] < 0) continue;
+          p.fillRect (QRectF {left + i * step, y, step + 0.6, bar_h}, 0 == st[i] ? night : 1 == st[i] ? dusk : day);
+        }
+      p.restore ();
+    };
+    draw_row (4, de);
+    draw_row (4 + bar_h + 20, dx);
+    double const y3 = 4 + 2 * (bar_h + 20);
+    p.setPen (muted);
+    p.drawText (QPointF {0, y3 + fm.ascent ()}, QObject::tr ("Both"));
+    double const step = (right - left) / 288.;
+    p.setPen (Qt::NoPen);
+    p.setBrush (both_c);
+    for (auto const& r : both ())
+      {
+        double const x0 = left + start.secsTo (r.first) / 300. * step, x1 = left + start.secsTo (r.second) / 300. * step;
+        p.drawRoundedRect (QRectF {x0, y3, qMax (4., x1 - x0), bar_h - 4}, 4, 4);
+      }
+    // hours along the bottom
+    double const y4 = y3 + bar_h + 4;
+    p.setPen (muted);
+    for (int h = 0; h <= 24; h += 6)
+      {
+        double const x = left + h * 12 * step;
+        auto const t = start.addSecs (h * 3600).toString ("hh:mm");
+        auto const label = 0 == h ? QObject::tr ("now %1").arg (t) : 24 == h ? t + " UTC" : t;
+        double const w = fm.horizontalAdvance (label);
+        double const lx = 0 == h ? x : 24 == h ? x - w : x - w / 2;
+        p.drawText (QPointF {lx, y4 + fm.ascent ()}, label);
+      }
+  }
 };
 
 //
@@ -3214,7 +3849,7 @@ void ConditionsWindow::update_containers ()
 {
   // hide a row or column when every box in it is switched off
   top_row_->setVisible (box_on ("clock") || box_on ("xray") || box_on ("sun") || box_on ("beacons"));
-  left_scroll_->setVisible (box_on ("de") || box_on ("dx") || box_on ("voacap") || box_on ("bands"));
+  left_scroll_->setVisible (box_on ("dx") || box_on ("voacap"));
   // the boxes left in the column share its height: VOACAP's chart grows
   // when it's shown, otherwise the boxes keep their size at the top
   if (side_)
@@ -3269,11 +3904,17 @@ void ConditionsWindow::build_ui ()
   utc_date_->setObjectName ("muted");
   local_clock_ = new QLabel {clock_box};      // kept for the local time, shown in the date line
   local_clock_->hide ();
+  // you: grid, where that is, sunrise and sunset
+  de_info_ = new QLabel {clock_box};
+  de_info_->setTextFormat (Qt::RichText);
+  de_info_->setObjectName ("plain");
   clock_left->addWidget (box_title (tr ("Station"), clock_box));
   clock_left->addStretch ();
   clock_left->addWidget (call_label_);
   clock_left->addWidget (utc_clock_);
   clock_left->addWidget (utc_date_);
+  clock_left->addSpacing (2);
+  clock_left->addWidget (de_info_);
   clock_left->addStretch ();
   top->addWidget (clock_box, 3);
   settings_->beginGroup ("Conditions");
@@ -3299,28 +3940,97 @@ void ConditionsWindow::build_ui ()
   sun_image_->set_message (tr ("The Sun from NASA SDO"));
   sun_image_->setToolTip (tr ("The latest picture of the Sun from NASA's Solar Dynamics Observatory. "
                               "Bright spots in the ultraviolet views are active regions that can flare."));
-  sun_channels_ = QStringList {"HMIIC", "0193", "0171", "0304", "HMIB"};
-  auto * sun_seg = make_segments ({tr ("Visible"), "193", "171", "304", tr ("Mag")},
-                                  {tr ("Visible light: sunspots"),
-                                   tr ("Corona at 193 %1: active regions and coronal holes").arg (QChar {0x00C5}),
-                                   tr ("Corona at 171 %1: loops over active regions").arg (QChar {0x00C5}),
-                                   tr ("Chromosphere at 304 %1: filaments and prominences").arg (QChar {0x00C5}),
-                                   tr ("Magnetic field: black and white are opposite polarities")},
-                                  sun_group_, sun_box);
-  settings_->beginGroup ("Conditions");
-  sun_group_->button (qBound (0, settings_->value ("SunChannel", 1).toInt (), 4))->setChecked (true);
-  settings_->endGroup ();
-  connect (sun_group_, static_cast<void (QButtonGroup::*) (QAbstractButton *)> (&QButtonGroup::buttonClicked), this, [this] (QAbstractButton * b) {
-      int const i = sun_group_->id (b);
+  // every picture SDO puts up, picked from a menu by the title
+  {
+    struct Pic {char const * channel; QString text; QString tip;};
+    QVector<Pic> const pics {
+      {"211193171", tr ("Composite (211 · 193 · 171 %1)").arg (QChar {0x00C5}), tr ("Three ultraviolet views in one: the corona and active regions")},
+      {"HMIB", tr ("Magnetogram"), tr ("Magnetic field: black and white are opposite polarities")},
+      {"HMIIC", tr ("6173 %1 (visible light)").arg (QChar {0x00C5}), tr ("Visible light: sunspots")},
+      {"0131", tr ("131 %1 (flares)").arg (QChar {0x00C5}), tr ("The hottest material: flares light up here")},
+      {"0171", tr ("171 %1").arg (QChar {0x00C5}), tr ("Corona: loops over active regions")},
+      {"0193", tr ("193 %1").arg (QChar {0x00C5}), tr ("Corona: active regions and coronal holes")},
+      {"0211", tr ("211 %1").arg (QChar {0x00C5}), tr ("Active regions and coronal holes")},
+      {"0304", tr ("304 %1").arg (QChar {0x00C5}), tr ("Chromosphere: filaments and prominences")},
+      {"rotate", tr ("Rotate through them all"), tr ("A different picture every 20 seconds")},
+    };
+    auto * menu = new QMenu {sun_box};
+    sun_pictures_ = new QActionGroup {menu};
+    settings_->beginGroup ("Conditions");
+    auto const saved = settings_->value ("SunPicture", "0193").toString ();
+    bool const movie = settings_->value ("SunMovie", false).toBool ();
+    settings_->endGroup ();
+    for (auto const& pic : pics)
+      {
+        if (QLatin1String {"rotate"} == pic.channel) menu->addSeparator ();
+        auto * a = menu->addAction (pic.text);
+        a->setCheckable (true);
+        a->setData (QString {pic.channel});
+        a->setToolTip (pic.tip);
+        a->setChecked (saved == pic.channel);
+        sun_pictures_->addAction (a);
+        if (QLatin1String {"rotate"} != pic.channel) sun_channels_ << pic.channel;
+      }
+    if (!sun_pictures_->checkedAction ()) sun_pictures_->actions ()[5]->setChecked (true);
+    menu->setToolTipsVisible (true);
+    menu->addSeparator ();
+    sun_movie_action_ = menu->addAction (tr ("Show movie (last 48 hours)"));
+    sun_movie_action_->setCheckable (true);
+    sun_movie_action_->setChecked (movie);
+    connect (menu->addAction (tr ("Gray line tool...")), &QAction::triggered, this, &ConditionsWindow::gray_line_tool);
+    sun_pick_ = new QToolButton {sun_box};
+    sun_pick_->setPopupMode (QToolButton::InstantPopup);
+    sun_pick_->setMenu (menu);
+    sun_pick_->setToolTip (tr ("Which picture of the Sun, the last two days as a movie, and the gray line tool"));
+    auto picked = [this] {
+      auto const choice = sun_choice ();
       settings_->beginGroup ("Conditions");
-      settings_->setValue ("SunChannel", i);
+      settings_->setValue ("SunPicture", choice);
+      settings_->setValue ("SunMovie", sun_movie_action_->isChecked ());
       settings_->endGroup ();
-      sun_image_->set_image (QImage {});
-      sun_image_->set_message (tr ("Loading..."));
-      fetch_sun ();
-    });
+      sun_pick_->setText (sun_pictures_->checkedAction ()->text ().section (" (", 0, 0)
+                          .replace (tr ("Rotate through them all"), tr ("Rotate")));
+      if ("rotate" == choice && !sun_movie_action_->isChecked ()) sun_rotate_->start ();
+      else sun_rotate_->stop ();
+      if (sun_movie_action_->isChecked ()) load_sun_movie ();
+      else
+        {
+          stop_sun_movie ();
+          fetch_sun ();
+        }
+    };
+    sun_rotate_ = new QTimer {this};
+    sun_rotate_->setInterval (20000);
+    connect (sun_rotate_, &QTimer::timeout, this, [this] {
+        int const i = sun_channels_.indexOf (sun_channel_);
+        show_sun_channel (sun_channels_.value ((i + 1) % sun_channels_.size ()));
+      });
+    sun_movie_timer_ = new QTimer {this};
+    sun_movie_timer_->setInterval (150);
+    connect (sun_movie_timer_, &QTimer::timeout, this, [this] {
+        if (sun_frames_.isEmpty ()) return;
+        sun_frame_ = (sun_frame_ + 1) % (sun_frames_.size () + 8);     // a pause at the end
+        int const i = qMin (sun_frame_, sun_frames_.size () - 1);
+        sun_image_->set_image (sun_frames_[i].second);
+        sun_image_->set_caption (sun_frames_[i].first.toString ("d MMM hh:mm") + " UTC");
+      });
+    for (auto * a : sun_pictures_->actions ()) connect (a, &QAction::triggered, this, picked);
+    connect (sun_movie_action_, &QAction::triggered, this, picked);
+    sun_pick_->setText (sun_pictures_->checkedAction ()->text ().section (" (", 0, 0)
+                        .replace (tr ("Rotate through them all"), tr ("Rotate")));
+    if ("rotate" == sun_choice () && !movie) sun_rotate_->start ();
+    // the title row: the box's title on the left, the menu on the right
+    if (auto * title = sun_box->findChild<QLabel *> ())
+      {
+        body->removeWidget (title);
+        auto * head = new QHBoxLayout;
+        head->addWidget (title);
+        head->addStretch ();
+        head->addWidget (sun_pick_);
+        body->insertLayout (0, head);
+      }
+  }
   body->addWidget (sun_image_, 1);
-  body->addWidget (sun_seg, 0, Qt::AlignHCenter);
   top->addWidget (sun_box, 2);
 
   auto * beacon_box = make_box ("beacons", tr ("NCDXF beacons"), body);
@@ -3387,13 +4097,6 @@ void ConditionsWindow::build_ui ()
   side->setContentsMargins (0, 0, 0, 0);
   side->setSpacing (12);
   left_column_->setObjectName ("plain");
-
-  auto * de_box = make_box ("de", tr ("DE · You"), body);
-  de_info_ = new QLabel {de_box};
-  de_info_->setWordWrap (true);
-  de_info_->setTextFormat (Qt::RichText);
-  body->addWidget (de_info_);
-  side->addWidget (de_box);
 
   auto * dx_box = make_box ("dx", tr ("DX"), body);
   dx_info_ = new QLabel {dx_box};
@@ -3482,35 +4185,6 @@ void ConditionsWindow::build_ui ()
   connect (voacap_path_, static_cast<void (QButtonGroup::*) (QAbstractButton *)> (&QButtonGroup::buttonClicked), this, voacap_changed);
   side->addWidget (voacap_box);
 
-  auto * bands_box = make_box ("bands", tr ("Band outlook"), body);
-  bands_box->setToolTip (tr ("A rough estimate from the solar flux and K index, not a forecast for any one path."));
-  auto * bands = new QGridLayout;
-  bands->setHorizontalSpacing (8);
-  bands->setVerticalSpacing (5);
-  for (int dn = 0; dn < 2; ++dn)
-    {
-      auto * head = new QLabel {dn ? tr ("Night") : tr ("Day"), bands_box};
-      head->setObjectName ("muted");
-      bands->addWidget (head, 0, dn + 1, Qt::AlignCenter);
-    }
-  char const * groups[] = {"80–40m", "30–20m", "17–15m", "12–10m"};
-  for (int g = 0; g < 4; ++g)
-    {
-      bands->addWidget (new QLabel {QString::fromUtf8 (groups[g]), bands_box}, g + 1, 0);
-      for (int dn = 0; dn < 2; ++dn)
-        {
-          auto * cell = new QLabel {QString {QChar {0x2014}}, bands_box};
-          cell->setAlignment (Qt::AlignCenter);
-          cell->setMinimumWidth (62);
-          band_cells_[g][dn] = cell;
-          bands->addWidget (cell, g + 1, dn + 1);
-        }
-    }
-  body->addLayout (bands);
-  auto * est = new QLabel {tr ("Estimated from solar flux and K"), bands_box};
-  est->setObjectName ("muted");
-  body->addWidget (est);
-  side->addWidget (bands_box);
   side_ = side;
   side_filler_ = new QWidget {left_column_};      // takes up the space when no box can
   side->addWidget (side_filler_, 1);
@@ -3536,7 +4210,11 @@ void ConditionsWindow::build_ui ()
   map_->on_double_click = [this] (QString const& call, Qt::KeyboardModifiers modifiers) {
     Q_EMIT station_double_clicked (call, modifiers);
   };
+  news_ = new NewsTicker {map_card};
+  news_->hide ();
+  news_->set_message (tr ("Getting the headlines..."));
   map_column->addWidget (build_map_bar ());
+  map_column->addWidget (news_);
   map_column->addWidget (map_, 1);
   middle->addWidget (map_card, 1);
   outer->addLayout (middle, 1);
@@ -3552,7 +4230,6 @@ void ConditionsWindow::build_ui ()
   add_box_action ("sun", tr ("The Sun (NASA SDO)"));
   add_box_action ("beacons", tr ("NCDXF beacons"));
   add_box_action ("spacewx", tr ("Space weather"));
-  add_box_action ("de", tr ("You (DE)"));
   add_box_action ("dx", tr ("DX station"));
   add_box_action ("voacap", tr ("VOACAP DE-DX"));
   add_box_action ("bands", tr ("Band outlook"));
@@ -3567,42 +4244,150 @@ QWidget * ConditionsWindow::build_map_bar ()
 {
   auto * bar = new QWidget {this};
   bar->setObjectName ("plain");
+  map_bar_ = bar;
   auto * rows = new QVBoxLayout {bar};
   rows->setContentsMargins (0, 0, 0, 0);
   rows->setSpacing (8);
   auto * row1 = new QHBoxLayout;
   row1->setSpacing (8);
-  auto * row2 = new QHBoxLayout;
-  row2->setSpacing (8);
+  auto * row2_widget = new QWidget {bar};
+  row2_widget->setObjectName ("plain");
+  auto * row2 = new FlowLayout {row2_widget, 8};
+  row2->set_last_right (true);
   rows->addLayout (row1);
-  rows->addLayout (row2);
+  rows->addWidget (row2_widget);
 
-  // which map, and how it's drawn
-  row1->addWidget (make_segments ({tr ("Day/Night"), tr ("Satellite"), tr ("Countries"), tr ("Terrain")},
-                                  {tr ("The Earth by day, city lights on the night side"),
-                                   tr ("The Earth by day everywhere"),
-                                   tr ("Plain land and borders in this color scheme"),
-                                   tr ("Mountains and the sea floor")},
-                                  style_group_, bar));
-  row1->addWidget (make_segments ({tr ("Flat"), tr ("Centred")},
-                                  {tr ("The whole world, north up"),
-                                   tr ("<p>Centred on you (azimuthal). A straight line from the middle is the "
-                                       "beam heading to that place, and the farther out, the farther away. "
-                                       "The edge is the far side of the world.</p>")},
-                                  projection_group_, bar));
+  // which map, and how it's drawn: three menus; the switches they set
+  // are kept, hidden, so earlier settings carry over
+  auto * styles = make_segments ({tr ("Day/Night"), tr ("Satellite"), tr ("Countries"), tr ("Terrain")}, {}, style_group_, bar);
+  auto * projections = make_segments ({tr ("Flat"), tr ("Centred on you"), tr ("Robinson"), tr ("Centred on you, near half")}, {},
+                                      projection_group_, bar);
+  styles->hide ();
+  projections->hide ();
   grid_box_ = new QComboBox {bar};
   grid_box_->addItem (tr ("No grid"));
   grid_box_->addItem (tr ("Lat/long"));
-  grid_box_->addItem (tr ("Maidenhead"));
+  grid_box_->addItem (tr ("Maidenhead fields"));
   grid_box_->addItem (tr ("Maidenhead squares"));
-  grid_box_->setToolTip (tr ("<p><b>Lat/long:</b> lines every 15 degrees.</p>"
-                             "<p><b>Maidenhead:</b> fields AA to RR.</p>"
-                             "<p><b>Maidenhead squares:</b> the fields and the squares inside them.</p>"
-                             "<p>Point at the map to see the grid square, the nearest city and how far it is from you.</p>"));
-  row1->addWidget (grid_box_);
+  grid_box_->addItem (tr ("Equator and tropics"));
+  grid_box_->addItem (tr ("Beam headings and distance"));
+  grid_box_->addItem (tr ("CQ zones"));
+  grid_box_->addItem (tr ("ITU zones"));
+  grid_box_->hide ();
+  auto menu_button = [bar] (QString const& tip) {
+    auto * b = new QToolButton {bar};
+    b->setPopupMode (QToolButton::InstantPopup);
+    b->setToolTip (tip);
+    b->setMenu (new QMenu {b});
+    b->menu ()->setToolTipsVisible (true);
+    return b;
+  };
+  auto heading = [] (QMenu * m, QString const& text) {
+    auto * a = m->addAction (text);
+    auto f = a->font ();
+    f.setBold (true);
+    f.setCapitalization (QFont::AllUppercase);
+    f.setPointSizeF (qMax (6.5, f.pointSizeF () * 0.85));
+    a->setFont (f);
+    a->setEnabled (false);
+  };
+  style_button_ = menu_button (tr ("The map under everything, and whether it's coloured by conditions"));
+  {
+    auto * m = style_button_->menu ();
+    heading (m, tr ("The Earth"));
+    auto * earth = new QActionGroup {m};
+    QStringList const names {tr ("Day/Night"), tr ("Satellite"), tr ("Countries"), tr ("Terrain")};
+    QStringList const tips {tr ("The Earth by day, city lights on the night side"), tr ("The Earth by day everywhere"),
+                            tr ("Plain land and borders in this color scheme"), tr ("Mountains and the sea floor")};
+    for (int i = 0; i < 4; ++i)
+      {
+        auto * a = m->addAction (names[i]);
+        a->setCheckable (true);
+        a->setToolTip (tips[i]);
+        earth->addAction (a);
+        connect (a, &QAction::triggered, this, [this, i] {style_group_->button (i)->click ();});
+        connect (m, &QMenu::aboutToShow, a, [this, a, i] {a->setChecked (style_group_->checkedId () == i);});
+      }
+    m->addSeparator ();
+    heading (m, tr ("Coloured by conditions"));
+    colour_by_ = new QActionGroup {m};
+    QStringList const cond {tr ("Nothing"), tr ("DRAP absorption (NOAA)"), tr ("MUF now (ionosondes, KC2G)")};
+    QStringList const cond_tips {
+      tr ("Just the map"),
+      tr ("<p>NOAA's D-region absorption: the highest frequency losing 1 dB or more going through the bottom of the "
+          "ionosphere. After a flare the daylight side lights up: bands under that number are hard going.</p>"),
+      tr ("<p>The maximum usable frequency for a 3,000 km hop, now, from ionosondes round the world "
+          "(prop.kc2g.com). Bands under the MUF can skip from that part of the world.</p>")};
+    settings_->beginGroup ("Conditions");
+    int const by = qBound (0, settings_->value ("MapColourBy", 0).toInt (), 2);
+    settings_->endGroup ();
+    for (int i = 0; i < 3; ++i)
+      {
+        auto * a = m->addAction (cond[i]);
+        a->setCheckable (true);
+        a->setChecked (i == by);
+        a->setData (i);
+        a->setToolTip (cond_tips[i]);
+        colour_by_->addAction (a);
+      }
+  }
+  projection_button_ = menu_button (tr ("How the round Earth is laid out flat"));
+  {
+    auto * m = projection_button_->menu ();
+    heading (m, tr ("Projection"));
+    auto * group = new QActionGroup {m};
+    struct P {int id; QString text; QString tip;};
+    QVector<P> const ps {
+      {0, tr ("Flat"), tr ("The whole world, north up")},
+      {2, tr ("Robinson"), tr ("The whole world with rounded sides, less stretched near the poles")},
+      {1, tr ("Centred on you"), tr ("<p>Azimuthal: a straight line from the middle is the beam heading to that place, and the "
+                                     "farther out, the farther away. The edge is the far side of the world.</p>")},
+      {3, tr ("Centred on you, near half"), tr ("<p>The same, but only the half of the world nearest you (out to 10,000 km), "
+                                                "so it's bigger.</p>")},
+    };
+    for (auto const& pr : ps)
+      {
+        auto * a = m->addAction (pr.text);
+        a->setCheckable (true);
+        a->setToolTip (pr.tip);
+        group->addAction (a);
+        int const id = pr.id;
+        connect (a, &QAction::triggered, this, [this, id] {projection_group_->button (id)->click ();});
+        connect (m, &QMenu::aboutToShow, a, [this, a, id] {a->setChecked (projection_group_->checkedId () == id);});
+      }
+  }
+  grid_button_ = menu_button (tr ("<p>Lines over the map.</p><p>Point at the map to see the grid square, the nearest city and how far it is from you.</p>"));
+  {
+    auto * m = grid_button_->menu ();
+    heading (m, tr ("Grid lines"));
+    auto * group = new QActionGroup {m};
+    struct G {int id; QString tip;};
+    QVector<G> const gs {
+      {0, tr ("No lines")}, {4, tr ("The equator, the tropics and the polar circles")}, {1, tr ("Lines every 15 degrees")},
+      {2, tr ("Maidenhead fields AA to RR")}, {3, tr ("The fields and the squares inside them")},
+      {5, tr ("Beam headings every 30 degrees and distance rings every 2,500 km from you")},
+      {6, tr ("The 40 CQ zones")}, {7, tr ("The 90 ITU zones")},
+    };
+    for (auto const& g : gs)
+      {
+        auto * a = m->addAction (grid_box_->itemText (g.id));
+        a->setCheckable (true);
+        a->setToolTip (g.tip);
+        group->addAction (a);
+        int const id = g.id;
+        connect (a, &QAction::triggered, this, [this, id] {grid_box_->setCurrentIndex (id);});
+        connect (m, &QMenu::aboutToShow, a, [this, a, id] {a->setChecked (grid_box_->currentIndex () == id);});
+      }
+  }
+  row1->addWidget (style_button_);
+  row1->addWidget (projection_button_);
+  row1->addWidget (grid_button_);
   gray_box_ = make_chip (tr ("Gray line"), tr ("Shade the night side of the Earth"), bar);
   aurora_box_ = make_chip (tr ("Aurora"), tr ("NOAA's 30-minute aurora forecast. Strong aurora can absorb or reflect HF and VHF signals near the poles."), bar);
   rain_box_ = make_chip (tr ("Rain"), tr ("Where it's raining or snowing over the last half hour or so, from NASA satellites"), bar);
+  clouds_box_ = make_chip (tr ("Clouds"), tr ("<p>Clouds now, from the GOES and Himawari weather satellites (NASA GIBS). "
+                                              "Europe, Africa and western Asia aren't covered.</p>"), bar);
+  news_box_ = make_chip (tr ("News"), tr ("Ham radio headlines from ARRL, AMSAT and DX-World scrolling under these buttons. Click one to read it."), bar);
   cities_box_ = make_chip (tr ("Cities"), tr ("Names of cities. Zoom in to see more of them. Capitals have a square."), bar);
   beacons_box_ = make_chip (tr ("Beacons"), tr ("The 18 NCDXF/IARU beacons. The ones sending now are filled in the color of their band."), bar);
   prop_box_ = make_chip (tr ("Propagation"), tr ("<p>VOACAP's map for one band from you: how likely it is to reach each part of the world "
@@ -3688,15 +4473,55 @@ QWidget * ConditionsWindow::build_map_bar ()
     load_map_colours ();
     map_->on_colour = [this] (QString const& key, QString const& name) {pick_map_colour (key, name);};
   }
-  for (auto * b : {gray_box_, aurora_box_, rain_box_, cities_box_, beacons_box_, worked_grids_box_, psk_box_, prop_box_}) row2->addWidget (b);
-  row2->addStretch ();
+  for (auto * b : {gray_box_, aurora_box_, rain_box_, clouds_box_, cities_box_, beacons_box_, worked_grids_box_, psk_box_, prop_box_, news_box_}) row2->addWidget (b);
   row1->addStretch ();
+  // the band outlook: day and night for each group of bands
+  {
+    auto * outlook = new QWidget {bar};
+    outlook->setObjectName ("plain");
+    outlook->setToolTip (tr ("<p><b>Band outlook</b>, day and night: a rough estimate from the solar flux and "
+                             "K index, not a forecast for any one path.</p>"));
+    auto * h = new QHBoxLayout {outlook};
+    h->setContentsMargins (0, 0, 0, 0);
+    h->setSpacing (5);
+    auto * head = new QVBoxLayout;
+    head->setSpacing (0);
+    auto * title = box_title (tr ("Bands"), outlook);
+    title->setAlignment (Qt::AlignRight);
+    auto * dn = new QLabel {tr ("day · night"), outlook};
+    dn->setObjectName ("muted");
+    auto f = dn->font ();
+    f.setPointSizeF (qMax (6.5, f.pointSizeF () * 0.82));
+    dn->setFont (f);
+    dn->setAlignment (Qt::AlignRight);
+    head->addWidget (title);
+    head->addWidget (dn);
+    h->addLayout (head);
+    h->addSpacing (4);
+    char const * groups[] = {"80–40", "30–20", "17–15", "12–10"};
+    for (int g = 0; g < 4; ++g)
+      {
+        if (g) h->addSpacing (7);
+        h->addWidget (new QLabel {QString::fromUtf8 (groups[g]), outlook});
+        for (int d = 0; d < 2; ++d)
+          {
+            auto * cell = new QLabel {QString {QChar {0x2014}}, outlook};
+            cell->setAlignment (Qt::AlignCenter);
+            cell->setFont (f);
+            band_cells_[g][d] = cell;
+            h->addWidget (cell);
+          }
+      }
+    outlook->setSizePolicy (QSizePolicy::Fixed, QSizePolicy::Preferred);
+    boxes_["bands"] = outlook;
+    row1->addWidget (outlook);
+  }
   auto * boxes = new QToolButton {bar};
   boxes->setText (tr ("Boxes"));
   boxes->setToolTip (tr ("Choose which boxes this window shows"));
   boxes->setPopupMode (QToolButton::InstantPopup);
   boxes->setMenu (boxes_menu_);
-  row1->addWidget (boxes);
+  row2->addWidget (boxes);
 
   // which stations: the legend on the map; these switches hold the choice
   show_cq_ = new QCheckBox {bar};
@@ -3720,13 +4545,15 @@ QWidget * ConditionsWindow::build_map_bar ()
   // restore and react
   settings_->beginGroup ("Conditions");
   style_group_->button (qBound (0, settings_->value ("MapStyle", 0).toInt (), 3))->setChecked (true);
-  projection_group_->button (qBound (0, settings_->value ("MapProjection", 0).toInt (), 1))->setChecked (true);
+  projection_group_->button (qBound (0, settings_->value ("MapProjection", 0).toInt (), 3))->setChecked (true);
   // older betas had a single Grid squares check box
   int const old_grid = settings_->value ("GridSquares", false).toBool () ? 2 : 0;
   grid_box_->setCurrentIndex (qBound (0, settings_->value ("MapGrid", old_grid).toInt (), grid_box_->count () - 1));
   gray_box_->setChecked (settings_->value ("GrayLine", true).toBool ());
   aurora_box_->setChecked (settings_->value ("Aurora", false).toBool ());
   rain_box_->setChecked (settings_->value ("Rain", false).toBool ());
+  clouds_box_->setChecked (settings_->value ("Clouds", false).toBool ());
+  news_box_->setChecked (settings_->value ("News", false).toBool ());
   beacons_box_->setChecked (settings_->value ("Beacons", false).toBool ());
   cities_box_->setChecked (settings_->value ("Cities", false).toBool ());
   prop_band_ = qBound (0, settings_->value ("PropBand", 4).toInt (), VoacapGrid::bands - 1);     // 20 m
@@ -3747,6 +4574,18 @@ QWidget * ConditionsWindow::build_map_bar ()
     map_->gray_line = gray_box_->isChecked ();
     map_->show_aurora = aurora_box_->isChecked ();
     map_->show_rain = rain_box_->isChecked ();
+    map_->show_clouds = clouds_box_->isChecked ();
+    map_->colour_by = colour_by_->checkedAction () ? colour_by_->checkedAction ()->data ().toInt () : 0;
+    if (news_) news_->setVisible (news_box_->isChecked ());
+    // the menus' buttons say what's chosen
+    style_button_->setText (style_group_->checkedButton () ? style_group_->checkedButton ()->text () : QString {});
+    if (map_->colour_by) style_button_->setText (style_button_->text () + " + " + (1 == map_->colour_by ? tr ("DRAP") : tr ("MUF")));
+    QStringList const short_grids {tr ("No grid"), tr ("Lat/long"), tr ("Fields"), tr ("Squares"), tr ("Tropics"),
+                                   tr ("Beam headings"), tr ("CQ zones"), tr ("ITU zones")};
+    grid_button_->setText (short_grids.value (grid_box_->currentIndex ()));
+    QStringList const short_proj {tr ("Flat"), tr ("Centred"), tr ("Robinson"), tr ("Near half")};
+    projection_button_->setText (short_proj.value (projection_group_->checkedId ()));
+    QTimer::singleShot (0, this, [this] {fit_outlook ();});
     map_->show_beacons = beacons_box_->isChecked ();
     map_->show_cities = cities_box_->isChecked ();
     map_->show_prop = prop_box_->isChecked ();
@@ -3786,7 +4625,18 @@ QWidget * ConditionsWindow::build_map_bar ()
       apply ();
       if (on) schedule_area ();
     });
-  for (auto * box : {aurora_box_, rain_box_})
+  for (auto * a : colour_by_->actions ())
+    {
+      connect (a, &QAction::triggered, this, [this, apply] {
+          apply ();
+          if (isVisible ()) refresh_overlays ();
+        });
+    }
+  connect (news_box_, &QAbstractButton::toggled, this, [this, apply] (bool on) {
+      apply ();
+      if (on) fetch_news ();
+    });
+  for (auto * box : {aurora_box_, rain_box_, clouds_box_})
     {
       connect (box, &QAbstractButton::toggled, this, [this, apply] {
           apply ();
@@ -3794,6 +4644,7 @@ QWidget * ConditionsWindow::build_map_bar ()
         });
     }
   QTimer::singleShot (0, this, apply);
+  QTimer::singleShot (0, this, [this] {if (news_box_->isChecked ()) fetch_news ();});
   update_legend ();
   return bar;
 }
@@ -3807,6 +4658,9 @@ void ConditionsWindow::save_map_options ()
   settings_->remove ("GridSquares");
   settings_->setValue ("GrayLine", gray_box_->isChecked ());
   settings_->setValue ("Aurora", aurora_box_->isChecked ());
+  settings_->setValue ("Clouds", clouds_box_->isChecked ());
+  settings_->setValue ("News", news_box_->isChecked ());
+  if (colour_by_) settings_->setValue ("MapColourBy", colour_by_->checkedAction () ? colour_by_->checkedAction ()->data ().toInt () : 0);
   settings_->setValue ("Rain", rain_box_->isChecked ());
   settings_->setValue ("Beacons", beacons_box_->isChecked ());
   settings_->setValue ("Cities", cities_box_->isChecked ());
@@ -4130,8 +4984,289 @@ void ConditionsWindow::refresh_overlays ()
           map_->set_rain (img.convertToFormat (QImage::Format_ARGB32_Premultiplied));
         });
     }
-  if (aurora_box_->isChecked () || rain_box_->isChecked ()) overlay_timer_->start ();
+  if (clouds_box_->isChecked ())
+    {
+      // the three geostationary weather satellites NASA GIBS has, in infrared:
+      // cold cloud tops are bright, day and night
+      QUrl url {gibs_base () + "wms/epsg4326/best/wms.cgi"};
+      QUrlQuery q;
+      q.addQueryItem ("SERVICE", "WMS");
+      q.addQueryItem ("REQUEST", "GetMap");
+      q.addQueryItem ("VERSION", "1.1.1");
+      q.addQueryItem ("LAYERS", "GOES-West_ABI_Band13_Clean_Infrared,GOES-East_ABI_Band13_Clean_Infrared,Himawari_AHI_Band13_Clean_Infrared");
+      q.addQueryItem ("SRS", "EPSG:4326");
+      q.addQueryItem ("BBOX", "-180,-90,180,90");
+      q.addQueryItem ("WIDTH", "1440");
+      q.addQueryItem ("HEIGHT", "720");
+      q.addQueryItem ("FORMAT", "image/png");
+      q.addQueryItem ("TRANSPARENT", "TRUE");
+      url.setQuery (q);
+      QNetworkRequest req {url};
+      req.setRawHeader ("User-Agent", http_user_agent ().toUtf8 ());
+      auto * reply = network_->get (req);
+      connect (reply, &QNetworkReply::finished, this, [this, reply] {
+          reply->deleteLater ();
+          QImage img;
+          if (QNetworkReply::NoError == reply->error ()) img.loadFromData (reply->readAll ());
+          if (img.isNull ())
+            {
+              overlay_status_ = tr ("Clouds couldn't be reached.");
+              return;
+            }
+          // grey to white clouds: the brighter (colder), the more solid
+          img = img.convertToFormat (QImage::Format_ARGB32);
+          QImage clouds {img.size (), QImage::Format_ARGB32_Premultiplied};
+          for (int y = 0; y < img.height (); ++y)
+            {
+              auto const * in = reinterpret_cast<QRgb const *> (img.constScanLine (y));
+              auto * out = reinterpret_cast<QRgb *> (clouds.scanLine (y));
+              for (int x = 0; x < img.width (); ++x)
+                {
+                  int const v = qGray (in[x]);
+                  int const a = qAlpha (in[x]) < 128 ? 0 : qBound (0, (v - 105) * 2, 225);
+                  out[x] = qPremultiply (qRgba (245, 248, 255, a));
+                }
+            }
+          map_->set_clouds (clouds);
+        });
+    }
+  if (colour_by_ && colour_by_->checkedAction () && colour_by_->checkedAction ()->data ().toInt ()) fetch_conditions_map ();
+  bool const any = aurora_box_->isChecked () || rain_box_->isChecked () || clouds_box_->isChecked ()
+    || (colour_by_ && colour_by_->checkedAction () && colour_by_->checkedAction ()->data ().toInt ());
+  if (any) overlay_timer_->start ();
   else overlay_timer_->stop ();
+}
+
+// the map coloured by NOAA's DRAP or by the MUF from ionosondes
+void ConditionsWindow::fetch_conditions_map ()
+{
+  int const by = colour_by_->checkedAction ()->data ().toInt ();
+  if (1 == by)
+    {
+      QNetworkRequest req {QUrl {swpc_base () + "text/drap_global_frequencies.txt"}};
+      req.setRawHeader ("User-Agent", http_user_agent ().toUtf8 ());
+      auto * reply = network_->get (req);
+      connect (reply, &QNetworkReply::finished, this, [this, reply] {
+          reply->deleteLater ();
+          if (QNetworkReply::NoError != reply->error ())
+            {
+              overlay_status_ = tr ("DRAP couldn't be reached.");
+              return;
+            }
+          // a table: longitudes across the top, then "lat | MHz MHz ..."
+          QVector<double> lons;
+          QVector<QPair<double, QVector<double>>> rows;
+          double top = 0.;
+          for (auto const& raw : QString::fromLatin1 (reply->readAll ()).split ('\n'))
+            {
+              auto const line = raw.trimmed ();
+              if (line.isEmpty () || line.startsWith ('#') || QRegularExpression {"^-+$"}.match (line).hasMatch ()) continue;
+              if (line.contains ('|'))
+                {
+                  auto const lat = line.section ('|', 0, 0).trimmed ().toDouble ();
+                  QVector<double> v;
+                  for (auto const& f : line.section ('|', 1).split (QRegularExpression {"\\s+"})) if (f.size ()) v << f.toDouble ();
+                  for (double x : v) top = qMax (top, x);
+                  rows << qMakePair (lat, v);
+                }
+              else if (lons.isEmpty ())
+                {
+                  for (auto const& f : line.split (QRegularExpression {"\\s+"})) if (f.size ()) lons << f.toDouble ();
+                }
+            }
+          if (rows.isEmpty () || lons.size () < 2)
+            {
+              overlay_status_ = tr ("DRAP couldn't be read.");
+              return;
+            }
+          // a gentle scale when it's quiet, up to 35 MHz in a big flare
+          double const scale = qMax (10., qCeil (top / 5.) * 5.);
+          QImage img {int (lons.size ()), int (rows.size ()), QImage::Format_ARGB32_Premultiplied};
+          for (int y = 0; y < rows.size (); ++y)
+            {
+              for (int x = 0; x < lons.size (); ++x)
+                {
+                  double const v = rows[y].second.value (x, 0.);
+                  QColor c = mhz_colour (v, scale);
+                  // nothing absorbed: leave the map clear
+                  int const a = v <= 0.05 ? 0 : qBound (90, int (110 + v / scale * 145), 235);
+                  img.setPixel (x, y, qPremultiply (qRgba (c.red (), c.green (), c.blue (), a)));
+                }
+            }
+          map_->set_conditions (img.scaled (720, 360, Qt::IgnoreAspectRatio, Qt::SmoothTransformation),
+                                tr ("DRAP: absorbed up to"), scale);
+        });
+      return;
+    }
+  // the MUF at each ionosonde, spread between them
+  QNetworkRequest req {QUrl {kc2g_base () + "api/stations.json"}};
+  req.setRawHeader ("User-Agent", http_user_agent ().toUtf8 ());
+  auto * reply = network_->get (req);
+  connect (reply, &QNetworkReply::finished, this, [this, reply] {
+      reply->deleteLater ();
+      if (QNetworkReply::NoError != reply->error ())
+        {
+          overlay_status_ = tr ("The MUF (prop.kc2g.com) couldn't be reached.");
+          return;
+        }
+      struct P {double lat; double lon; double muf;};
+      QVector<P> points;
+      auto const now = QDateTime::currentDateTimeUtc ();
+      for (auto const& v : QJsonDocument::fromJson (reply->readAll ()).array ())
+        {
+          auto const o = v.toObject ();
+          auto const st = o.value ("station").toObject ();
+          double const muf = o.value ("mufd").toDouble (qQNaN ());
+          double lat = st.value ("latitude").toVariant ().toDouble ();
+          double lon = st.value ("longitude").toVariant ().toDouble ();
+          auto const when = QDateTime::fromString (o.value ("time").toString ().left (19), Qt::ISODate);
+          if (qIsNaN (muf) || muf <= 0.) continue;
+          if (when.isValid () && QDateTime {when.date (), when.time (), Qt::UTC}.secsTo (now) > 3 * 3600) continue;
+          if (lon > 180.) lon -= 360.;
+          points << P {lat, lon, muf};
+        }
+      if (points.isEmpty ())
+        {
+          overlay_status_ = tr ("No recent MUF readings.");
+          return;
+        }
+      // weighted by distance; far from any ionosonde it fades out
+      QImage img {360, 180, QImage::Format_ARGB32_Premultiplied};
+      QVector<double> sl, cl, so, co;
+      for (auto const& pt : points)
+        {
+          sl << std::sin (rad (pt.lat)); cl << std::cos (rad (pt.lat));
+          so << std::sin (rad (pt.lon)); co << std::cos (rad (pt.lon));
+        }
+      for (int y = 0; y < 180; ++y)
+        {
+          double const lat = rad (89.5 - y);
+          double const s1 = std::sin (lat), c1 = std::cos (lat);
+          for (int x = 0; x < 360; ++x)
+            {
+              double const lon = rad (-179.5 + x);
+              double const s2 = std::sin (lon), c2 = std::cos (lon);
+              double sum = 0., weights = 0., nearest = 1e9;
+              for (int i = 0; i < points.size (); ++i)
+                {
+                  double const cosd = s1 * sl[i] + c1 * cl[i] * (c2 * co[i] + s2 * so[i]);
+                  double const d = std::acos (qBound (-1., cosd, 1.));
+                  nearest = qMin (nearest, d);
+                  double const w = 1. / std::pow (qMax (d, 0.01), 3.);
+                  sum += w * points[i].muf;
+                  weights += w;
+                }
+              double const muf = sum / weights;
+              QColor const c = mhz_colour (muf, 35.);
+              int const a = qBound (0, int (220 * (1. - (nearest - 0.25) / 0.35)), 200);
+              img.setPixel (x, y, qPremultiply (qRgba (c.red (), c.green (), c.blue (), a)));
+            }
+        }
+      map_->set_conditions (img.scaled (720, 360, Qt::IgnoreAspectRatio, Qt::SmoothTransformation), tr ("MUF now"), 35.);
+    });
+}
+
+// headlines from ARRL, AMSAT and DX-World, once an hour while News is on
+void ConditionsWindow::fetch_news ()
+{
+  if (!news_timer_)
+    {
+      news_timer_ = new QTimer {this};
+      news_timer_->setInterval (60 * 60 * 1000);
+      connect (news_timer_, &QTimer::timeout, this, &ConditionsWindow::fetch_news);
+    }
+  if (!news_box_->isChecked ())
+    {
+      news_timer_->stop ();
+      return;
+    }
+  news_timer_->start ();
+  struct Feed {QString source; QString url;};
+  QVector<Feed> const feeds {
+    {"ARRL", news_base ("https://www.arrl.org/news/rss", "arrl")},
+    {"AMSAT", news_base ("https://www.amsat.org/feed/", "amsat")},
+    {"DX-World", news_base ("https://www.dx-world.net/feed/", "dxworld")},
+  };
+  auto * got = new QMap<int, QVector<NewsTicker::Item>>;
+  auto * left = new int {int (feeds.size ())};
+  for (int f = 0; f < feeds.size (); ++f)
+    {
+      QNetworkRequest req {QUrl {feeds[f].url}};
+      req.setRawHeader ("User-Agent", http_user_agent ().toUtf8 ());
+#if QT_VERSION >= QT_VERSION_CHECK (5, 9, 0)
+      req.setAttribute (QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+#endif
+      auto * reply = network_->get (req);
+      auto const source = feeds[f].source;
+      connect (reply, &QNetworkReply::finished, this, [this, reply, source, f, got, left] {
+          reply->deleteLater ();
+          if (QNetworkReply::NoError == reply->error ())
+            {
+              // RSS items or Atom entries: the newest few
+              QXmlStreamReader xml {reply->readAll ()};
+              QVector<NewsTicker::Item> items;
+              NewsTicker::Item item;
+              bool in_item = false;
+              while (!xml.atEnd () && items.size () < 6)
+                {
+                  xml.readNext ();
+                  if (xml.isStartElement ())
+                    {
+                      auto const name = xml.name ().toString ();
+                      if ("item" == name || "entry" == name) {in_item = true; item = NewsTicker::Item {source, {}, {}};}
+                      else if (in_item && "title" == name) item.title = xml.readElementText ().simplified ();
+                      else if (in_item && "link" == name)
+                        {
+                          auto const href = xml.attributes ().value ("href").toString ();
+                          item.link = href.size () ? href : xml.readElementText ().trimmed ();
+                        }
+                    }
+                  else if (xml.isEndElement () && ("item" == xml.name () || "entry" == xml.name ()))
+                    {
+                      in_item = false;
+                      if (item.title.size ()) items << item;
+                    }
+                }
+              (*got)[f] = items;
+            }
+          if (--*left) return;
+          QVector<NewsTicker::Item> all;
+          // take turns: one from each source
+          for (int i = 0; i < 6; ++i)
+            {
+              for (auto it = got->cbegin (); it != got->cend (); ++it) if (i < it->size ()) all << it.value ()[i];
+            }
+          news_->set_items (all);
+          if (all.isEmpty ()) news_->set_message (tr ("The headlines couldn't be reached. Will try again in an hour."));
+          delete got;
+          delete left;
+        });
+    }
+}
+
+// the band outlook in words when there's room, coloured dots when not
+void ConditionsWindow::fit_outlook ()
+{
+  auto * outlook = boxes_.value ("bands");
+  if (!outlook || !map_bar_) return;
+  // what the words need: the menus beside them, then the outlook itself
+  int used = 0;
+  for (auto * w : {static_cast<QWidget *> (style_button_), static_cast<QWidget *> (projection_button_), static_cast<QWidget *> (grid_button_)})
+    {
+      used += w->sizeHint ().width () + 8;
+    }
+  QFontMetrics const fm {band_cells_[0][0]->font ()};
+  int const words = 4 * (fm.horizontalAdvance ("80–40") + 2 * (fm.horizontalAdvance ("Good") + 16) + 20) + 80;
+  bool const compact = used + words > map_bar_->width ();
+  if (compact == compact_outlook_) return;
+  compact_outlook_ = compact;
+  update_bands ();
+}
+
+void ConditionsWindow::resizeEvent (QResizeEvent * e)
+{
+  QWidget::resizeEvent (e);
+  fit_outlook ();
 }
 
 
@@ -4245,7 +5380,7 @@ void ConditionsWindow::fix_clock_width ()
   double base = QApplication::font ().pointSizeF ();
   if (base <= 0) base = 9.;
   auto const key = QString {"%1|%2|%3|%4"}.arg (base).arg (QApplication::font ().family ())
-    .arg (utc_date_->font ().toString ()).arg (call_label_->sizeHint ().width ());
+    .arg (utc_date_->font ().toString ()).arg (call_label_->sizeHint ().width ()) + de_info_->text ();
   if (key == clock_column_key_) return;
   clock_column_key_ = key;
 
@@ -4281,7 +5416,8 @@ void ConditionsWindow::fix_clock_width ()
     }
   date_w += 2 * (widest_digit (date_fm) - date_fm.horizontalAdvance ('1')) + 2 * widest_digit (date_fm);
 
-  int const width = qCeil (qMax (qMax (clock_w, date_w), double (call_label_->sizeHint ().width ()))) + 8;
+  int const width = qCeil (qMax (qMax (qMax (clock_w, date_w), double (call_label_->sizeHint ().width ())),
+                                 double (de_info_->sizeHint ().width ()))) + 8;
   clock_column_->setFixedWidth (width);
 }
 
@@ -4344,11 +5480,32 @@ void ConditionsWindow::update_beacons ()
     }
 }
 
-void ConditionsWindow::fetch_sun ()
+QString ConditionsWindow::sun_choice () const
 {
-  if (!box_on ("sun")) return;
-  auto const channel = sun_channels_.value (qMax (0, sun_group_->checkedId ()));
-  QNetworkRequest req {QUrl {QString {"https://sdo.gsfc.nasa.gov/assets/img/latest/latest_512_%1.jpg"}.arg (channel)}};
+  auto * a = sun_pictures_ ? sun_pictures_->checkedAction () : nullptr;
+  return a ? a->data ().toString () : QString {"0193"};
+}
+
+namespace
+{
+  QString sun_url (QString const& channel)
+  {
+    return QString {"%1assets/img/latest/latest_512_%2.jpg"}.arg (sdo_base (), channel);
+  }
+}
+
+// one picture: from the last 15 minutes' copy or fetched fresh
+void ConditionsWindow::show_sun_channel (QString const& channel)
+{
+  sun_channel_ = channel;
+  sun_image_->set_caption (QString {});
+  auto const cached = sun_cache_.value (channel);
+  if (!cached.second.isNull () && cached.first.secsTo (QDateTime::currentDateTimeUtc ()) < 14 * 60)
+    {
+      sun_image_->set_image (cached.second);
+      return;
+    }
+  QNetworkRequest req {QUrl {sun_url (channel)}};
   req.setRawHeader ("User-Agent", http_user_agent ().toUtf8 ());
 #if QT_VERSION >= QT_VERSION_CHECK (5, 9, 0)
   req.setAttribute (QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
@@ -4356,11 +5513,13 @@ void ConditionsWindow::fetch_sun ()
   auto * reply = network_->get (req);
   connect (reply, &QNetworkReply::finished, this, [this, reply, channel] {
       reply->deleteLater ();
-      if (channel != sun_channels_.value (qMax (0, sun_group_->checkedId ()))) return;   // changed while loading
       QImage img;
       if (QNetworkReply::NoError == reply->error ()) img.loadFromData (reply->readAll ());
+      if (!img.isNull ()) sun_cache_[channel] = qMakePair (QDateTime::currentDateTimeUtc (), img);
+      if (channel != sun_channel_ || sun_movie_action_->isChecked ()) return;   // changed while loading
       if (img.isNull ())
         {
+          sun_image_->set_image (QImage {});
           sun_image_->set_message (tr ("The Sun picture couldn't be reached. Will try again in 15 minutes."));
           return;
         }
@@ -4369,7 +5528,214 @@ void ConditionsWindow::fetch_sun ()
                                   "Bright spots in the ultraviolet views are active regions that can flare.")
                               .arg (QDateTime::currentDateTimeUtc ().toString ("hh:mm")));
     });
+}
+
+void ConditionsWindow::fetch_sun ()
+{
+  if (!box_on ("sun")) return;
+  if (sun_movie_action_ && sun_movie_action_->isChecked ())
+    {
+      load_sun_movie ();
+    }
+  else
+    {
+      auto choice = sun_choice ();
+      if ("rotate" == choice) choice = sun_channel_.size () ? sun_channel_ : QString {"0193"};
+      if (sun_image_->toolTip ().isEmpty () || sun_channel_ != choice) sun_image_->set_message (tr ("Loading..."));
+      sun_cache_.remove (choice);
+      show_sun_channel (choice);
+    }
   if (isVisible ()) sun_timer_->start ();
+}
+
+void ConditionsWindow::stop_sun_movie ()
+{
+  sun_movie_timer_->stop ();
+  sun_frames_.clear ();
+  sun_frames_channel_.clear ();
+  sun_image_->set_caption (QString {});
+}
+
+// the last two days, about one picture an hour, from SDO's browse pages
+void ConditionsWindow::load_sun_movie ()
+{
+  auto channel = sun_choice ();
+  if ("rotate" == channel) channel = "0193";
+  sun_rotate_->stop ();
+  if (sun_frames_channel_ == channel && sun_frames_.size ()
+      && sun_frames_.last ().first.secsTo (QDateTime::currentDateTimeUtc ()) < 90 * 60)
+    {
+      if (!sun_movie_timer_->isActive ()) sun_movie_timer_->start ();
+      return;
+    }
+  sun_movie_timer_->stop ();
+  sun_frames_.clear ();
+  sun_frames_channel_ = channel;
+  sun_frame_ = 0;
+  sun_image_->set_image (QImage {});
+  sun_image_->set_message (tr ("Loading the last 48 hours..."));
+  auto const now = QDateTime::currentDateTimeUtc ();
+  auto * names = new QMap<QDateTime, QString>;
+  auto * pending = new int {3};
+  for (int d = 0; d < 3; ++d)
+    {
+      auto const day = now.date ().addDays (-d);
+      auto const dir = QString {"%1assets/img/browse/%2/"}.arg (sdo_base (), day.toString ("yyyy/MM/dd"));
+      QNetworkRequest req {QUrl {dir}};
+      req.setRawHeader ("User-Agent", http_user_agent ().toUtf8 ());
+      auto * reply = network_->get (req);
+      connect (reply, &QNetworkReply::finished, this, [this, reply, dir, channel, names, pending, now] {
+          reply->deleteLater ();
+          if (QNetworkReply::NoError == reply->error ())
+            {
+              QRegularExpression const re {QString {"(\\d{8}_\\d{6})_512_%1\\.jpg"}.arg (channel)};
+              auto it = re.globalMatch (QString::fromLatin1 (reply->readAll ()));
+              while (it.hasNext ())
+                {
+                  auto const m = it.next ();
+                  auto t = QDateTime::fromString (m.captured (1), "yyyyMMdd_hhmmss");
+                  t.setTimeSpec (Qt::UTC);
+                  if (t.isValid () && t.secsTo (now) <= 48 * 3600) names->insert (t, dir + m.captured (0));
+                }
+            }
+          if (--*pending) return;
+          // about one an hour
+          QVector<QPair<QDateTime, QString>> picks;
+          QDateTime last;
+          for (auto i = names->cbegin (); i != names->cend (); ++i)
+            {
+              if (!last.isValid () || last.secsTo (i.key ()) >= 55 * 60)
+                {
+                  picks << qMakePair (i.key (), i.value ());
+                  last = i.key ();
+                }
+            }
+          delete names;
+          delete pending;
+          if (channel != sun_frames_channel_ || !sun_movie_action_->isChecked ()) return;
+          if (picks.isEmpty ())
+            {
+              sun_image_->set_message (tr ("The movie couldn't be loaded. Will try again in 15 minutes."));
+              sun_frames_channel_.clear ();
+              return;
+            }
+          sun_frames_wanted_ = picks.size ();
+          auto * got = new QMap<QDateTime, QImage>;
+          auto * left = new int {int (picks.size ())};
+          for (auto const& pick : picks)
+            {
+              QNetworkRequest r {QUrl {pick.second}};
+              r.setRawHeader ("User-Agent", http_user_agent ().toUtf8 ());
+              auto * frame = network_->get (r);
+              auto const when = pick.first;
+              connect (frame, &QNetworkReply::finished, this, [this, frame, when, got, left, channel] {
+                  frame->deleteLater ();
+                  QImage img;
+                  if (QNetworkReply::NoError == frame->error ()) img.loadFromData (frame->readAll ());
+                  if (!img.isNull ()) got->insert (when, img);
+                  bool const done = 0 == --*left;
+                  if (channel == sun_frames_channel_ && sun_movie_action_->isChecked () && !done)
+                    {
+                      sun_image_->set_message (tr ("Loading the last 48 hours... %1%")
+                                               .arg (100 * (sun_frames_wanted_ - *left) / qMax (1, sun_frames_wanted_)));
+                    }
+                  if (!done) return;
+                  if (channel == sun_frames_channel_ && sun_movie_action_->isChecked ())
+                    {
+                      for (auto i = got->cbegin (); i != got->cend (); ++i) sun_frames_ << qMakePair (i.key (), i.value ());
+                      if (sun_frames_.isEmpty ()) sun_image_->set_message (tr ("The movie couldn't be loaded. Will try again in 15 minutes."));
+                      else sun_movie_timer_->start ();
+                    }
+                  delete got;
+                  delete left;
+                });
+            }
+        });
+    }
+}
+
+// when you and the DX station are both in the gray line
+void ConditionsWindow::gray_line_tool ()
+{
+  if (gray_line_)
+    {
+      gray_line_->raise ();
+      gray_line_->activateWindow ();
+      return;
+    }
+  auto * dialog = new QDialog {this};
+  gray_line_ = dialog;
+  dialog->setAttribute (Qt::WA_DeleteOnClose);
+  connect (dialog, &QObject::destroyed, this, [this] {gray_line_ = nullptr;});
+  dialog->setWindowTitle (tr ("Gray line: you and DX"));
+  auto * v = new QVBoxLayout {dialog};
+  auto * intro = new QLabel {tr ("When you and the DX station are both in twilight, the low bands can open along the gray line. "
+                                 "The highlighted times are when you're both in it, over the next 24 hours."), dialog};
+  intro->setWordWrap (true);
+  v->addWidget (intro);
+  auto * chart = new GrayLineChart {dialog};
+  v->addWidget (chart, 1);
+  auto * key = new QLabel {dialog};
+  key->setTextFormat (Qt::RichText);
+  v->addWidget (key);
+  auto * row = new QHBoxLayout;
+  row->addWidget (new QLabel {tr ("DX grid:"), dialog});
+  auto * grid = new QLineEdit {dialog};
+  grid->setMaxLength (8);
+  grid->setPlaceholderText (tr ("e.g. PM95"));
+  grid->setFixedWidth (110);
+  grid->setText (dx_grid_);
+  row->addWidget (grid);
+  auto * from_dx = new QLabel {tr ("(from the DX box until you type one)"), dialog};
+  from_dx->setObjectName ("muted");
+  row->addWidget (from_dx);
+  row->addStretch ();
+  auto * close = new QPushButton {tr ("Close"), dialog};
+  connect (close, &QPushButton::clicked, dialog, &QDialog::close);
+  row->addWidget (close);
+  v->addLayout (row);
+
+  auto refresh = [this, chart, key, grid] {
+    auto const now = QDateTime::currentDateTimeUtc ();
+    chart->start = QDateTime {now.date (), QTime {now.time ().hour (), now.time ().minute () / 5 * 5}, Qt::UTC};
+    chart->de = GrayLineChart::Place {};
+    chart->de.name = my_call_;
+    chart->de.grid = my_grid_.left (6).toUpper ();
+    grid_to_latlon (my_grid_, chart->de.lat, chart->de.lon);
+    auto const g = grid->text ().trimmed ().toUpper ();
+    chart->dx = GrayLineChart::Place {};
+    chart->dx.name = g == dx_grid_.toUpper () ? dx_call_ : QString {};
+    chart->dx.grid = g;
+    if (!grid_to_latlon (g, chart->dx.lat, chart->dx.lon)) chart->dx.lat = chart->dx.lon = qQNaN ();
+    chart->update ();
+    auto const muted = Win11Theme::token ("text_secondary");
+    auto const sw = [] (char const * c) {return QString {"<span style=\"background:%1\">&nbsp;&nbsp;&nbsp;&nbsp;</span>"}.arg (c);};
+    QString text = sw ("#5C5230") + " " + tr ("Day") + " &nbsp; " + sw ("#FF9F43") + " " + tr ("Twilight") + " &nbsp; "
+      + sw ("#16263D") + " " + tr ("Night") + " &nbsp;&nbsp;&nbsp; ";
+    if (qIsNaN (chart->de.lat)) text += QString {"<span style=\"color:%1\">%2</span>"}.arg (muted, tr ("Put your grid in Settings > General."));
+    else if (qIsNaN (chart->dx.lat)) text += QString {"<span style=\"color:%1\">%2</span>"}.arg (muted, tr ("Type the DX station's grid, or pick a station."));
+    else
+      {
+        QStringList times;
+        for (auto const& r : chart->both ())
+          {
+            times << QString {"<b>%1–%2</b>"}.arg (r.first.toString ("hh:mm"), r.second.toString ("hh:mm"))
+              + QString {" <span style=\"color:%1\">(%2 local)</span>"}.arg (muted, r.first.toLocalTime ().toString ("h:mm AP"));
+          }
+        text += times.isEmpty () ? tr ("Not both in twilight at once in the next 24 hours.")
+                                 : tr ("Both in twilight: %1 UTC").arg (times.join (", "));
+      }
+    key->setText (text);
+  };
+  connect (grid, &QLineEdit::textChanged, dialog, refresh);
+  auto * timer = new QTimer {dialog};
+  timer->setInterval (60000);
+  connect (timer, &QTimer::timeout, dialog, refresh);
+  connect (this, &ConditionsWindow::dx_changed_for_tools, dialog, [grid, this] {grid->setText (dx_grid_);});
+  timer->start ();
+  refresh ();
+  dialog->resize (720, 300);
+  dialog->show ();
 }
 
 void ConditionsWindow::refresh ()
@@ -4415,6 +5781,9 @@ void ConditionsWindow::request (QString const& url, void (ConditionsWindow::*han
           QString text = tr ("Space weather and aurora: NOAA Space Weather Prediction Center, updated %1 UTC. "
                              "Sun: NASA SDO. Maps: NASA Blue Marble and Black Marble, NASA GIBS when zoomed, Natural Earth; rain and snow: NASA GIBS.")
             .arg (updated_.toString ("hh:mm"));
+          if (map_->colour_by == 2) text += ' ' + tr ("MUF: prop.kc2g.com (KC2G).");
+          if (map_->show_clouds) text += ' ' + tr ("Clouds: NASA GIBS (GOES and Himawari).");
+          if (ConditionsMap::CQZones == map_->grid || ConditionsMap::ITUZones == map_->grid) text += ' ' + tr ("Zones: HB9HIL (MIT licence).");
           if (overlay_status_.size ()) text += ' ' + overlay_status_;
           if (failed_) text += ' ' + tr ("(%n item(s) couldn't be reached; will try again in 15 minutes)", "", failed_);
           status_->setText (text);
@@ -4579,10 +5948,23 @@ void ConditionsWindow::update_bands ()
               cell->setStyleSheet (QString {"QLabel {color: %1;}"}.arg (Win11Theme::token ("text_secondary")));
               continue;
             }
-          cell->setText (words[level]);
-          cell->setStyleSheet (pill_css (level_color (level)));
+          cell->setText (compact_outlook_ ? QString {} : words[level]);
+          cell->setToolTip (QString {"%1: %2"}.arg (dn ? tr ("Night") : tr ("Day"), words[level]));
+          QColor const c = level_color (level);
+          if (compact_outlook_) cell->setStyleSheet (QString {"QLabel {background-color: %1; border-radius: 7px;}"}.arg (c.name ()));
+          else cell->setStyleSheet (QString {"QLabel {color: %1; background-color: rgba(%2, %3, %4, 38); border: 1px solid rgba(%2, %3, %4, 80);"
+                                             " border-radius: 6px; padding: 0px 5px; font-weight: 600;}"}
+                                    .arg (c.name ()).arg (c.red ()).arg (c.green ()).arg (c.blue ()));
+          if (compact_outlook_) cell->setFixedSize (14, 14);
+          else
+            {
+              cell->setMinimumSize (0, 0);
+              cell->setMaximumSize (QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+              cell->setMinimumWidth (cell->sizeHint ().width ());
+            }
         }
     }
+  if (auto * outlook = boxes_.value ("bands")) outlook->updateGeometry ();
 }
 
 void ConditionsWindow::update_de_dx ()
@@ -4606,19 +5988,19 @@ void ConditionsWindow::update_de_dx ()
   };
   QString const table {"<table cellspacing=\"0\" cellpadding=\"1\">"};
 
-  // you
-  QString de = big (my_call_.size () ? slashed (my_call_).toHtmlEscaped () : QString {QChar {0x2014}});
+  // you, under the clock
+  QString de;
   double my_lat, my_lon;
   bool const have_me = grid_to_latlon (my_grid_, my_lat, my_lon);
   if (have_me)
     {
-      de += table + row (tr ("Grid"), my_grid_.left (6).toUpper () + " · " + latlon_text (my_lat, my_lon))
-        + row (tr ("Local"), now.toLocalTime ().toString ("h:mm AP"))
-        + row (tr ("Sun"), sun_line (my_lat, my_lon)) + "</table>";
+      auto const key = [muted] (QString const& k) {return QString {"<span style=\"color:%1\">%2</span>&nbsp;"}.arg (muted, k);};
+      de = key (tr ("Grid")) + my_grid_.left (6).toUpper () + QString {" <span style=\"color:%1\">·</span> "}.arg (muted)
+        + latlon_text (my_lat, my_lon) + "<br/>" + key (tr ("Sun")) + sun_line (my_lat, my_lon);
     }
   else
     {
-      de += QString {"<span style=\"color:%1\">%2</span>"}.arg (muted, tr ("Put your grid in Settings > General to see your sunrise and sunset."));
+      de = QString {"<span style=\"color:%1\">%2</span>"}.arg (muted, tr ("Put your grid in Settings"));
     }
   de_info_->setText (de);
 
@@ -5137,6 +6519,7 @@ void ConditionsWindow::set_dx (QString const& call, QString const& grid)
     }
   update_de_dx ();
   schedule_voacap ();
+  Q_EMIT dx_changed_for_tools ();
 }
 
 void ConditionsWindow::add_station (QString const& call, QString const& grid, int snr, bool cq, bool to_me,
