@@ -3898,7 +3898,10 @@ void MainWindow::on_autoButton_clicked (bool checked)
   m_config.transceiver_tune (false);  // reset rig tuning
   if (checked && ui->tuneButton->isChecked() && !(m_mode=="WSPR" || m_mode=="FST4W")) return; // not allowed while tuning
   stopWRTimer.stop();                                       // stop any Wait & Reply timeout
-  if (checked) {m_repeatKey.clear (); m_repeatCount = 0;}   // fresh count each time Tx is enabled
+  // a fresh count only when Tx goes from off to on: the program re-enabling
+  // Tx while it's already on (a CQ: First pick, a repeat of the same
+  // station) mustn't reset it, so the Max boxes are hard stops
+  if (checked && !m_auto) {m_repeatKey.clear (); m_repeatCount = 0;}
   if (!checked && ui->DX_Call_Button->isChecked()) {
       stopWCTimer.stop();                                   // stop any Wait & Call timeout
       ui->DX_Call_Button->click ();                         // disable Wait & Call

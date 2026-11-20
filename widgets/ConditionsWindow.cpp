@@ -4102,8 +4102,10 @@ void ConditionsWindow::build_ui ()
                         .replace (tr ("Rotate through them all"), tr ("Rotate")));
     if ("rotate" == sun_choice () && !movie) sun_rotate_->start ();
   }
-  // the picture's menu sits beside it so nothing covers the Sun
-  sun_image_->set_side_widget (sun_pick_);
+  // no menu button: double-click the Sun for the choice of pictures
+  sun_pick_->hide ();
+  sun_image_->setToolTip (tr ("Double-click to choose the picture of the Sun, the movie or the gray line tool"));
+  sun_image_->installEventFilter (this);
   body->addWidget (sun_image_, 1);
   top->addWidget (sun_box, 15);
 
@@ -4171,6 +4173,13 @@ void ConditionsWindow::build_ui ()
   body->addWidget (beacon_next_);
   body->addStretch ();
   top->addWidget (beacon_box, 10);
+  // left to right: station, beacons, X-ray, space weather, the Sun
+  {
+    QWidget * const order[] = {clock_box, beacon_box, xray_box, boxes_.value ("spacewx"), sun_box};
+    int const stretch[] = {32, 10, 30, 13, 15};
+    for (auto * w : order) top->removeWidget (w);
+    for (int i = 0; i < 5; ++i) top->addWidget (order[i], stretch[i]);
+  }
   outer->addWidget (top_row_);
 
 
@@ -6779,6 +6788,12 @@ void ConditionsWindow::set_call_info (QWidget * info)
 
 bool ConditionsWindow::eventFilter (QObject * o, QEvent * e)
 {
+  // double-click the Sun: its menu of pictures where you clicked
+  if (o == sun_image_ && QEvent::MouseButtonDblClick == e->type () && sun_pick_ && sun_pick_->menu ())
+    {
+      sun_pick_->menu ()->popup (static_cast<QMouseEvent *> (e)->globalPos ());
+      return true;
+    }
   // the QRZ details showing or not: the call above the table follows
   if (o == call_info_ && (QEvent::Show == e->type () || QEvent::Hide == e->type ()))
     {
