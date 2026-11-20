@@ -14,9 +14,7 @@
 
 namespace
 {
-  int const photo_size = 64;
-
-  QPixmap rounded (QPixmap const& source)
+  QPixmap rounded (QPixmap const& source, int photo_size)
   {
     auto const scaled = source.scaled (photo_size, photo_size, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
     QPixmap result {photo_size, photo_size};
@@ -30,7 +28,7 @@ namespace
     return result;
   }
 
-  QPixmap initials (QString const& call)
+  QPixmap initials (QString const& call, int photo_size)
   {
     // placeholder: first letters of the call on a soft tile
     QPixmap result {photo_size, photo_size};
@@ -41,7 +39,7 @@ namespace
     path.addRoundedRect (0, 0, photo_size, photo_size, 10, 10);
     p.fillPath (path, QColor {"#3A6EA5"});
     auto font = p.font ();
-    font.setPixelSize (22);
+    font.setPixelSize (photo_size * 22 / 64);
     font.setBold (true);
     p.setFont (font);
     p.setPen (Qt::white);
@@ -62,7 +60,7 @@ CallsignInfo::CallsignInfo (QWidget * parent)
   setFrameShape (QFrame::NoFrame);
   setSizePolicy (QSizePolicy::Preferred, QSizePolicy::Fixed);
 
-  photo_->setFixedSize (photo_size, photo_size);
+  photo_->setFixedSize (photo_size_, photo_size_);
   photo_->setStyleSheet ("background: transparent;");
   title_->setTextFormat (Qt::RichText);
   details_->setTextFormat (Qt::PlainText);
@@ -115,7 +113,8 @@ void CallsignInfo::showCall (QString const& call, QString const& country)
 {
   call_ = call.toUpper ();
   country_ = country;
-  photo_->setPixmap (initials (call_));
+  photo_raw_ = QPixmap {};
+  photo_->setPixmap (initials (call_, photo_size_));
   title_->setText (QString {"<span style='font-size:16px; font-weight:600;'>%1</span>"}.arg (call_.toHtmlEscaped ()));
   details_->setText (country_);
   source_->setText (tr ("Looking up…"));
@@ -151,7 +150,8 @@ void CallsignInfo::setInfo (CallsignLookup::Info const& i)
 void CallsignInfo::setPhoto (QString const& call, QPixmap const& pixmap)
 {
   if (!call_.contains (call) || pixmap.isNull ()) return;
-  photo_->setPixmap (rounded (pixmap));
+  photo_raw_ = pixmap;
+  photo_->setPixmap (rounded (pixmap, photo_size_));
 }
 
 void CallsignInfo::setNotFound (QString const& call, QString const& reason)
@@ -165,4 +165,13 @@ void CallsignInfo::openQrzPage ()
 {
   if (call_.isEmpty ()) return;
   QDesktopServices::openUrl (QUrl {QString {"https://www.qrz.com/db/%1"}.arg (QString::fromLatin1 (QUrl::toPercentEncoding (call_)))});
+}
+
+void CallsignInfo::setPhotoSize (int size)
+{
+  if (size == photo_size_) return;
+  photo_size_ = size;
+  photo_->setFixedSize (size, size);
+  if (!photo_raw_.isNull ()) photo_->setPixmap (rounded (photo_raw_, size));
+  else if (call_.size ()) photo_->setPixmap (initials (call_, size));
 }

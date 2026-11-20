@@ -228,7 +228,7 @@ void WideGraph::build_toolbar ()
   QColor const accent {Win11Theme::token ("accent")};
   m_toolbar->setStyleSheet (QString {
       "QPushButton#wfView {border: none; border-radius: 7px; padding: 4px 11px; background: transparent; color: %2;}"
-      "QPushButton#wfView:checked {background: %1; color: white; font-weight: 600;}"
+      "QPushButton#wfView:checked {background: %1; color: white;}"
       "QFrame#wfSeg {border: 1px solid %3; border-radius: 9px; background: rgba(127, 127, 127, 28);}"
       "QPushButton#wfSwatch {border: 2px solid transparent; border-radius: 6px; padding: 1px; background: transparent;}"
       "QPushButton#wfSwatch:checked {border-color: %1;}"

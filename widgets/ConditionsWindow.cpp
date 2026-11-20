@@ -68,6 +68,7 @@
 #include <QPushButton>
 #include <QSlider>
 #include "PskLive.hpp"
+#include "CallsignInfo.hpp"
 #include <QPushButton>
 #include <QProgressBar>
 #include <QColorDialog>
@@ -3856,10 +3857,15 @@ void ConditionsWindow::update_containers ()
   // when it's shown, otherwise the boxes keep their size at the top
   if (side_)
     {
-      bool const grow = box_on ("voacap");
+      // with the space weather tiles closed, the DX box takes the extra
+      // room and its photo gets bigger; otherwise VOACAP's chart grows
+      bool const roomy = !box_on ("spacewx") && box_on ("dx");
+      bool const grow = box_on ("voacap") && !roomy;
+      side_->setStretchFactor (boxes_["dx"], roomy ? 1 : 0);
       side_->setStretchFactor (boxes_["voacap"], grow ? 1 : 0);
-      side_->setStretchFactor (side_filler_, grow ? 0 : 1);
-      side_filler_->setVisible (!grow);
+      side_->setStretchFactor (side_filler_, grow || roomy ? 0 : 1);
+      side_filler_->setVisible (!grow && !roomy);
+      if (auto * info = qobject_cast<CallsignInfo *> (call_info_)) info->setPhotoSize (roomy ? 150 : 64);
     }
   if (box_on ("voacap")) schedule_voacap ();
   if (box_on ("sun") && isVisible ()) sun_timer_->start (); else sun_timer_->stop ();
@@ -3931,7 +3937,7 @@ void ConditionsWindow::build_ui ()
   clock_left->addSpacing (2);
   clock_left->addWidget (de_info_);
   clock_left->addStretch ();
-  top->addWidget (clock_box, 3);
+  top->addWidget (clock_box, 5);
   settings_->beginGroup ("Conditions");
   station_picture_ = settings_->value ("StationPicture", QString {}).toString ();
   settings_->endGroup ();
@@ -4065,7 +4071,7 @@ void ConditionsWindow::build_ui ()
   beacon_next_->setObjectName ("muted");
   body->addWidget (beacon_next_);
   body->addStretch ();
-  top->addWidget (beacon_box, 3);
+  top->addWidget (beacon_box, 2);
   outer->addWidget (top_row_);
 
   // ---- space weather tiles ----
@@ -4118,6 +4124,7 @@ void ConditionsWindow::build_ui ()
   dx_info_->setWordWrap (true);
   dx_info_->setTextFormat (Qt::RichText);
   body->addWidget (dx_info_);
+  body->addStretch (1);              // extra room goes under the details
   side->addWidget (dx_box);
 
   auto * voacap_box = make_box ("voacap", {}, body);
@@ -4226,6 +4233,7 @@ void ConditionsWindow::build_ui ()
     Q_EMIT station_double_clicked (call, modifiers);
   };
   news_ = new NewsTicker {map_card};
+  news_->setObjectName ("plain");      // the card shows round its rounded corners
   news_->hide ();
   news_->set_message (tr ("Getting the headlines..."));
   map_column->addWidget (build_map_bar ());
@@ -5445,18 +5453,23 @@ void ConditionsWindow::update_beacons ()
   int const secs = msecs / 1000;
   int const slot = (secs % 180) / 10;
   auto const muted = Win11Theme::token ("text_secondary");
+  // a narrow box: band and call; where each one is, when you point at it
   QString rows {"<table cellspacing=\"0\" cellpadding=\"2\">"};
+  QStringList places;
   for (int b = 0; b < 5; ++b)
     {
       auto const& beacon = ncdxf[beacon_on (slot, b)];
       rows += QString {"<tr><td><span style=\"color:%1\">&#9679;</span>&nbsp;</td><td>%2&nbsp;&nbsp;</td>"
-                       "<td><b>%3</b>&nbsp;&nbsp;</td><td style=\"color:%4\">%5</td></tr>"}
-        .arg (beacon_color (b).name ()).arg (beacon_freqs[b])
-        .arg (slashed (beacon.call)).arg (muted).arg (QString {beacon.place}.section (',', -1).trimmed ());
+                       "<td><b>%3</b></td></tr>"}
+        .arg (beacon_color (b).name ()).arg (beacon_freqs[b]).arg (slashed (beacon.call));
+      places << QString {"%1 &nbsp;<b>%2</b> &nbsp;%3"}.arg (beacon_freqs[b]).arg (slashed (beacon.call))
+        .arg (QString {beacon.place}.toHtmlEscaped ());
     }
+  Q_UNUSED (muted);
   beacon_rows_[0]->setText (rows + "</table>");
+  beacon_rows_[0]->setToolTip (places.join ("<br/>"));
   beacon_bar_->setValue ((msecs % 10000) / 100);
-  beacon_next_->setText (tr ("Next change in %1 s").arg (10 - secs % 10));
+  beacon_next_->setText (tr ("Next in %1 s").arg (10 - secs % 10));
   if (slot != beacon_slot_)
     {
       beacon_slot_ = slot;
@@ -6508,6 +6521,7 @@ void ConditionsWindow::set_call_info (QWidget * info)
   int const at = box->indexOf (dx_info_);
   box->insertWidget (at < 0 ? 1 : at, info);
   info->installEventFilter (this);
+  update_containers ();
   update_de_dx ();
 }
 

@@ -30,6 +30,8 @@ public:
   void setInfo (CallsignLookup::Info const&);
   void setPhoto (QString const& call, QPixmap const&);
   void setNotFound (QString const& call, QString const& reason);
+  // the photo's size: bigger when there's room for it
+  void setPhotoSize (int);
 
 private:
   void openQrzPage ();
@@ -40,6 +42,8 @@ private:
   QLabel * source_;
   QPushButton * qrz_button_;
   QString call_;
+  QPixmap photo_raw_;
+  int photo_size_ {64};
   QString country_;
 };
 

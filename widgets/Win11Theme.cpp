@@ -258,7 +258,6 @@ QPushButton:checked, QToolButton:checked {
   background-color: @accent;
   color: @accent_text;
   border: 1px solid @accent;
-  font-weight: 600;
 }
 QPushButton:checked:hover, QToolButton:checked:hover { background-color: @accent_hover; }
 QPushButton:disabled, QToolButton:disabled {
@@ -384,7 +383,7 @@ QTabBar::tab {
   border-radius: 9px;
 }
 QTabBar::tab:hover { color: @text; background: @ctrl; }
-QTabBar::tab:selected { color: @accent_text; background: @accent; font-weight: 600; }
+QTabBar::tab:selected { color: @accent_text; background: @accent; }
 
 /* ---- grouping: cards ---- */
 QGroupBox {
