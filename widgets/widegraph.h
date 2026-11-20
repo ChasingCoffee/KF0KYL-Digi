@@ -64,7 +64,11 @@ public:
   void	 setDarkStyle(bool b);
   void   restoreWindowGeometry ();   // used when the waterfall is detached from the main window
 
+  // a decoded station's call shown on its signal in the waterfall
+  void addDecodeLabel (int freq, QString const& call, int snr, QColor const& colour, QString const& tip, QString const& period);
+
 signals:
+  void labelDoubleClicked (QString const& call, Qt::KeyboardModifiers);
   void freezeDecode2(int n);
   void f11f12(int n);
   void setXIT2(int n);
@@ -112,6 +116,17 @@ private:
   class QComboBox * m_displayStyle;
   QCheckBox * m_periodLines;
   QCheckBox * m_fitBand {nullptr};
+  // the toolbar over the waterfall
+  void build_toolbar ();
+  void sync_toolbar ();
+  QWidget * m_toolbar {nullptr};
+  class QButtonGroup * m_viewGroup {nullptr};
+  class QButtonGroup * m_paletteGroup {nullptr};
+  class QSlider * m_tbGain {nullptr};
+  class QSlider * m_tbFloor {nullptr};
+  class QSlider * m_tbSpeed {nullptr};
+  class QPushButton * m_tbNames {nullptr};
+  class QPushButton * m_tbMore {nullptr};
   QTimer * m_fitTimer {nullptr};
 
   QSettings * m_settings;

@@ -4797,6 +4797,7 @@ void MainWindow::setup_callsign_info ()
   // the Conditions window always opens on its own, never inside the main window
   m_conditions = new ConditionsWindow {m_settings};
   connect (m_conditions, &ConditionsWindow::station_double_clicked, this, &MainWindow::double_click_station);
+  connect (m_wideGraph.data (), &WideGraph::labelDoubleClicked, this, &MainWindow::double_click_station);
   m_conditions->set_my_call (m_config.my_callsign ());
   m_conditions->set_my_grid (m_config.my_grid ());
   m_conditions->set_miles (m_config.miles ());
@@ -7581,23 +7582,34 @@ void MainWindow::readFromStdout()                             //readFromStdout
             }
           }
           if(m_position != 0) ui->decodedTextBrowser->horizontalScrollBar()->setValue(m_position);
-          if (m_conditions)
-            {
-              // put the station on the Conditions map
-              QString de_call, de_grid;
-              decodedtext.deCallAndGrid (de_call, de_grid);
-              de_call = de_call.remove ('<').remove ('>');
-              if (de_call.size () > 2)
-                {
-                  m_mapDecodes[de_call] = decodedtext.string ();
-                  auto const country = m_logBook.countries ()->lookup (de_call);
-                  bool const to_me = decodedtext.call () == m_config.my_callsign ()
-                    || Radio::base_callsign (decodedtext.call ()) == Radio::base_callsign (m_config.my_callsign ());
-                  m_conditions->add_station (de_call, de_grid, decodedtext.snr (), decodedtext.CQersCall ().size () > 0,
-                                             to_me, ui->decodedTextBrowser->last_background (),
-                                             country.latitude, -country.longtitude);
-                }
-            }
+          {
+            // put the station on the Conditions map and its call on its
+            // signal in the waterfall
+            QString de_call, de_grid;
+            decodedtext.deCallAndGrid (de_call, de_grid);
+            de_call = de_call.remove ('<').remove ('>');
+            if (de_call.size () > 2)
+              {
+                m_mapDecodes[de_call] = decodedtext.string ();
+                auto const country = m_logBook.countries ()->lookup (de_call);
+                bool const to_me = decodedtext.call () == m_config.my_callsign ()
+                  || Radio::base_callsign (decodedtext.call ()) == Radio::base_callsign (m_config.my_callsign ());
+                if (m_conditions)
+                  {
+                    m_conditions->add_station (de_call, de_grid, decodedtext.snr (), decodedtext.CQersCall ().size () > 0,
+                                               to_me, ui->decodedTextBrowser->last_background (),
+                                               country.latitude, -country.longtitude);
+                  }
+                auto const raw = decodedtext.string ();
+                int const mark = raw.indexOf (QRegularExpression {"[~#@&+$:`]"}, 14);
+                auto const words = raw.mid (mark < 0 ? 24 : mark + 1).trimmed ().left (37).trimmed ().toHtmlEscaped ();
+                QString tip = QString {"%L1 Hz &middot; <b>%2</b>"}.arg (decodedtext.frequencyOffset ()).arg (words);
+                if (country.entity_name.size ()) tip += " &middot; " + country.entity_name.toHtmlEscaped ();
+                tip += QString {" &middot; %1 dB"}.arg (decodedtext.snr ());
+                m_wideGraph->addDecodeLabel (decodedtext.frequencyOffset (), de_call, decodedtext.snr (),
+                                             ui->decodedTextBrowser->last_background (), tip, decodedtext.string ().left (6));
+              }
+          }
         }
         if (m_mode=="FT8" && ((m_multithreadFT8 && m_ft8DecoderStart<2) or m_freqNominal>45000000)) earlyDecodes.append(line_read); //ft8md
 

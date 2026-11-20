@@ -79,7 +79,8 @@ public:
   void setTimestamp(int n);
   void setBars(bool b);
   // how the waterfall is drawn: 0 Classic, 1 SDR (big spectrum over the
-  // waterfall), 2 3D (rows of peaks going back in time)
+  // waterfall), 2 3D (rows of peaks going back in time), 3 both: 3D over
+  // the waterfall
   void setDisplayStyle (int style);
   int displayStyle () const {return m_displayStyle;}
   // the line across the waterfall at the start of each period
@@ -107,9 +108,18 @@ public:
   bool scaleOK () const {return m_bScaleOK;}
   void setDarkStyle(bool b);
 
+  // a decoded station's call shown on its signal; a new period's first
+  // decode clears the last period's
+  struct DecodeLabel {int freq; QString call; int snr; QColor colour; QString tip;};
+  void addDecodeLabel (DecodeLabel const&, QString const& period);
+  void clearDecodeLabels () {m_labels.clear (); update ();}
+  void setShowLabels (bool on) {m_showLabels = on; update ();}
+  bool showLabels () const {return m_showLabels;}
+
 signals:
   void freezeDecode1(int n);
   void setFreq1(int rxFreq, int txFreq);
+  void labelDoubleClicked (QString const& call, Qt::KeyboardModifiers);
 
 protected:
   //re-implemented widget event handlers
@@ -222,7 +232,14 @@ private slots:
 
 private:
   void paint_sdr (QPainter&, QRect const& panel);
-  void paint_3d (QPainter&);
+  void paint_3d (QPainter&, QRect const& area);
+  void paint_labels (QPainter&, double top);
+  void paint_bands (QPainter&, int top, int bottom);
+  int label_at (QPoint const&) const;
+  QVector<DecodeLabel> m_labels;
+  QString m_labelsPeriod;
+  bool m_showLabels {true};
+  QVector<QPair<QRectF, int>> m_labelRects;
   int m_displayStyle {0};
   bool m_periodLines {true};
   QVector<float> m_specY;              // the spectrum now, for SDR

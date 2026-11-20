@@ -134,31 +134,174 @@ void CPlotter::paintEvent(QPaintEvent *)                                // paint
   if(m_paintEventBusy) return;
   m_paintEventBusy=true;
   QPainter painter(this);
+  m_labelRects.clear ();
   if (2 == m_displayStyle) {
-    paint_3d (painter);
+    paint_3d (painter, rect ());
+    paint_bands (painter, 0, m_h - 18);
+    paint_labels (painter, 6.);
+    m_lastPaintedX = m_lastMouseX;
+    m_paintEventBusy=false;
+    return;
+  }
+  if (3 == m_displayStyle) {
+    // both: 3D on top, the waterfall under it
+    int const h3 = qBound (80, int (m_h * 0.5), m_h - 40);
+    paint_3d (painter, QRect {0, 0, m_w, h3});
+    painter.drawPixmap (0, h3, m_WaterfallPixmap);
+    painter.setPen (QPen {QColor {255, 255, 255, 60}, 1});
+    painter.drawLine (0, h3, m_w, h3);
+    paint_bands (painter, 0, m_h);
+    paint_labels (painter, h3 + 6. + (m_timestamp ? painter.fontMetrics ().height () : 0));
     m_lastPaintedX = m_lastMouseX;
     m_paintEventBusy=false;
     return;
   }
   painter.drawPixmap(0,0,m_ScalePixmap);
+  double label_top = 36.;
   if (1 == m_displayStyle) {
     // SDR: a big spectrum under the scale, the waterfall below it
     int const sh = qBound (60, m_h2, qMax (60, m_h - 60));
     paint_sdr (painter, QRect {0, 30, m_w, sh});
     painter.drawPixmap(0, 30 + sh, m_WaterfallPixmap);
+    label_top = 30 + sh + 6;
+    if (m_timestamp) label_top += painter.fontMetrics ().height ();   // under the period's time
   } else {
     painter.drawPixmap(0,30,m_WaterfallPixmap);
     painter.drawPixmap(0,m_h1,m_2DPixmap);
   }
   int x = XfromFreq(m_rxFreq);
-  if (m_bars) {
+  if (1 == m_displayStyle) {
+    paint_bands (painter, 30, m_h);
+    if (m_bars && m_lastMouseX >= 0 && m_lastMouseX != x) painter.drawPixmap (m_lastMouseX, 0, m_HoverOverlayPixmap);
+  } else if (m_bars) {
     painter.drawPixmap(0,30,m_DialOverlayPixmap);
     if(m_lastMouseX >= 0 && m_lastMouseX != x){
       painter.drawPixmap(m_lastMouseX, 0, m_HoverOverlayPixmap);
     }
   }
+  if (0 == m_displayStyle && m_timestamp) label_top += painter.fontMetrics ().height ();
+  paint_labels (painter, label_top);
   m_lastPaintedX = m_lastMouseX;
   m_paintEventBusy=false;
+}
+
+// RX and TX as soft coloured bands the width of a signal, with labels
+void CPlotter::paint_bands (QPainter& p, int top, int bottom)
+{
+  if (!m_bars) return;
+  double const bw = "FT4" == m_mode ? 83.3 : "FT8" == m_mode ? 50. : 0.;
+  p.save ();
+  p.setRenderHint (QPainter::Antialiasing);
+  auto f = p.font ();
+  f.setBold (true);
+  f.setPointSizeF (8.);
+  p.setFont (f);
+  QFontMetricsF const fm {f};
+  struct B {int freq; QColor c; QString text;};
+  B const bands[] = {{m_txFreq, QColor {255, 77, 77}, QString {"TX %1"}.arg (m_txFreq)},
+                     {m_rxFreq, QColor {61, 220, 132}, QString {"RX %1"}.arg (m_rxFreq)}};
+  QVector<QRectF> used;
+  for (auto const& b : bands) {
+    double const x0 = XfromFreq (b.freq);
+    double const w = qMax (2., bw > 0 ? XfromFreq (b.freq + bw) - x0 : 2.);
+    QLinearGradient g {QPointF {x0, 0}, QPointF {x0 + w, 0}};
+    QColor c = b.c;
+    c.setAlpha (0);
+    g.setColorAt (0, c);
+    c.setAlpha (60);
+    g.setColorAt (0.5, c);
+    c.setAlpha (0);
+    g.setColorAt (1, c);
+    p.fillRect (QRectF {x0, double (top), w, double (bottom - top)}, g);
+    QColor edge = b.c;
+    edge.setAlpha (200);
+    p.setPen (QPen {edge, 1});
+    p.drawLine (QPointF {x0, double (top)}, QPointF {x0, double (bottom)});
+    if (bw > 0) p.drawLine (QPointF {x0 + w, double (top)}, QPointF {x0 + w, double (bottom)});
+    // the label over the band, moved down if TX and RX sit together
+    double const tw = fm.horizontalAdvance (b.text) + 10;
+    QRectF r {x0 + w / 2 - tw / 2, top + 2., tw, fm.height () + 2};
+    for (auto const& u : used) if (u.intersects (r)) r.translate (0, r.height () + 2);
+    used << r;
+    p.setPen (Qt::NoPen);
+    p.setBrush (b.c);
+    p.drawRoundedRect (r, 5, 5);
+    p.setPen (b.c.lightness () > 140 ? Qt::black : Qt::white);
+    p.drawText (r, Qt::AlignCenter, b.text);
+  }
+  p.restore ();
+}
+
+void CPlotter::addDecodeLabel (DecodeLabel const& label, QString const& period)
+{
+  if (period != m_labelsPeriod) {
+    m_labels.clear ();
+    m_labelsPeriod = period;
+  }
+  for (auto& l : m_labels) {
+    if (l.call == label.call) {l = label; update (); return;}
+  }
+  m_labels << label;
+  update ();
+}
+
+// the calls on their signals, in rows so none overlap
+void CPlotter::paint_labels (QPainter& p, double top)
+{
+  if (!m_showLabels || m_labels.isEmpty ()) return;
+  p.save ();
+  p.setRenderHint (QPainter::Antialiasing);
+  auto f = p.font ();
+  f.setBold (true);
+  f.setPointSizeF (8.);
+  p.setFont (f);
+  auto small = f;
+  small.setBold (false);
+  QFontMetricsF const fm {f}, sm {small};
+  double const h = fm.height () + 3;
+  double const bw = "FT4" == m_mode ? 83.3 : 50.;
+  // left to right, each in the first row it fits
+  QVector<int> order (m_labels.size ());
+  for (int i = 0; i < order.size (); ++i) order[i] = i;
+  std::sort (order.begin (), order.end (), [this] (int a, int b) {return m_labels[a].freq < m_labels[b].freq;});
+  QVector<double> row_end;
+  int const max_rows = qBound (1, int ((m_h - top) / (h + 3)) / 2, 3);
+  for (int i : order) {
+    auto const& l = m_labels[i];
+    QString const snr = QString {"%1%2"}.arg (l.snr >= 0 ? "+" : QString {QChar {0x2212}}).arg (std::abs (l.snr));
+    double const w = fm.horizontalAdvance (l.call) + 4 + sm.horizontalAdvance (snr) + 14;
+    double const cx = XfromFreq (l.freq + bw / 2);
+    double const x = qBound (2., cx - w / 2, m_w - w - 2.);
+    if (cx < 0 || cx > m_w) continue;
+    int row = 0;
+    while (row < row_end.size () && row_end[row] > x - 3) ++row;
+    if (row >= max_rows) continue;
+    if (row == row_end.size ()) row_end << 0.;
+    row_end[row] = x + w;
+    QRectF const r {x, top + row * (h + 3), w, h};
+    QColor bg = l.colour.isValid () ? l.colour : QColor {10, 16, 22, 210};
+    QColor text = l.colour.isValid () ? (l.colour.lightness () > 140 ? QColor {Qt::black} : QColor {Qt::white}) : QColor {230, 234, 240};
+    QColor edge = l.colour.isValid () ? l.colour.darker (130) : QColor {255, 255, 255, 110};
+    p.setPen (QPen {edge, 1});
+    p.setBrush (bg);
+    p.drawRoundedRect (r, h / 2, h / 2);
+    p.setFont (f);
+    p.setPen (text);
+    p.drawText (QPointF {r.left () + 7, r.center ().y () + fm.ascent () / 2 - 1.5}, l.call);
+    p.setFont (small);
+    QColor dim = text;
+    dim.setAlpha (180);
+    p.setPen (dim);
+    p.drawText (QPointF {r.left () + 7 + fm.horizontalAdvance (l.call) + 4, r.center ().y () + fm.ascent () / 2 - 1.5}, snr);
+    m_labelRects << qMakePair (r, i);
+  }
+  p.restore ();
+}
+
+int CPlotter::label_at (QPoint const& pos) const
+{
+  for (auto const& r : m_labelRects) if (r.first.contains (pos)) return r.second;
+  return -1;
 }
 
 void CPlotter::draw(float swide[], bool bScroll, bool bRed)
@@ -912,6 +1055,14 @@ void CPlotter::mouseMoveEvent (QMouseEvent * event)
   update();
 
   event->ignore();
+  int const label = label_at (event->pos ());
+  if (label >= 0 && label < m_labels.size ()) {
+    QToolTip::showText (event->globalPos (), m_labels[label].tip + "<br/><i>" + tr ("Double-click to call") + "</i>", this);
+    setCursor (Qt::PointingHandCursor);
+    QWidget::mouseMoveEvent (event);
+    return;
+  }
+  setCursor (Qt::CrossCursor);
   if(m_freq) {
     if (!m_bTotalPower){
         QToolTip::showText(event->globalPos(),QString::number(int(FreqfromX(x))));
@@ -971,6 +1122,12 @@ void CPlotter::mouseDoubleClickEvent (QMouseEvent * event)
     bool rightbutton = (event->button() & Qt::RightButton);
     bool leftbutton = (event->button() & Qt::LeftButton);
     bool ctrl = (event->modifiers() & Qt::ControlModifier);
+  int const label = leftbutton ? label_at (event->pos ()) : -1;
+  if (label >= 0 && label < m_labels.size ()) {
+    // a call on a signal: answer it, as from Band Activity
+    emit labelDoubleClicked (m_labels[label].call, event->modifiers ());
+    return;
+  }
   if (leftbutton) {
     int n=2;
     if(ctrl) n+=100;
@@ -1117,7 +1274,7 @@ void CPlotter::setTimestamp(int n)
 
 void CPlotter::setDisplayStyle (int style)
 {
-  m_displayStyle = qBound (0, style, 2);
+  m_displayStyle = qBound (0, style, 3);
   update ();
 }
 
@@ -1125,15 +1282,18 @@ void CPlotter::paint_sdr (QPainter& p, QRect const& panel)
 {
   p.save ();
   p.setClipRect (panel);
-  p.fillRect (panel, QColor {14, 16, 22});
+  QLinearGradient back {QPointF {0., double (panel.top ())}, QPointF {0., double (panel.bottom ())}};
+  back.setColorAt (0, QColor {6, 10, 16});
+  back.setColorAt (1, QColor {10, 16, 24});
+  p.fillRect (panel, back);
   p.setRenderHint (QPainter::Antialiasing);
-  QColor const grid {40, 44, 54};
+  QColor const grid {255, 255, 255, 16};
   p.setPen (QPen {grid, 1});
   for (int k = 1; k < 5; ++k) {
     double const y = panel.top () + panel.height () * k / 5.;
     p.drawLine (QPointF {double (panel.left ()), y}, QPointF {double (panel.right ()), y});
   }
-  int const step = 500;
+  int const step = 250;
   for (int f = (m_startFreq / step + 1) * step; f < m_fMax; f += step) {
     int const x = XfromFreq (f);
     p.drawLine (x, panel.top (), x, panel.bottom ());
@@ -1151,43 +1311,58 @@ void CPlotter::paint_sdr (QPainter& p, QRect const& panel)
       line << QPointF {double (i), y_of (m_specY[i])};
       peak << QPointF {double (i), y_of (m_peakY[i])};
     }
+    // the scheme's accent: a filled glow under a bright line
+    QColor const accent = palette ().highlight ().color ();
+    QColor const hot = g_ColorTbl.value (230, QColor {255, 220, 60});
     QPolygonF area = line;
     area << QPointF {double (n - 1), double (panel.bottom ())} << QPointF {0., double (panel.bottom ())};
     QLinearGradient fill {QPointF {0., double (panel.top ())}, QPointF {0., double (panel.bottom ())}};
-    fill.setColorAt (0, QColor {76, 194, 255, 120});
-    fill.setColorAt (1, QColor {76, 194, 255, 15});
+    QColor top_c = accent, bottom_c = accent;
+    top_c.setAlpha (140);
+    bottom_c.setAlpha (10);
+    fill.setColorAt (0, top_c);
+    fill.setColorAt (1, bottom_c);
     p.setPen (Qt::NoPen);
     p.setBrush (fill);
     p.drawPolygon (area);
     p.setBrush (Qt::NoBrush);
-    p.setPen (QPen {QColor {255, 170, 60, 200}, 1.});
+    QPen dots {QColor {hot.red (), hot.green (), hot.blue (), 170}, 1.};
+    dots.setDashPattern ({2., 3.});
+    p.setPen (dots);
     p.drawPolyline (peak);
-    p.setPen (QPen {QColor {235, 240, 250}, 1.2});
+    QColor glow = accent.lighter (130);
+    glow.setAlpha (90);
+    p.setPen (QPen {glow, 4.});
+    p.drawPolyline (line);
+    p.setPen (QPen {accent.lighter (160), 1.4});
     p.drawPolyline (line);
   }
   p.restore ();
 }
 
-void CPlotter::paint_3d (QPainter& p)
+void CPlotter::paint_3d (QPainter& p, QRect const& area)
 {
   // newest row in front, older rows going back toward the horizon
   QColor const bg {4, 6, 14};
-  p.fillRect (rect (), bg);
+  p.save ();
+  p.setClipRect (area);
+  p.fillRect (area, bg);
   p.setRenderHint (QPainter::Antialiasing);
+  int const W = area.width (), H = area.height ();
   int const step = 2;                  // every other row
   int const depth_rows = 64;
-  double const cx = m_w / 2.;
-  double const base = m_h - 18.;
-  double const depth = m_h * 0.55;
-  double const shrink = 0.45;
-  double const tall = m_h * 0.42;
+  double const cx = area.left () + W / 2.;
+  double const base = area.top () + H - 18.;
+  double const depth = H * 0.55;
+  double const shrink = 0.4;
+  double const tall = H * 0.5;
   auto X = [&] (double x, double z) {return cx + (x - cx) * (1. - shrink * z);};
   QColor const floor_color {30, 40, 70};
   p.setPen (QPen {floor_color, 1});
   for (int k = 0; k <= 8; ++k) {
     double const z = k / 8.;
     double const y = base - z * depth;
-    p.drawLine (QPointF {X (0, z), y}, QPointF {X (m_w, z), y});
+    p.drawLine (QPointF {X (0, z), y}, QPointF {X (W, z), y});
   }
   auto font = p.font ();
   font.setPointSizeF (8.);
@@ -1199,6 +1374,11 @@ void CPlotter::paint_3d (QPainter& p)
     p.setPen (QColor {110, 120, 150});
     p.drawText (QPointF {x - 12, base + 13}, QString::number (f));
   }
+  // the palette from its quiet end to its brightest, for colouring by height
+  auto pal = [] (int v, double fade) {
+    QColor c = g_ColorTbl.value (qBound (0, v, 254), Qt::white);
+    return QColor::fromRgbF (c.redF () * fade, c.greenF () * fade, c.blueF () * fade);
+  };
   int const rows = qMin (depth_rows, m_rows3D.size () / step);
   struct Label {double x; double y; QString text; int marker;};
   QVector<Label> labels;
@@ -1215,16 +1395,17 @@ void CPlotter::paint_3d (QPainter& p)
     if (row.marker) {
       if (m_periodLines) {
         p.setPen (QPen {row.marker == 2 ? QColor {229, 72, 77, 200} : QColor {150, 160, 190, 200}, 1.2});
-        p.drawLine (QPointF {X (0, z), y}, QPointF {X (m_w, z), y});
+        p.drawLine (QPointF {X (0, z), y}, QPointF {X (W, z), y});
       }
       // the time stamp is kept on the line, found among the next rows too
       QString stamp = row.stamp;
-      if (m_timestamp && stamp.size ()) labels << Label {m_timestamp == 2 ? X (m_w, z) : X (0, z), y, stamp, row.marker};
+      if (m_timestamp && stamp.size ()) labels << Label {m_timestamp == 2 ? X (W, z) : X (0, z), y, stamp, row.marker};
       continue;
     }
     if (row.v.isEmpty ()) continue;
     int const n = qMin (row.v.size (), m_w);
-    double const scale = tall * (1. - 0.4 * z) / qMax (40, 254 - row.floor);
+    double const peak_h = tall * (1. - 0.4 * z);
+    double const scale = peak_h / qMax (40, 254 - row.floor);
     QPolygonF pts;
     pts.reserve (n / 2 + 3);
     for (int i = 0; i < n; i += 2) {
@@ -1233,28 +1414,21 @@ void CPlotter::paint_3d (QPainter& p)
     }
     QPolygonF shape = pts;
     shape << QPointF {X (n - 1, z), y + 1} << QPointF {X (0, z), y + 1};
+    // solid ridges: the higher, the brighter, fading into the floor
+    QLinearGradient g {QPointF {0., y}, QPointF {0., y - peak_h}};
+    g.setColorAt (0.0, pal (row.floor + 20, 0.35 * fade));
+    g.setColorAt (0.25, pal (150, 0.85 * fade));
+    g.setColorAt (0.55, pal (200, fade));
+    g.setColorAt (1.0, pal (254, fade));
     p.setPen (Qt::NoPen);
-    p.setBrush (bg);
+    p.setBrush (g);
     p.drawPolygon (shape);
-    // the floor line in the palette's quiet colour, signals in theirs
-    QColor quiet = g_ColorTbl.value (qMin (254, row.floor + 30), QColor {40, 50, 90});
-    quiet.setAlphaF (0.55 * fade);
+    QLinearGradient top {QPointF {0., y}, QPointF {0., y - peak_h}};
+    top.setColorAt (0.0, pal (row.floor + 60, 0.7 * fade));
+    top.setColorAt (1.0, QColor::fromRgbF (fade, fade, fade));
     p.setBrush (Qt::NoBrush);
-    p.setPen (QPen {quiet, 1});
+    p.setPen (QPen {QBrush {top}, 1.});
     p.drawPolyline (pts);
-    for (int i = 0, j = 0; i + 2 < n; i += 2, ++j) {
-      int const v = qMax (row.v[i], row.v[i + 2]);
-      if (v < row.floor + 24) continue;
-      QColor c = g_ColorTbl.value (qMin (254, v + 30), Qt::white);
-      c = QColor::fromRgbF (c.redF () * fade + 0.0, c.greenF () * fade, c.blueF () * fade);
-      p.setPen (QPen {c, 1.5});
-      p.drawLine (pts[j], pts[j + 1]);
-    }
-  }
-  // Rx and Tx markers running back through the rows
-  for (auto const& m : {qMakePair (XfromFreq (m_rxFreq), QColor {63, 185, 80}), qMakePair (XfromFreq (m_txFreq), QColor {229, 72, 77})}) {
-    p.setPen (QPen {m.second, 1.5});
-    p.drawLine (QPointF {X (m.first, 0), base}, QPointF {X (m.first, 1), base - depth});
   }
   // time stamps on top of everything so peaks never cover them
   auto bold = font;
@@ -1264,7 +1438,7 @@ void CPlotter::paint_3d (QPainter& p)
   QFontMetricsF fm {bold};
   for (auto const& l : labels) {
     double const w = fm.boundingRect (l.text).width ();
-    double const x = m_timestamp == 2 ? qMin (l.x - w - 4, m_w - w - 4.) : qMax (l.x + 4, 4.);
+    double const x = m_timestamp == 2 ? qMin (l.x - w - 4, area.right () - w - 4.) : qMax (l.x + 4, area.left () + 4.);
     QPainterPath path;
     path.addText (QPointF {x, l.y - 4}, bold, l.text);
     p.setPen (QPen {QColor {0, 0, 0, 200}, 3});
@@ -1274,6 +1448,7 @@ void CPlotter::paint_3d (QPainter& p)
     p.setBrush (QColor {230, 232, 240});
     p.drawPath (path);
   }
+  p.restore ();
 }
 
 void CPlotter::setBars(bool b)

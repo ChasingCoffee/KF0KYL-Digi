@@ -12,6 +12,14 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QButtonGroup>
+#include <QPushButton>
+#include <QSlider>
+#include <QLabel>
+#include <QFrame>
+#include <QPainter>
+#include <QSpinBox>
+#include "Win11Theme.hpp"
 #include <cmath>
 #include <math.h>
 #include "ui_widegraph.h"
@@ -86,11 +94,13 @@ WideGraph::WideGraph(QSettings * settings, QWidget *parent) :
   m_displayStyle->addItem (tr ("Classic"));
   m_displayStyle->addItem (tr ("SDR"));
   m_displayStyle->addItem (tr ("3D"));
+  m_displayStyle->addItem (tr ("Both"));
   m_displayStyle->setToolTip (tr ("<p>How the waterfall is drawn:</p>"
                                   "<p><b>Classic:</b> the waterfall with the spectrum under it.</p>"
                                   "<p><b>SDR:</b> a big spectrum with a grid and peak hold, the waterfall under it. "
                                   "The Spec % setting sets how tall the spectrum is.</p>"
-                                  "<p><b>3D:</b> signals stand up as peaks, newest in front, older rows going back in time.</p>"));
+                                  "<p><b>3D:</b> signals stand up as peaks, newest in front, older rows going back in time.</p>"
+                                  "<p><b>Both:</b> 3D over the waterfall.</p>"));
   ui->horizontalLayout->insertWidget (0, m_displayStyle);
   ui->adjust_palette_push_button->setMaximumWidth (QWIDGETSIZE_MAX);   // room for its text with the rounder buttons
   // the line across the waterfall at the start of each period
@@ -115,6 +125,7 @@ WideGraph::WideGraph(QSettings * settings, QWidget *parent) :
 
   connect(ui->widePlot, SIGNAL(freezeDecode1(int)),this,
           SLOT(wideFreezeDecode(int)));
+  connect (ui->widePlot, &CPlotter::labelDoubleClicked, this, &WideGraph::labelDoubleClicked);
 
   connect(ui->widePlot, SIGNAL(setFreq1(int,int)),this,
           SLOT(setFreq2(int,int)));
@@ -178,7 +189,7 @@ WideGraph::WideGraph(QSettings * settings, QWidget *parent) :
     setRxRange ();
     m_controlsScroll->setVisible(!m_settings->value("HideControls",false).toBool());
     m_fitBand->setChecked (m_settings->value ("FitBand", true).toBool ());
-    m_displayStyle->setCurrentIndex (qBound (0, m_settings->value ("DisplayStyle", 0).toInt (), 2));
+    m_displayStyle->setCurrentIndex (qBound (0, m_settings->value ("DisplayStyle", 1).toInt (), 3));
     ui->widePlot->setDisplayStyle (m_displayStyle->currentIndex ());
     m_periodLines->setChecked (m_settings->value ("PeriodLines", true).toBool ());
     ui->widePlot->setPeriodLines (m_periodLines->isChecked ());
@@ -200,6 +211,184 @@ WideGraph::WideGraph(QSettings * settings, QWidget *parent) :
   ui->paletteComboBox->addItem (m_user_defined);
   if (m_user_defined == m_waterfallPalette) ui->paletteComboBox->setCurrentIndex(index);
   readPalette ();
+  build_toolbar ();
+}
+
+// the bar over the waterfall: the view, the colours, three sliders, the
+// calls on signals; More opens the rest of the controls under it
+void WideGraph::build_toolbar ()
+{
+  auto * box = qobject_cast<QVBoxLayout *> (layout ());
+  if (!box) return;
+  m_toolbar = new QWidget {this};
+  m_toolbar->setObjectName ("wfToolbar");
+  auto * h = new QHBoxLayout {m_toolbar};
+  h->setContentsMargins (6, 4, 6, 4);
+  h->setSpacing (8);
+  QColor const accent {Win11Theme::token ("accent")};
+  m_toolbar->setStyleSheet (QString {
+      "QPushButton#wfView {border: none; border-radius: 7px; padding: 4px 11px; background: transparent; color: %2;}"
+      "QPushButton#wfView:checked {background: %1; color: white; font-weight: 600;}"
+      "QFrame#wfSeg {border: 1px solid %3; border-radius: 9px; background: rgba(127, 127, 127, 28);}"
+      "QPushButton#wfSwatch {border: 2px solid transparent; border-radius: 6px; padding: 1px; background: transparent;}"
+      "QPushButton#wfSwatch:checked {border-color: %1;}"
+      "QLabel#wfLabel {color: %2;}"}
+    .arg (accent.name ())
+    .arg (Win11Theme::token ("text_secondary"))
+    .arg (Win11Theme::token ("border"))
+    .arg (QString {})
+    .arg (Win11Theme::token ("text")));
+  m_toolbar->setProperty ("w11_keep", true);
+
+  // the view
+  auto * seg = new QFrame {m_toolbar};
+  seg->setObjectName ("wfSeg");
+  auto * sh = new QHBoxLayout {seg};
+  sh->setContentsMargins (2, 2, 2, 2);
+  sh->setSpacing (0);
+  m_viewGroup = new QButtonGroup {seg};
+  struct V {int style; QString text; QString tip;};
+  QVector<V> const views {
+    {1, tr ("Waterfall"), tr ("A glowing spectrum over the waterfall")},
+    {2, tr ("3D"), tr ("Signals stand up as peaks: the newest in front, the last minute or so behind them")},
+    {3, tr ("Both"), tr ("3D over the waterfall")},
+  };
+  for (auto const& v : views)
+    {
+      auto * b = new QPushButton {v.text, seg};
+      b->setObjectName ("wfView");
+      b->setCheckable (true);
+      b->setToolTip (v.tip);
+      b->setFocusPolicy (Qt::NoFocus);
+      b->setCursor (Qt::PointingHandCursor);
+      m_viewGroup->addButton (b, v.style);
+      sh->addWidget (b);
+    }
+  h->addWidget (seg);
+  connect (m_viewGroup, static_cast<void (QButtonGroup::*) (QAbstractButton *)> (&QButtonGroup::buttonClicked), this, [this] (QAbstractButton * b) {
+      m_displayStyle->setCurrentIndex (m_viewGroup->id (b));
+    });
+
+  // the colours: a few favourites; every palette is under More
+  auto * colours = new QLabel {tr ("Colours"), m_toolbar};
+  colours->setObjectName ("wfLabel");
+  h->addSpacing (4);
+  h->addWidget (colours);
+  m_paletteGroup = new QButtonGroup {m_toolbar};
+  m_paletteGroup->setExclusive (false);
+  for (auto const& name : {QString {"Digi"}, QString {"Nebula"}, QString {"Default"}})
+    {
+      QVector<QColor> cols;
+      try {cols = WFPalette {m_palettes_path.absoluteFilePath (name + ".pal")}.interpolate ();} catch (...) {}
+      QPixmap pix {44, 14};
+      pix.fill (Qt::transparent);
+      {
+        QPainter p {&pix};
+        p.setRenderHint (QPainter::Antialiasing);
+        QLinearGradient g {QPointF {0, 0}, QPointF {44, 0}};
+        for (int i = 0; i <= 8 && cols.size (); ++i) g.setColorAt (i / 8., cols.value (qMin (cols.size () - 1, i * (cols.size () - 1) / 8)));
+        p.setPen (Qt::NoPen);
+        p.setBrush (g);
+        p.drawRoundedRect (QRectF {0, 0, 44, 14}, 4, 4);
+      }
+      auto * b = new QPushButton {m_toolbar};
+      b->setObjectName ("wfSwatch");
+      b->setIcon (QIcon {pix});
+      b->setIconSize (pix.size ());
+      b->setCheckable (true);
+      b->setFocusPolicy (Qt::NoFocus);
+      b->setCursor (Qt::PointingHandCursor);
+      b->setToolTip ("Default" == name ? tr ("Classic colours") : name);
+      b->setProperty ("palette", name);
+      m_paletteGroup->addButton (b);
+      h->addWidget (b);
+      connect (b, &QPushButton::clicked, this, [this, name] {
+          m_waterfallPalette = name;
+          ui->paletteComboBox->setCurrentText (name);
+          readPalette ();
+          replot ();
+          sync_toolbar ();
+        });
+    }
+
+  // gain, floor and speed
+  auto slider = [this, h] (QString const& text, QString const& tip, int lo, int hi) {
+    auto * l = new QLabel {text, m_toolbar};
+    l->setObjectName ("wfLabel");
+    auto * s = new QSlider {Qt::Horizontal, m_toolbar};
+    s->setRange (lo, hi);
+    s->setFixedWidth (90);
+    s->setToolTip (tip);
+    l->setToolTip (tip);
+    h->addSpacing (6);
+    h->addWidget (l);
+    h->addWidget (s);
+    return s;
+  };
+  m_tbGain = slider (tr ("Gain"), tr ("How bright signals are on the waterfall"), ui->gainSlider->minimum (), ui->gainSlider->maximum ());
+  m_tbFloor = slider (tr ("Floor"), tr ("How bright the background noise is"), ui->zeroSlider->minimum (), ui->zeroSlider->maximum ());
+  m_tbSpeed = slider (tr ("Speed"), tr ("How fast the waterfall moves"), 1, 10);
+  connect (m_tbGain, &QSlider::valueChanged, ui->gainSlider, &QSlider::setValue);
+  connect (m_tbFloor, &QSlider::valueChanged, ui->zeroSlider, &QSlider::setValue);
+  connect (m_tbSpeed, &QSlider::valueChanged, this, [this] (int speed) {
+      ui->waterfallAvgSpinBox->setValue (11 - speed);
+    });
+  h->addStretch ();
+
+  m_tbNames = new QPushButton {tr ("Calls on signals"), m_toolbar};
+  m_tbNames->setCheckable (true);
+  m_tbNames->setToolTip (tr ("Show each decoded station's call on its signal. Double-click one to call it."));
+  h->addWidget (m_tbNames);
+  m_tbMore = new QPushButton {tr ("More"), m_toolbar};
+  m_tbMore->setCheckable (true);
+  m_tbMore->setToolTip (tr ("All the waterfall's settings"));
+  h->addWidget (m_tbMore);
+  {
+    SettingsGroup g {m_settings, "WideGraph"};
+    m_tbNames->setChecked (m_settings->value ("NamesOnSignals", true).toBool ());
+    m_tbMore->setChecked (m_settings->value ("MoreOpen", false).toBool ());
+  }
+  ui->widePlot->setShowLabels (m_tbNames->isChecked ());
+  connect (m_tbNames, &QPushButton::toggled, this, [this] (bool on) {
+      ui->widePlot->setShowLabels (on);
+      SettingsGroup g {m_settings, "WideGraph"};
+      m_settings->setValue ("NamesOnSignals", on);
+    });
+  connect (m_tbMore, &QPushButton::toggled, this, [this] (bool on) {
+      ui->cbControls->setChecked (on);
+      m_controlsScroll->setVisible (on);
+      SettingsGroup g {m_settings, "WideGraph"};
+      m_settings->setValue ("MoreOpen", on);
+    });
+  // the old switch over the waterfall gives way to More
+  ui->cbControls->hide ();
+  m_controlsScroll->setVisible (m_tbMore->isChecked ());
+  box->insertWidget (0, m_toolbar);
+
+  // keep the toolbar in step with the controls under More
+  connect (m_displayStyle, static_cast<void (QComboBox::*) (int)> (&QComboBox::currentIndexChanged), this, &WideGraph::sync_toolbar);
+  connect (ui->gainSlider, &QSlider::valueChanged, this, &WideGraph::sync_toolbar);
+  connect (ui->zeroSlider, &QSlider::valueChanged, this, &WideGraph::sync_toolbar);
+  connect (ui->waterfallAvgSpinBox, static_cast<void (QSpinBox::*) (int)> (&QSpinBox::valueChanged), this, &WideGraph::sync_toolbar);
+  connect (ui->paletteComboBox, static_cast<void (QComboBox::*) (int)> (&QComboBox::activated), this, &WideGraph::sync_toolbar);
+  sync_toolbar ();
+}
+
+void WideGraph::sync_toolbar ()
+{
+  if (!m_toolbar) return;
+  for (auto * b : m_viewGroup->buttons ()) b->setChecked (m_viewGroup->id (b) == m_displayStyle->currentIndex ());
+  for (auto * b : m_paletteGroup->buttons ()) b->setChecked (b->property ("palette").toString () == m_waterfallPalette);
+  for (auto * s : {m_tbGain, m_tbFloor, m_tbSpeed}) s->blockSignals (true);
+  m_tbGain->setValue (ui->gainSlider->value ());
+  m_tbFloor->setValue (ui->zeroSlider->value ());
+  m_tbSpeed->setValue (qBound (1, 11 - ui->waterfallAvgSpinBox->value (), 10));
+  for (auto * s : {m_tbGain, m_tbFloor, m_tbSpeed}) s->blockSignals (false);
+}
+
+void WideGraph::addDecodeLabel (int freq, QString const& call, int snr, QColor const& colour, QString const& tip, QString const& period)
+{
+  ui->widePlot->addDecodeLabel (CPlotter::DecodeLabel {freq, call, snr, colour, tip}, period);
 }
 
 WideGraph::~WideGraph ()
