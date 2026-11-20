@@ -56,10 +56,10 @@ CallsignInfo::CallsignInfo (QWidget * parent)
   , title_ {new QLabel {this}}
   , details_ {new QLabel {this}}
   , source_ {new QLabel {this}}
-  , qrz_button_ {new QPushButton {tr ("QRZ Page"), this}}
+  , qrz_button_ {new QPushButton {tr ("QRZ page"), this}}
 {
   setObjectName ("callsign_info");
-  setFrameShape (QFrame::StyledPanel);
+  setFrameShape (QFrame::NoFrame);
   setSizePolicy (QSizePolicy::Preferred, QSizePolicy::Fixed);
 
   photo_->setFixedSize (photo_size, photo_size);
@@ -76,18 +76,30 @@ CallsignInfo::CallsignInfo (QWidget * parent)
   qrz_button_->setFocusPolicy (Qt::NoFocus);   // never steal the keyboard while operating
   connect (qrz_button_, &QPushButton::clicked, this, &CallsignInfo::openQrzPage);
 
+  // laid out for the DX box in the Conditions window: the photo beside
+  // the call, name and place, then the QRZ page button
+  title_->setWordWrap (true);
   auto * text = new QVBoxLayout;
   text->setSpacing (1);
   text->addWidget (title_);
   text->addWidget (details_);
-  text->addWidget (source_);
+  text->addStretch ();
 
-  auto * row = new QHBoxLayout {this};
-  row->setContentsMargins (8, 6, 8, 6);
-  row->setSpacing (12);
-  row->addWidget (photo_);
-  row->addLayout (text, 1);
-  row->addWidget (qrz_button_, 0, Qt::AlignVCenter);
+  auto * top = new QHBoxLayout;
+  top->setSpacing (12);
+  top->addWidget (photo_, 0, Qt::AlignTop);
+  top->addLayout (text, 1);
+
+  auto * bottom = new QHBoxLayout;
+  bottom->setSpacing (8);
+  bottom->addWidget (qrz_button_);
+  bottom->addWidget (source_, 1);
+
+  auto * column = new QVBoxLayout {this};
+  column->setContentsMargins (0, 0, 0, 0);
+  column->setSpacing (8);
+  column->addLayout (top);
+  column->addLayout (bottom);
 
   clear ();
 }

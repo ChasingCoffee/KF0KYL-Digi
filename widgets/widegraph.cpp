@@ -232,13 +232,22 @@ void WideGraph::build_toolbar ()
       "QFrame#wfSeg {border: 1px solid %3; border-radius: 9px; background: rgba(127, 127, 127, 28);}"
       "QPushButton#wfSwatch {border: 2px solid transparent; border-radius: 6px; padding: 1px; background: transparent;}"
       "QPushButton#wfSwatch:checked {border-color: %1;}"
-      "QLabel#wfLabel {color: %2;}"}
+      "QLabel#wfLabel {color: %2;}"
+      "QPushButton#wfPill {border-radius: 11px; padding: 3px 12px; font-weight: 600;}"}
     .arg (accent.name ())
     .arg (Win11Theme::token ("text_secondary"))
     .arg (Win11Theme::token ("border"))
     .arg (QString {})
     .arg (Win11Theme::token ("text")));
   m_toolbar->setProperty ("w11_keep", true);
+
+  // one pill opens and closes everything on the bar, More included
+  m_tbPill = new QPushButton {m_toolbar};
+  m_tbPill->setObjectName ("wfPill");
+  m_tbPill->setCheckable (true);
+  m_tbPill->setFocusPolicy (Qt::NoFocus);
+  m_tbPill->setCursor (Qt::PointingHandCursor);
+  h->addWidget (m_tbPill);
 
   // the view
   auto * seg = new QFrame {m_toolbar};
@@ -249,6 +258,7 @@ void WideGraph::build_toolbar ()
   m_viewGroup = new QButtonGroup {seg};
   struct V {int style; QString text; QString tip;};
   QVector<V> const views {
+    {0, tr ("Classic"), tr ("The waterfall with the spectrum under it, as in WSJT-X")},
     {1, tr ("Waterfall"), tr ("A glowing spectrum over the waterfall")},
     {2, tr ("3D"), tr ("Signals stand up as peaks: the newest in front, the last minute or so behind them")},
     {3, tr ("Both"), tr ("3D over the waterfall")},
@@ -343,10 +353,12 @@ void WideGraph::build_toolbar ()
   m_tbMore->setCheckable (true);
   m_tbMore->setToolTip (tr ("All the waterfall's settings"));
   h->addWidget (m_tbMore);
+  bool open = true;
   {
     SettingsGroup g {m_settings, "WideGraph"};
     m_tbNames->setChecked (m_settings->value ("NamesOnSignals", true).toBool ());
     m_tbMore->setChecked (m_settings->value ("MoreOpen", false).toBool ());
+    open = m_settings->value ("ToolbarOpen", true).toBool ();
   }
   ui->widePlot->setShowLabels (m_tbNames->isChecked ());
   connect (m_tbNames, &QPushButton::toggled, this, [this] (bool on) {
@@ -356,13 +368,27 @@ void WideGraph::build_toolbar ()
     });
   connect (m_tbMore, &QPushButton::toggled, this, [this] (bool on) {
       ui->cbControls->setChecked (on);
-      m_controlsScroll->setVisible (on);
+      m_controlsScroll->setVisible (on && m_tbPill->isChecked ());
       SettingsGroup g {m_settings, "WideGraph"};
       m_settings->setValue ("MoreOpen", on);
     });
+  connect (m_tbPill, &QPushButton::toggled, this, [this] (bool on) {
+      for (auto * w : m_toolbar->findChildren<QWidget *> (QString {}, Qt::FindDirectChildrenOnly))
+        {
+          if (w != m_tbPill) w->setVisible (on);
+        }
+      m_controlsScroll->setVisible (on && m_tbMore->isChecked ());
+      m_tbPill->setText (on ? tr ("Hide %1").arg (QChar {0x25B4}) : tr ("Tools %1").arg (QChar {0x25BE}));
+      m_tbPill->setToolTip (on ? tr ("Hide the waterfall's tools") : tr ("Show the waterfall's tools"));
+      SettingsGroup g {m_settings, "WideGraph"};
+      m_settings->setValue ("ToolbarOpen", on);
+    });
   // the old switch over the waterfall gives way to More
   ui->cbControls->hide ();
-  m_controlsScroll->setVisible (m_tbMore->isChecked ());
+  m_tbPill->setChecked (!open);
+  m_tbPill->setChecked (open);      // sets up what shows either way
+  // the view is chosen on the bar; the old list under More goes
+  m_displayStyle->hide ();
   box->insertWidget (0, m_toolbar);
 
   // keep the toolbar in step with the controls under More

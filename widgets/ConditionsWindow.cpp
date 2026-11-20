@@ -86,7 +86,6 @@ namespace
   double deg (double r) {return r * 180. / pi;}
 
   QString swpc_base () {return "https://services.swpc.noaa.gov/";}
-  QString gibs_base () {return "https://gibs.earthdata.nasa.gov/";}
   QString kc2g_base () {return "https://prop.kc2g.com/";}
   QString news_base (QString const& url, QString const&) {return url;}
   QString sdo_base () {return "https://sdo.gsfc.nasa.gov/";}
@@ -765,10 +764,8 @@ public:
   void set_dx (QString const& call, double lat, double lon) {dx_call_ = call; dx_lat_ = lat; dx_lon_ = lon; update ();}
 
   void set_aurora (QImage const& img) {aurora_ = img; changed ();}
-  void set_clouds (QImage const& img) {clouds_ = img; changed ();}
   // the map coloured by DRAP or the MUF: the picture, what it is and the top of its scale
   void set_conditions (QImage const& img, QString const& label, double top) {cond_ = img; cond_label = label; cond_top = top; changed ();}
-  bool show_clouds {false};
   int colour_by {0};                  // 0 nothing, 1 DRAP, 2 MUF now
   QString cond_label;
   double cond_top {35.};
@@ -1123,7 +1120,12 @@ protected:
         if (age > 1.) continue;
         bool const was_called = called.contains (it.key ());
         QColor c;
-        if (s.to_me)
+        if (2 != worked_mode && calls_shown ().contains (it.key ()))
+          {
+            // logged: the worked colour from the moment it's in the log
+            c = worked_color;
+          }
+        else if (s.to_me)
           {
             if (!show_me) continue;
             c = my_call_color;
@@ -1132,10 +1134,6 @@ protected:
           {
             if (!show_called) continue;
             c = tx_color;
-          }
-        else if (2 != worked_mode && calls_shown ().contains (it.key ()))
-          {
-            c = worked_color;
           }
         else if (s.cq)
           {
@@ -1556,10 +1554,10 @@ protected:
       {
         auto const& s = stations[call];
         QString what;
-        if (s.to_me) what = QObject::tr ("calling you");
-        else if (called.contains (call)) what = QObject::tr ("you called");
-        else if (2 != worked_mode && calls_shown ().contains (call))
+        if (2 != worked_mode && calls_shown ().contains (call))
           what = 1 == worked_mode ? QObject::tr ("worked today on %1").arg (band_label) : QObject::tr ("worked before on %1").arg (band_label);
+        else if (s.to_me) what = QObject::tr ("calling you");
+        else if (called.contains (call)) what = QObject::tr ("you called");
         else if (s.cq) what = QObject::tr ("calling CQ");
         QToolTip::showText (global,
                             QString {"<b>%1</b> &nbsp;%2 dB &nbsp;%3 UTC &nbsp;%4<br/>%5"}
@@ -1692,7 +1690,6 @@ private:
             p.drawImage (all, cond_);
             p.setOpacity (1.);
           }
-        if (show_clouds && !clouds_.isNull ()) p.drawImage (all, clouds_);
         if (show_rain && !rain_.isNull ()) p.drawImage (all, rain_);
         if (show_prop && !prop_.isNull ()) p.drawImage (all, prop_);
         if (show_aurora && !aurora_.isNull ()) p.drawImage (all, aurora_);
@@ -2691,7 +2688,6 @@ private:
   QImage night_;
   QVector<double> shade_;
   QImage aurora_;
-  QImage clouds_;
   QImage cond_;
   QImage rain_;
   QImage prop_;
@@ -2740,6 +2736,12 @@ public:
   }
   // the last one sits at the far right of the last line
   void set_last_right (bool on) {last_right_ = on;}
+  void insert_widget (int i, QWidget * w)
+  {
+    addChildWidget (w);
+    items_.insert (qBound (0, i, int (items_.size ())), new QWidgetItem {w});
+    invalidate ();
+  }
 
 private:
   int place (QRect const& r, bool apply) const
@@ -3866,7 +3868,19 @@ void ConditionsWindow::update_containers ()
 void ConditionsWindow::build_ui ()
 {
   boxes_menu_ = new QMenu {this};
-  auto * outer = new QVBoxLayout {this};
+  // everything scrolls if very large text makes it bigger than the screen
+  auto * scroll = new QScrollArea {this};
+  scroll->setObjectName ("plainScroll");
+  scroll->setFrameShape (QFrame::NoFrame);
+  scroll->setWidgetResizable (true);
+  auto * content = new QWidget {scroll};
+  content->setObjectName ("plain");
+  scroll->setWidget (content);
+  scroll->viewport ()->setObjectName ("plain");
+  auto * whole = new QVBoxLayout {this};
+  whole->setContentsMargins (0, 0, 0, 0);
+  whole->addWidget (scroll);
+  auto * outer = new QVBoxLayout {content};
   outer->setContentsMargins (14, 14, 14, 10);
   outer->setSpacing (12);
   QVBoxLayout * body;
@@ -3876,7 +3890,8 @@ void ConditionsWindow::build_ui ()
   auto * top = new QHBoxLayout {top_row_};
   top->setContentsMargins (0, 0, 0, 0);
   top->setSpacing (12);
-  top_row_->setMaximumHeight (215);
+  // tall enough for its text at any text size
+  top_row_->setMaximumHeight (qMax (215, 14 * QFontMetrics {QApplication::font ()}.height ()));
 
   auto * clock_box = make_box ("clock", {}, body);
   auto * clock_row = new QHBoxLayout;
@@ -3934,7 +3949,7 @@ void ConditionsWindow::build_ui ()
   body->addWidget (xray_graph_);
   top->addWidget (xray_box, 4);
 
-  auto * sun_box = make_box ("sun", tr ("The Sun · NASA SDO"), body);
+  auto * sun_box = make_box ("sun", tr ("The Sun"), body);
   sun_image_ = new SunImage {sun_box};
   sun_image_->setObjectName ("plain");
   sun_image_->set_message (tr ("The Sun from NASA SDO"));
@@ -4385,8 +4400,6 @@ QWidget * ConditionsWindow::build_map_bar ()
   gray_box_ = make_chip (tr ("Gray line"), tr ("Shade the night side of the Earth"), bar);
   aurora_box_ = make_chip (tr ("Aurora"), tr ("NOAA's 30-minute aurora forecast. Strong aurora can absorb or reflect HF and VHF signals near the poles."), bar);
   rain_box_ = make_chip (tr ("Rain"), tr ("Where it's raining or snowing over the last half hour or so, from NASA satellites"), bar);
-  clouds_box_ = make_chip (tr ("Clouds"), tr ("<p>Clouds now, from the GOES and Himawari weather satellites (NASA GIBS). "
-                                              "Europe, Africa and western Asia aren't covered.</p>"), bar);
   news_box_ = make_chip (tr ("News"), tr ("Ham radio headlines from ARRL, AMSAT and DX-World scrolling under these buttons. Click one to read it."), bar);
   cities_box_ = make_chip (tr ("Cities"), tr ("Names of cities. Zoom in to see more of them. Capitals have a square."), bar);
   beacons_box_ = make_chip (tr ("Beacons"), tr ("The 18 NCDXF/IARU beacons. The ones sending now are filled in the color of their band."), bar);
@@ -4473,7 +4486,7 @@ QWidget * ConditionsWindow::build_map_bar ()
     load_map_colours ();
     map_->on_colour = [this] (QString const& key, QString const& name) {pick_map_colour (key, name);};
   }
-  for (auto * b : {gray_box_, aurora_box_, rain_box_, clouds_box_, cities_box_, beacons_box_, worked_grids_box_, psk_box_, prop_box_, news_box_}) row2->addWidget (b);
+  for (auto * b : {gray_box_, aurora_box_, rain_box_, cities_box_, beacons_box_, worked_grids_box_, psk_box_, prop_box_, news_box_}) row2->addWidget (b);
   row1->addStretch ();
   // the band outlook: day and night for each group of bands
   {
@@ -4515,6 +4528,8 @@ QWidget * ConditionsWindow::build_map_bar ()
     outlook->setSizePolicy (QSizePolicy::Fixed, QSizePolicy::Preferred);
     boxes_["bands"] = outlook;
     row1->addWidget (outlook);
+    row1_ = row1;
+    row2_ = row2;
   }
   auto * boxes = new QToolButton {bar};
   boxes->setText (tr ("Boxes"));
@@ -4552,7 +4567,6 @@ QWidget * ConditionsWindow::build_map_bar ()
   gray_box_->setChecked (settings_->value ("GrayLine", true).toBool ());
   aurora_box_->setChecked (settings_->value ("Aurora", false).toBool ());
   rain_box_->setChecked (settings_->value ("Rain", false).toBool ());
-  clouds_box_->setChecked (settings_->value ("Clouds", false).toBool ());
   news_box_->setChecked (settings_->value ("News", false).toBool ());
   beacons_box_->setChecked (settings_->value ("Beacons", false).toBool ());
   cities_box_->setChecked (settings_->value ("Cities", false).toBool ());
@@ -4574,7 +4588,6 @@ QWidget * ConditionsWindow::build_map_bar ()
     map_->gray_line = gray_box_->isChecked ();
     map_->show_aurora = aurora_box_->isChecked ();
     map_->show_rain = rain_box_->isChecked ();
-    map_->show_clouds = clouds_box_->isChecked ();
     map_->colour_by = colour_by_->checkedAction () ? colour_by_->checkedAction ()->data ().toInt () : 0;
     if (news_) news_->setVisible (news_box_->isChecked ());
     // the menus' buttons say what's chosen
@@ -4585,7 +4598,7 @@ QWidget * ConditionsWindow::build_map_bar ()
     grid_button_->setText (short_grids.value (grid_box_->currentIndex ()));
     QStringList const short_proj {tr ("Flat"), tr ("Centred"), tr ("Robinson"), tr ("Near half")};
     projection_button_->setText (short_proj.value (projection_group_->checkedId ()));
-    QTimer::singleShot (0, this, [this] {fit_outlook ();});
+    QTimer::singleShot (0, this, [this] {fit_outlook (); update_status ();});
     map_->show_beacons = beacons_box_->isChecked ();
     map_->show_cities = cities_box_->isChecked ();
     map_->show_prop = prop_box_->isChecked ();
@@ -4636,7 +4649,7 @@ QWidget * ConditionsWindow::build_map_bar ()
       apply ();
       if (on) fetch_news ();
     });
-  for (auto * box : {aurora_box_, rain_box_, clouds_box_})
+  for (auto * box : {aurora_box_, rain_box_})
     {
       connect (box, &QAbstractButton::toggled, this, [this, apply] {
           apply ();
@@ -4658,7 +4671,6 @@ void ConditionsWindow::save_map_options ()
   settings_->remove ("GridSquares");
   settings_->setValue ("GrayLine", gray_box_->isChecked ());
   settings_->setValue ("Aurora", aurora_box_->isChecked ());
-  settings_->setValue ("Clouds", clouds_box_->isChecked ());
   settings_->setValue ("News", news_box_->isChecked ());
   if (colour_by_) settings_->setValue ("MapColourBy", colour_by_->checkedAction () ? colour_by_->checkedAction ()->data ().toInt () : 0);
   settings_->setValue ("Rain", rain_box_->isChecked ());
@@ -4984,54 +4996,8 @@ void ConditionsWindow::refresh_overlays ()
           map_->set_rain (img.convertToFormat (QImage::Format_ARGB32_Premultiplied));
         });
     }
-  if (clouds_box_->isChecked ())
-    {
-      // the three geostationary weather satellites NASA GIBS has, in infrared:
-      // cold cloud tops are bright, day and night
-      QUrl url {gibs_base () + "wms/epsg4326/best/wms.cgi"};
-      QUrlQuery q;
-      q.addQueryItem ("SERVICE", "WMS");
-      q.addQueryItem ("REQUEST", "GetMap");
-      q.addQueryItem ("VERSION", "1.1.1");
-      q.addQueryItem ("LAYERS", "GOES-West_ABI_Band13_Clean_Infrared,GOES-East_ABI_Band13_Clean_Infrared,Himawari_AHI_Band13_Clean_Infrared");
-      q.addQueryItem ("SRS", "EPSG:4326");
-      q.addQueryItem ("BBOX", "-180,-90,180,90");
-      q.addQueryItem ("WIDTH", "1440");
-      q.addQueryItem ("HEIGHT", "720");
-      q.addQueryItem ("FORMAT", "image/png");
-      q.addQueryItem ("TRANSPARENT", "TRUE");
-      url.setQuery (q);
-      QNetworkRequest req {url};
-      req.setRawHeader ("User-Agent", http_user_agent ().toUtf8 ());
-      auto * reply = network_->get (req);
-      connect (reply, &QNetworkReply::finished, this, [this, reply] {
-          reply->deleteLater ();
-          QImage img;
-          if (QNetworkReply::NoError == reply->error ()) img.loadFromData (reply->readAll ());
-          if (img.isNull ())
-            {
-              overlay_status_ = tr ("Clouds couldn't be reached.");
-              return;
-            }
-          // grey to white clouds: the brighter (colder), the more solid
-          img = img.convertToFormat (QImage::Format_ARGB32);
-          QImage clouds {img.size (), QImage::Format_ARGB32_Premultiplied};
-          for (int y = 0; y < img.height (); ++y)
-            {
-              auto const * in = reinterpret_cast<QRgb const *> (img.constScanLine (y));
-              auto * out = reinterpret_cast<QRgb *> (clouds.scanLine (y));
-              for (int x = 0; x < img.width (); ++x)
-                {
-                  int const v = qGray (in[x]);
-                  int const a = qAlpha (in[x]) < 128 ? 0 : qBound (0, (v - 105) * 2, 225);
-                  out[x] = qPremultiply (qRgba (245, 248, 255, a));
-                }
-            }
-          map_->set_clouds (clouds);
-        });
-    }
   if (colour_by_ && colour_by_->checkedAction () && colour_by_->checkedAction ()->data ().toInt ()) fetch_conditions_map ();
-  bool const any = aurora_box_->isChecked () || rain_box_->isChecked () || clouds_box_->isChecked ()
+  bool const any = aurora_box_->isChecked () || rain_box_->isChecked ()
     || (colour_by_ && colour_by_->checkedAction () && colour_by_->checkedAction ()->data ().toInt ());
   if (any) overlay_timer_->start ();
   else overlay_timer_->stop ();
@@ -5162,7 +5128,7 @@ void ConditionsWindow::fetch_conditions_map ()
               img.setPixel (x, y, qPremultiply (qRgba (c.red (), c.green (), c.blue (), a)));
             }
         }
-      map_->set_conditions (img.scaled (720, 360, Qt::IgnoreAspectRatio, Qt::SmoothTransformation), tr ("MUF now"), 35.);
+      map_->set_conditions (img.scaled (720, 360, Qt::IgnoreAspectRatio, Qt::SmoothTransformation), tr ("MUF now · prop.kc2g.com (KC2G)"), 35.);
     });
 }
 
@@ -5248,16 +5214,36 @@ void ConditionsWindow::fetch_news ()
 void ConditionsWindow::fit_outlook ()
 {
   auto * outlook = boxes_.value ("bands");
-  if (!outlook || !map_bar_) return;
-  // what the words need: the menus beside them, then the outlook itself
+  if (!outlook || !map_bar_ || !row1_ || !row2_) return;
+  // what the menus beside it take
   int used = 0;
   for (auto * w : {static_cast<QWidget *> (style_button_), static_cast<QWidget *> (projection_button_), static_cast<QWidget *> (grid_button_)})
     {
       used += w->sizeHint ().width () + 8;
     }
-  QFontMetrics const fm {band_cells_[0][0]->font ()};
-  int const words = 4 * (fm.horizontalAdvance ("80–40") + 2 * (fm.horizontalAdvance ("Good") + 16) + 20) + 80;
-  bool const compact = used + words > map_bar_->width ();
+  // the outlook's width in words and in dots, measured while showing
+  if (compact_outlook_) outlook_dots_width_ = outlook->sizeHint ().width ();
+  else outlook_words_width_ = outlook->sizeHint ().width ();
+  int const room = map_bar_->width () - used - 16;
+  int const dots = outlook_dots_width_ ? outlook_dots_width_ : outlook_words_width_ * 3 / 5;
+  // words in the top row if they fit, else dots, else dots down among the buttons
+  bool const compact = outlook_words_width_ > room;
+  bool const below = compact && dots > room;
+  bool const was_below = row2_->indexOf (outlook) >= 0;
+  if (below != was_below)
+    {
+      if (below)
+        {
+          row1_->removeWidget (outlook);
+          static_cast<FlowLayout *> (row2_)->insert_widget (row2_->count () - 1, outlook);
+        }
+      else
+        {
+          row2_->removeWidget (outlook);
+          row1_->addWidget (outlook);
+        }
+      outlook->show ();
+    }
   if (compact == compact_outlook_) return;
   compact_outlook_ = compact;
   update_bands ();
@@ -5778,17 +5764,25 @@ void ConditionsWindow::request (QString const& url, void (ConditionsWindow::*han
           update_tiles ();
           update_bands ();
           schedule_voacap ();             // the solar flux sets VOACAP's sunspot number
-          QString text = tr ("Space weather and aurora: NOAA Space Weather Prediction Center, updated %1 UTC. "
-                             "Sun: NASA SDO. Maps: NASA Blue Marble and Black Marble, NASA GIBS when zoomed, Natural Earth; rain and snow: NASA GIBS.")
-            .arg (updated_.toString ("hh:mm"));
-          if (map_->colour_by == 2) text += ' ' + tr ("MUF: prop.kc2g.com (KC2G).");
-          if (map_->show_clouds) text += ' ' + tr ("Clouds: NASA GIBS (GOES and Himawari).");
-          if (ConditionsMap::CQZones == map_->grid || ConditionsMap::ITUZones == map_->grid) text += ' ' + tr ("Zones: HB9HIL (MIT licence).");
-          if (overlay_status_.size ()) text += ' ' + overlay_status_;
-          if (failed_) text += ' ' + tr ("(%n item(s) couldn't be reached; will try again in 15 minutes)", "", failed_);
-          status_->setText (text);
+          update_status ();
         }
     });
+}
+
+// the credits and anything that couldn't be reached, under the map; kept
+// in step with what's switched on
+void ConditionsWindow::update_status ()
+{
+  if (!updated_.isValid ()) return;
+  QString text = tr ("Space weather and aurora: NOAA Space Weather Prediction Center, updated %1 UTC. "
+                     "Sun: NASA SDO. Maps: NASA Blue Marble and Black Marble, NASA GIBS when zoomed, Natural Earth; rain and snow: NASA GIBS.")
+    .arg (updated_.toString ("hh:mm"));
+  if (map_->colour_by == 1) text += ' ' + tr ("D-region absorption: NOAA SWPC D-RAP.");
+  if (map_->colour_by == 2) text += ' ' + tr ("MUF: prop.kc2g.com, by Andrew Rodland, KC2G.");
+  if (ConditionsMap::CQZones == map_->grid || ConditionsMap::ITUZones == map_->grid) text += ' ' + tr ("Zones: HB9HIL (MIT licence).");
+  if (overlay_status_.size ()) text += ' ' + overlay_status_;
+  if (failed_) text += ' ' + tr ("(%n item(s) couldn't be reached; will try again in 15 minutes)", "", failed_);
+  status_->setText (text);
 }
 
 void ConditionsWindow::on_flux (QByteArray const& data)
@@ -5965,6 +5959,7 @@ void ConditionsWindow::update_bands ()
         }
     }
   if (auto * outlook = boxes_.value ("bands")) outlook->updateGeometry ();
+  QTimer::singleShot (0, this, [this] {fit_outlook ();});
 }
 
 void ConditionsWindow::update_de_dx ()
@@ -6022,7 +6017,10 @@ void ConditionsWindow::update_de_dx ()
     }
   else
     {
-      dx = big (slashed (dx_call_).toHtmlEscaped ());
+      // the call is in the QRZ details when they're showing
+      bool const qrz_shown = call_info_ && !call_info_->isHidden ();
+      if (qrz_shown) dx = QString {"<div style=\"height:4px\"></div>"};
+      else dx = big (slashed (dx_call_).toHtmlEscaped ());
       if (!have_dx)
         {
           dx += QString {"<div style=\"color:%1\">%2</div>"}.arg (muted, tr ("No grid square yet."));
@@ -6497,6 +6495,30 @@ void ConditionsWindow::set_miles (bool miles)
   miles_ = miles;
   map_->miles = miles;
   update_de_dx ();
+}
+
+void ConditionsWindow::set_call_info (QWidget * info)
+{
+  call_info_ = info;
+  auto * box = qobject_cast<QVBoxLayout *> (dx_info_->parentWidget ()->layout ());
+  if (!box) return;
+  info->setParent (dx_info_->parentWidget ());
+  // on the box's own background, not a panel of its own
+  info->setStyleSheet ("QFrame#callsign_info {background: transparent; border: none;} QFrame#callsign_info QLabel {background: transparent;}");
+  int const at = box->indexOf (dx_info_);
+  box->insertWidget (at < 0 ? 1 : at, info);
+  info->installEventFilter (this);
+  update_de_dx ();
+}
+
+bool ConditionsWindow::eventFilter (QObject * o, QEvent * e)
+{
+  // the QRZ details showing or not: the call above the table follows
+  if (o == call_info_ && (QEvent::Show == e->type () || QEvent::Hide == e->type ()))
+    {
+      QTimer::singleShot (0, this, [this] {update_de_dx ();});
+    }
+  return QWidget::eventFilter (o, e);
 }
 
 void ConditionsWindow::set_dx (QString const& call, QString const& grid)

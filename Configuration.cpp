@@ -1056,7 +1056,21 @@ QDir Configuration::writeable_data_dir () const {return m_->writeable_data_dir_;
 QDir Configuration::temp_dir () const {return m_->temp_dir_;}
 
 void Configuration::select_tab (int index) {m_->ui_->configuration_tabs->setCurrentIndex (index);}
-void Configuration::select_colors_tab () {m_->ui_->configuration_tabs->setCurrentWidget (m_->ui_->colors_tab);}
+void Configuration::select_colors_tab ()
+{
+  // each tab sits in a scroll area of its own: find the one holding Colors
+  auto * tabs = m_->ui_->configuration_tabs;
+  for (int i = 0; i < tabs->count (); ++i)
+    {
+      auto * page = tabs->widget (i);
+      auto * scroll = qobject_cast<QScrollArea *> (page);
+      if (page == m_->ui_->colors_tab || (scroll && scroll->widget () == m_->ui_->colors_tab))
+        {
+          tabs->setCurrentIndex (i);
+          return;
+        }
+    }
+}
 void Configuration::set_decode_highlighting (DecodeHighlightingModel::HighlightItems const& items)
 {
   m_->decode_highlighing_model_.items (items);
@@ -1885,6 +1899,13 @@ Configuration::impl::impl (Configuration * self, QNetworkAccessManager * network
       }
   }
   setup_scrolling_tabs ();
+  // a few boxes were given a fixed minimum height that's too small for
+  // their title and contents at today's text sizes: let them have the
+  // room they ask for
+  for (auto * box : findChildren<QGroupBox *> ())
+    {
+      if (box->minimumHeight () > 0 && box->minimumHeight () < box->minimumSizeHint ().height ()) box->setMinimumHeight (0);
+    }
 
   {
     // Make sure the default save directory exists

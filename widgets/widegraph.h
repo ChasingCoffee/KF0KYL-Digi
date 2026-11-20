@@ -127,6 +127,7 @@ private:
   class QSlider * m_tbSpeed {nullptr};
   class QPushButton * m_tbNames {nullptr};
   class QPushButton * m_tbMore {nullptr};
+  class QPushButton * m_tbPill {nullptr};
   QTimer * m_fitTimer {nullptr};
 
   QSettings * m_settings;

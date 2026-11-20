@@ -127,6 +127,7 @@
 #include <QSoundEffect>
 #include <QDialogButtonBox>
 #include <QTreeWidget>
+#include <QGridLayout>
 #include <QColorDialog>
 #include <QHeaderView>
 #include <QPushButton>
@@ -4797,6 +4798,8 @@ void MainWindow::setup_callsign_info ()
   // the Conditions window always opens on its own, never inside the main window
   m_conditions = new ConditionsWindow {m_settings};
   connect (m_conditions, &ConditionsWindow::station_double_clicked, this, &MainWindow::double_click_station);
+  // the QRZ details live in the Conditions window's DX box
+  m_conditions->set_call_info (m_callInfo);
   connect (m_wideGraph.data (), &WideGraph::labelDoubleClicked, this, &MainWindow::double_click_station);
   m_conditions->set_my_call (m_config.my_callsign ());
   m_conditions->set_my_grid (m_config.my_grid ());
@@ -4992,12 +4995,11 @@ void MainWindow::rebuild_layout (bool restore_sizes)
   bool const embed = m_embedWaterfallAction->isChecked ();
   QWidget * const band = ui->layoutWidget;        // Band Activity
   QWidget * const rx = ui->rh_decodes_widget;     // Rx Frequency
-  QWidget * const info = m_callInfo;
   QWidget * const controls = ui->lower_panel_widget;
 
   // remember what the user had hidden (SWL view hides the controls, the
   // info strip hides itself when there's no DX call)
-  QList<QWidget *> sections {band, rx, info, controls};
+  QList<QWidget *> sections {band, rx, controls};
   if (embed || wg->parentWidget () == m_layoutStash) sections << wg;
   QHash<QWidget *, bool> hidden;
   for (auto * w : sections)
@@ -5045,7 +5047,6 @@ void MainWindow::rebuild_layout (bool restore_sizes)
         wf_split->addWidget (ui->decodes_splitter);
         wf_split->setStretchFactor (wf_split->indexOf (ui->decodes_splitter), 1);
         column->addWidget (wf_split, 1);
-        column->addWidget (info);
         column->addWidget (controls);
       }
       break;
@@ -5063,7 +5064,6 @@ void MainWindow::rebuild_layout (bool restore_sizes)
         wf_split->addWidget (rx);
         wf_split->setStretchFactor (wf_split->indexOf (rx), 1);
         right_column->addWidget (wf_split, 1);
-        right_column->addWidget (info);
         if (PanelLayout::Wide == m_panelLayout) right_column->addWidget (controls);
         band_split->addWidget (right);
         band_split->setStretchFactor (0, 0);
@@ -18153,6 +18153,7 @@ void MainWindow::alertQSYmessage ()
 // ---------------------------------------------------------------------
 // 1.2.1 extras
 
+
 void MainWindow::setup_extras ()
 {
   // Band Activity filters, like GridTracker's: only what's new to you,
@@ -18200,6 +18201,9 @@ void MainWindow::setup_extras ()
   connect (logs, &QAction::triggered, this, &MainWindow::extra_logs_dialog);
   if (!m_settings->value ("ExtraLogs").toStringList ().isEmpty ()) apply_extra_logs ();
 
+  // the arrows between Tx and Rx: room for them at any text size
+  for (auto * b : {ui->pbR2T, ui->pbT2R}) b->setMaximumWidth (qMax (b->maximumWidth (), b->minimumSizeHint ().width ()));
+
   // what the Band Activity colours mean, beside its title
   {
     int const at = ui->verticalLayout_3->indexOf (ui->lh_decodes_title_label);
@@ -18215,23 +18219,64 @@ void MainWindow::setup_extras ()
     m_colourKey->set_items (m_config.decode_highlighting ().items ());
     // double-click a colour in the key to change it there and then
     connect (m_colourKey, &ColourKeyStrip::colour_clicked, this, [this] (DecodeHighlightingModel::Highlight type) {
+        // both colours of one highlight, with a preview like the key
         auto items = m_config.decode_highlighting ().items ();
-        for (auto& item : items)
-          {
-            if (item.type_ != type) continue;
-            bool const has_bg = Qt::NoBrush != item.background_.style ();
-            QColor const was = has_bg ? item.background_.color () : item.foreground_.color ();
-            auto const name = DecodeHighlightingModel::highlight_name (type);
-            QColor const c = QColorDialog::getColor (was, this, has_bg ? tr ("%1: highlight colour").arg (name)
-                                                                       : tr ("%1: text colour").arg (name));
-            if (!c.isValid () || c == was) return;
-            if (has_bg) item.background_ = QBrush {c};
-            else item.foreground_ = QBrush {c};
-            m_config.set_decode_highlighting (items);
-            m_colourKey->set_items (items);
-            update_conditions_colors ();
-            return;
-          }
+        int index = -1;
+        for (int i = 0; i < items.size (); ++i) if (items[i].type_ == type) index = i;
+        if (index < 0) return;
+        auto const name = DecodeHighlightingModel::highlight_name (type);
+        QColor bg = Qt::NoBrush != items[index].background_.style () ? items[index].background_.color () : QColor {};
+        QColor fg = Qt::NoBrush != items[index].foreground_.style () ? items[index].foreground_.color () : QColor {};
+        QDialog dialog {this};
+        dialog.setWindowTitle (tr ("%1 colours").arg (name));
+        auto * v = new QVBoxLayout {&dialog};
+        auto * preview = new QLabel {&dialog};
+        preview->setAlignment (Qt::AlignCenter);
+        preview->setMinimumHeight (QFontMetrics {preview->font ()}.height () * 2);
+        v->addWidget (preview);
+        auto * grid = new QGridLayout;
+        auto * bg_button = new QPushButton {tr ("Highlight colour..."), &dialog};
+        auto * bg_none = new QPushButton {tr ("None"), &dialog};
+        auto * fg_button = new QPushButton {tr ("Text colour..."), &dialog};
+        auto * fg_auto = new QPushButton {tr ("Automatic"), &dialog};
+        bg_none->setToolTip (tr ("No highlight: the text colour only"));
+        fg_auto->setToolTip (tr ("Black or white, whichever reads best on the highlight"));
+        grid->addWidget (bg_button, 0, 0);
+        grid->addWidget (bg_none, 0, 1);
+        grid->addWidget (fg_button, 1, 0);
+        grid->addWidget (fg_auto, 1, 1);
+        v->addLayout (grid);
+        auto * box = new QDialogButtonBox {QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog};
+        v->addWidget (box);
+        connect (box, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+        connect (box, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+        auto show = [&] {
+          // the same rule Band Activity uses for text with no colour of its own
+          QColor const text = fg.isValid () ? fg : bg.isValid () ? (bg.lightness () > 140 ? QColor {Qt::black} : QColor {Qt::white})
+                                                                  : palette ().text ().color ();
+          preview->setText (QString {"  %1  "}.arg (m_colourKey->chip_text (type)));
+          preview->setStyleSheet (QString {"QLabel {background: %1; color: %2; border-radius: 6px; font-weight: 700; padding: 6px 14px;}"}
+                                  .arg (bg.isValid () ? bg.name () : QString {"transparent"}, text.name ()));
+          bg_none->setEnabled (bg.isValid () && fg.isValid ());
+          fg_auto->setEnabled (fg.isValid () && bg.isValid ());
+        };
+        connect (bg_button, &QPushButton::clicked, &dialog, [&] {
+            QColor const c = QColorDialog::getColor (bg.isValid () ? bg : QColor {Qt::yellow}, &dialog, tr ("%1: highlight colour").arg (name));
+            if (c.isValid ()) {bg = c; show ();}
+          });
+        connect (bg_none, &QPushButton::clicked, &dialog, [&] {bg = QColor {}; show ();});
+        connect (fg_button, &QPushButton::clicked, &dialog, [&] {
+            QColor const c = QColorDialog::getColor (fg.isValid () ? fg : QColor {Qt::black}, &dialog, tr ("%1: text colour").arg (name));
+            if (c.isValid ()) {fg = c; show ();}
+          });
+        connect (fg_auto, &QPushButton::clicked, &dialog, [&] {fg = QColor {}; show ();});
+        show ();
+        if (QDialog::Accepted != dialog.exec ()) return;
+        items[index].background_ = bg.isValid () ? QBrush {bg} : QBrush {};
+        items[index].foreground_ = fg.isValid () ? QBrush {fg} : QBrush {};
+        m_config.set_decode_highlighting (items);
+        m_colourKey->set_items (items);
+        update_conditions_colors ();
       });
     connect (m_colourKey, &ColourKeyStrip::edit, this, [this] {
         m_config.select_colors_tab ();

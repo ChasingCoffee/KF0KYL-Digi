@@ -25,6 +25,8 @@ public:
   void set_lead (QWidget *);
   // the colours shown or just the title
   void set_chips_shown (bool);
+  // the short name a highlight has in the key
+  QString chip_text (DecodeHighlightingModel::Highlight h) const {return short_name (h);}
   QSize sizeHint () const override;
   QSize minimumSizeHint () const override;
   bool hasHeightForWidth () const override {return true;}

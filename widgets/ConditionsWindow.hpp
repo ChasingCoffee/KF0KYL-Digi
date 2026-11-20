@@ -75,6 +75,9 @@ public:
   // uses the same colours as Band Activity
   void set_highlight_colors (QColor const& cq, QColor const& my_call, QColor const& tx);
 
+  // the QRZ details (photo, name, place, QRZ page button), shown at the
+  // top of the DX box
+  void set_call_info (QWidget *);
   Q_SIGNAL void call_colors_changed ();
   Q_SIGNAL void dx_changed_for_tools ();
 
@@ -157,6 +160,8 @@ private:
   QLabel * local_clock_;
   QLabel * de_info_;
   QLabel * dx_info_;
+  QWidget * call_info_ {nullptr};
+  bool eventFilter (QObject *, QEvent *) override;
   XRayGraph * xray_graph_;
   SunImage * sun_image_;
   QStringList sun_channels_;
@@ -234,7 +239,6 @@ private:
   QHash<QString, QColor> map_colours_;     // the ones chosen in Map colours, by key
   QAbstractButton * aurora_box_;
   QAbstractButton * rain_box_;
-  QAbstractButton * clouds_box_ {nullptr};
   QAbstractButton * news_box_ {nullptr};
   class QToolButton * style_button_ {nullptr};
   class QToolButton * projection_button_ {nullptr};
@@ -245,7 +249,12 @@ private:
   void fetch_news ();
   void fetch_conditions_map ();          // DRAP or the MUF, whichever colours the map
   void fit_outlook ();
+  void update_status ();
   bool compact_outlook_ {false};
+  int outlook_words_width_ {0};
+  int outlook_dots_width_ {0};
+  class QHBoxLayout * row1_ {nullptr};
+  class QLayout * row2_ {nullptr};
   QWidget * map_bar_ {nullptr};
   void resizeEvent (QResizeEvent *) override;
   class QCheckBox * show_cq_;
