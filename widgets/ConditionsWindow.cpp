@@ -3026,7 +3026,7 @@ public:
     : QWidget {parent}
   {
     // big enough to see the detail in the pictures
-    int const side = qMax (210, 11 * QFontMetrics {font ()}.height ());
+    int const side = qMax (240, 12 * QFontMetrics {font ()}.height ());
     setMinimumSize (side, side);
     setSizePolicy (QSizePolicy::Expanding, QSizePolicy::Expanding);
   }
@@ -3051,15 +3051,11 @@ protected:
         p.drawText (rect (), Qt::AlignCenter | Qt::TextWordWrap, message_);
         return;
       }
-    // the whole picture, square, trimmed only of the black sky round the
-    // edge so the disk is as big as it can be with nothing cut off: the
-    // disk fills about 78% of an SDO picture, so keep the middle 90%
+    // NASA's whole picture, square and untrimmed, so flares and
+    // prominences show all round the edge of the Sun
     if (scaled_.size () != r.size ().toSize ())
       {
-        int const w = image_.width (), h = image_.height ();
-        int const keep = qRound (qMin (w, h) * 0.90);
-        QImage const middle = image_.copy ((w - keep) / 2, (h - keep) / 2, keep, keep);
-        scaled_ = middle.scaled (r.size ().toSize (), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        scaled_ = image_.scaled (r.size ().toSize (), Qt::KeepAspectRatio, Qt::SmoothTransformation);
       }
     QPainterPath frame;
     frame.addRoundedRect (r, 6, 6);
@@ -3931,7 +3927,7 @@ void ConditionsWindow::build_ui ()
   top->setContentsMargins (0, 0, 0, 0);
   top->setSpacing (12);
   // tall enough for its text at any text size
-  top_row_->setMaximumHeight (qMax (265, 16 * QFontMetrics {QApplication::font ()}.height ()));
+  top_row_->setMaximumHeight (qMax (305, 19 * QFontMetrics {QApplication::font ()}.height ()));
 
   auto * clock_box = make_box ("clock", {}, body);
   auto * clock_row = new QHBoxLayout;
