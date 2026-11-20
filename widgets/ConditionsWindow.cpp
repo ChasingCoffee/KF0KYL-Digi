@@ -3035,8 +3035,15 @@ public:
   void set_message (QString const& m) {message_ = m; update ();}
   void set_caption (QString const& c) {caption_ = c; update ();}
   void set_corners (QStringList const& c) {if (c != corners_) {corners_ = c; update ();}}
-  // a button kept in the picture's top right corner
-  void set_corner_widget (QWidget * w) {corner_widget_ = w; w->setParent (this); place ();}
+  // a widget kept just to the right of the picture, off the Sun
+  void set_side_widget (QWidget * w)
+  {
+    side_ = w;
+    w->setParent (this);
+    setMinimumWidth (minimumHeight () + w->sizeHint ().width () + 6);
+    place_side ();
+  }
+
 
 protected:
   void paintEvent (QPaintEvent *) override
@@ -3044,8 +3051,7 @@ protected:
     QPainter p {this};
     p.setRenderHint (QPainter::Antialiasing);
     p.setRenderHint (QPainter::SmoothPixmapTransform);
-    int const s = qMin (width (), height ()) - 2;
-    QRectF const r {(width () - s) / 2., (height () - s) / 2., double (s), double (s)};
+    QRectF const r = picture_rect ();
     if (image_.isNull ())
       {
         p.setPen (QColor {Win11Theme::token ("text_secondary")});
@@ -3081,16 +3087,15 @@ protected:
       p.setPen (QColor {255, 170, 60});
       p.drawText (box, Qt::AlignCenter, text);
     };
-    // the picture menu has the top right corner
     corner (corners_.value (0), Qt::AlignTop | Qt::AlignLeft);
+    corner (corners_.value (1), Qt::AlignTop | Qt::AlignRight);
     corner (corners_.value (2), Qt::AlignBottom | Qt::AlignLeft);
-    corner (corners_.value (1), Qt::AlignBottom | Qt::AlignRight);
     if (caption_.size ())
       {
         // a movie frame's time, bottom middle
         QRectF box {0, 0, fm.horizontalAdvance (caption_) + 8, fm.height () + 2};
         box.moveCenter ({r.center ().x (), r.bottom () - 4 - box.height () / 2});
-        if (corners_.value (2).size () || corners_.value (1).size ()) box.moveTop (box.top () - box.height () - 2);
+        if (corners_.value (2).size ()) box.moveTop (box.top () - box.height () - 2);
         p.setPen (Qt::NoPen);
         p.setBrush (QColor {0, 0, 0, 150});
         p.drawRoundedRect (box, 4, 4);
@@ -3098,25 +3103,35 @@ protected:
         p.drawText (box, Qt::AlignCenter, caption_);
       }
     p.setClipping (false);
-    p.setPen (QPen {QColor {Win11Theme::token ("border")}, 1});
-    p.setBrush (Qt::NoBrush);
-    p.drawRoundedRect (r, 6, 6);
   }
 
 private:
+  // the square picture and its side widget, centred together
+  QRectF picture_rect () const
+  {
+    int const gap = side_ ? side_->sizeHint ().width () + 6 : 0;
+    int const s = qMax (10, qMin (width () - gap, height ()) - 2);
+    return {(width () - s - gap) / 2., (height () - s) / 2., double (s), double (s)};
+  }
+  void place_side ()
+  {
+    if (!side_) return;
+    side_->resize (side_->sizeHint ());
+    auto const r = picture_rect ();
+    side_->move (qRound (r.right ()) + 6, qRound (r.top ()));
+  }
+  void resizeEvent (QResizeEvent *) override {place_side ();}
+  bool event (QEvent * e) override
+  {
+    // the menu's text changed size
+    if (QEvent::LayoutRequest == e->type ()) {place_side (); update ();}
+    return QWidget::event (e);
+  }
+  QWidget * side_ {nullptr};
   QImage image_;
   QImage scaled_;
   QStringList corners_;
-  QWidget * corner_widget_ {nullptr};
-  void place ()
-  {
-    if (!corner_widget_) return;
-    int const s = qMin (width (), height ()) - 2;
-    corner_widget_->adjustSize ();
-    corner_widget_->move ((width () + s) / 2 - corner_widget_->width () - 4, (height () - s) / 2 + 4);
-    corner_widget_->raise ();
-  }
-  void resizeEvent (QResizeEvent *) override {place ();}
+
   QString message_;
   QString caption_;
 };
@@ -4011,6 +4026,8 @@ void ConditionsWindow::build_ui ()
   // the picture fills the box: no title row, the menu sits on the picture
   auto * sun_box = make_box ("sun", {}, body);
   body->setContentsMargins (6, 6, 6, 6);
+  // all black, so the picture has no edges
+  sun_box->setStyleSheet ("QFrame#conditionsBox {background-color: #000000;}");
   sun_image_ = new SunImage {sun_box};
   sun_image_->setObjectName ("plain");
   sun_image_->set_message (tr ("The Sun from NASA SDO"));
@@ -4095,8 +4112,9 @@ void ConditionsWindow::build_ui ()
     sun_pick_->setText (sun_pictures_->checkedAction ()->text ().section (" (", 0, 0)
                         .replace (tr ("Rotate through them all"), tr ("Rotate")));
     if ("rotate" == sun_choice () && !movie) sun_rotate_->start ();
-    sun_image_->set_corner_widget (sun_pick_);
   }
+  // the picture's menu sits beside it so nothing covers the Sun
+  sun_image_->set_side_widget (sun_pick_);
   body->addWidget (sun_image_, 1);
   top->addWidget (sun_box, 2);
 
