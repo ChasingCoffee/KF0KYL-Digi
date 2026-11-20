@@ -3025,8 +3025,7 @@ public:
   explicit SunImage (QWidget * parent)
     : QWidget {parent}
   {
-    // big enough to see the detail in the pictures
-    int const side = qMax (240, 12 * QFontMetrics {font ()}.height ());
+    int const side = qMax (150, 8 * QFontMetrics {font ()}.height ());
     setMinimumSize (side, side);
     setSizePolicy (QSizePolicy::Expanding, QSizePolicy::Expanding);
   }
@@ -3036,6 +3035,8 @@ public:
   void set_message (QString const& m) {message_ = m; update ();}
   void set_caption (QString const& c) {caption_ = c; update ();}
   void set_corners (QStringList const& c) {if (c != corners_) {corners_ = c; update ();}}
+  // a button kept in the picture's top right corner
+  void set_corner_widget (QWidget * w) {corner_widget_ = w; w->setParent (this); place ();}
 
 protected:
   void paintEvent (QPaintEvent *) override
@@ -3080,10 +3081,22 @@ protected:
       p.setPen (QColor {255, 170, 60});
       p.drawText (box, Qt::AlignCenter, text);
     };
+    // the picture menu has the top right corner
     corner (corners_.value (0), Qt::AlignTop | Qt::AlignLeft);
-    corner (corners_.value (1), Qt::AlignTop | Qt::AlignRight);
     corner (corners_.value (2), Qt::AlignBottom | Qt::AlignLeft);
-    corner (caption_.size () ? caption_ : corners_.value (3), Qt::AlignBottom | Qt::AlignRight);
+    corner (corners_.value (1), Qt::AlignBottom | Qt::AlignRight);
+    if (caption_.size ())
+      {
+        // a movie frame's time, bottom middle
+        QRectF box {0, 0, fm.horizontalAdvance (caption_) + 8, fm.height () + 2};
+        box.moveCenter ({r.center ().x (), r.bottom () - 4 - box.height () / 2});
+        if (corners_.value (2).size () || corners_.value (1).size ()) box.moveTop (box.top () - box.height () - 2);
+        p.setPen (Qt::NoPen);
+        p.setBrush (QColor {0, 0, 0, 150});
+        p.drawRoundedRect (box, 4, 4);
+        p.setPen (QColor {Win11Theme::token ("text")});
+        p.drawText (box, Qt::AlignCenter, caption_);
+      }
     p.setClipping (false);
     p.setPen (QPen {QColor {Win11Theme::token ("border")}, 1});
     p.setBrush (Qt::NoBrush);
@@ -3094,6 +3107,16 @@ private:
   QImage image_;
   QImage scaled_;
   QStringList corners_;
+  QWidget * corner_widget_ {nullptr};
+  void place ()
+  {
+    if (!corner_widget_) return;
+    int const s = qMin (width (), height ()) - 2;
+    corner_widget_->adjustSize ();
+    corner_widget_->move ((width () + s) / 2 - corner_widget_->width () - 4, (height () - s) / 2 + 4);
+    corner_widget_->raise ();
+  }
+  void resizeEvent (QResizeEvent *) override {place ();}
   QString message_;
   QString caption_;
 };
@@ -3927,7 +3950,7 @@ void ConditionsWindow::build_ui ()
   top->setContentsMargins (0, 0, 0, 0);
   top->setSpacing (12);
   // tall enough for its text at any text size
-  top_row_->setMaximumHeight (qMax (305, 19 * QFontMetrics {QApplication::font ()}.height ()));
+  top_row_->setMaximumHeight (qMax (215, 14 * QFontMetrics {QApplication::font ()}.height ()));
 
   auto * clock_box = make_box ("clock", {}, body);
   auto * clock_row = new QHBoxLayout;
@@ -3985,7 +4008,9 @@ void ConditionsWindow::build_ui ()
   body->addWidget (xray_graph_);
   top->addWidget (xray_box, 4);
 
-  auto * sun_box = make_box ("sun", tr ("The Sun"), body);
+  // the picture fills the box: no title row, the menu sits on the picture
+  auto * sun_box = make_box ("sun", {}, body);
+  body->setContentsMargins (6, 6, 6, 6);
   sun_image_ = new SunImage {sun_box};
   sun_image_->setObjectName ("plain");
   sun_image_->set_message (tr ("The Sun from NASA SDO"));
@@ -4070,16 +4095,7 @@ void ConditionsWindow::build_ui ()
     sun_pick_->setText (sun_pictures_->checkedAction ()->text ().section (" (", 0, 0)
                         .replace (tr ("Rotate through them all"), tr ("Rotate")));
     if ("rotate" == sun_choice () && !movie) sun_rotate_->start ();
-    // the title row: the box's title on the left, the menu on the right
-    if (auto * title = sun_box->findChild<QLabel *> ())
-      {
-        body->removeWidget (title);
-        auto * head = new QHBoxLayout;
-        head->addWidget (title);
-        head->addStretch ();
-        head->addWidget (sun_pick_);
-        body->insertLayout (0, head);
-      }
+    sun_image_->set_corner_widget (sun_pick_);
   }
   body->addWidget (sun_image_, 1);
   top->addWidget (sun_box, 2);
