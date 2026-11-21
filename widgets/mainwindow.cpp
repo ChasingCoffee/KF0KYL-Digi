@@ -5245,18 +5245,6 @@ void MainWindow::apply_display_colors ()
   recolor (ui->labDialFreq, text_for (m_config.dial_text_color ()), m_config.dial_background_color ());
   recolor (ui->labUTC, text_for (m_config.clock_text_color ()), m_config.clock_background_color ());
 
-  // and the logo in the corner of the menu bar
-  if (!m_cornerLogo)
-    {
-      m_cornerLogo = new QLabel {menuBar ()};
-      m_cornerLogo->setObjectName ("cornerLogo");
-      QPixmap logo {":/station_logo.png"};
-      int const h = qMax (20, menuBar ()->sizeHint ().height () - 4);
-      m_cornerLogo->setPixmap (logo.scaledToHeight (h * devicePixelRatioF (), Qt::SmoothTransformation));
-      m_cornerLogo->setContentsMargins (0, 0, 10, 0);
-      menuBar ()->setCornerWidget (m_cornerLogo, Qt::TopRightCorner);
-    }
-  m_cornerLogo->setVisible (Win11Theme::isDigiGreen ());
 }
 
 void MainWindow::embed_waterfall (bool embed)

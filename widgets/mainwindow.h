@@ -1006,7 +1006,6 @@ private:
   void set_panel_layout (PanelLayout);
   void reset_layout ();
   void apply_display_colors ();
-  QLabel * m_cornerLogo {nullptr};
   // "Max" column beside Tx1-Tx4 and Tx6: stop after sending that message
   // N times in a row with no reply (0 = no limit)
   QSpinBox * m_txLimit[7] {};
