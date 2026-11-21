@@ -4829,6 +4829,10 @@ void MainWindow::setup_callsign_info ()
   connect (ui->dxGridEntry, &QLineEdit::textChanged, m_callInfoTimer, static_cast<void (QTimer::*) ()> (&QTimer::start));
 
   connect (&m_callLookup, &CallsignLookup::found, m_callInfo, &CallsignInfo::setInfo);
+  // QRZ's grid places the station exactly on the Conditions map
+  connect (&m_callLookup, &CallsignLookup::found, this, [this] (CallsignLookup::Info const& i) {
+      if (m_conditions) m_conditions->remember_grid (i.call, i.grid);
+    });
   connect (&m_callLookup, &CallsignLookup::photo, m_callInfo, &CallsignInfo::setPhoto);
   connect (&m_callLookup, &CallsignLookup::notFound, m_callInfo, &CallsignInfo::setNotFound);
   m_callLookup.setQrzLogin (m_config.qrz_xml_username (), m_config.qrz_xml_password ());

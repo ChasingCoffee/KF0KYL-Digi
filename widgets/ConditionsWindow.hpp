@@ -61,6 +61,7 @@ public:
                    QSet<QString> const& today_calls, QSet<QString> const& today_grids,
                    QSet<QString> const& all_grids, QSet<QString> const& today_all_grids);
   void set_dx (QString const& call, QString const& grid);
+  void remember_grid (QString const& call, QString const& grid);
   void set_miles (bool miles);         // Settings > General > Display distance in miles
   // a decoded station; grid may be empty, then lat/lon come from the
   // callsign's country (approx = true)
@@ -292,6 +293,7 @@ private:
   QString my_grid_;
   QString dx_call_;
   QString dx_grid_;
+  QHash<QString, QString> known_grids_;   // call -> grid, for the session
 };
 
 #endif

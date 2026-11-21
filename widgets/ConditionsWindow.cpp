@@ -1148,6 +1148,8 @@ protected:
         p.drawEllipse (pt, radius + 4, radius + 4);
         if (s.approx)
           {
+            // only the country is known: a faint ring, not a dot
+            c.setAlphaF (c.alphaF () * 0.55);
             p.setPen (QPen {c, 2.});
             p.setBrush (Qt::NoBrush);
             p.drawEllipse (pt, radius, radius);
@@ -1554,7 +1556,8 @@ protected:
         QToolTip::showText (global,
                             QString {"<b>%1</b> &nbsp;%2 dB &nbsp;%3 UTC &nbsp;%4<br/>%5"}
                             .arg (slashed (call)).arg (s.snr).arg (s.heard.toString ("hh:mm")).arg (what)
-                            .arg (QObject::tr ("Double-click to call")), this);
+                            .arg ((s.approx ? QObject::tr ("Location approximate: no grid heard yet, shown at the middle of the country") + "<br/>" : QString {})
+                                 + QObject::tr ("Double-click to call")), this);
         return;
       }
     int const spot = psk_at (pos);
@@ -6806,6 +6809,7 @@ void ConditionsWindow::set_dx (QString const& call, QString const& grid)
 {
   dx_call_ = call;
   dx_grid_ = grid;
+  remember_grid (call, grid);
   double lat, lon;
   if (call.size () && grid_to_latlon (grid, lat, lon))
     {
@@ -6831,13 +6835,18 @@ void ConditionsWindow::add_station (QString const& call, QString const& grid, in
   if (call.isEmpty ()) return;
   double lat, lon;
   bool approx = false;
-  if (!grid_to_latlon (grid, lat, lon))
+  if (grid_to_latlon (grid, lat, lon)) remember_grid (call, grid);
+  else
     {
-      // keep a better position heard earlier
+      // keep a better position heard earlier: on the map, or remembered
+      // from any message, the DX Grid box or QRZ this session
       if (map_->stations.contains (call) && !map_->stations[call].approx)
         {
           lat = map_->stations[call].lat;
           lon = map_->stations[call].lon;
+        }
+      else if (known_grids_.contains (call) && grid_to_latlon (known_grids_[call], lat, lon))
+        {
         }
       else if (!qIsNaN (country_lat) && !qIsNaN (country_lon))
         {
@@ -6852,6 +6861,26 @@ void ConditionsWindow::add_station (QString const& call, QString const& grid, in
     }
   map_->stations[call] = Station {lat, lon, QDateTime::currentDateTimeUtc (), snr, cq, to_me, approx, highlight};
   if (isVisible ()) map_->update ();
+}
+
+// a station's grid, kept for the session whatever clears the map; a longer
+// (more exact) grid replaces a shorter one, and a dot already on the map moves
+void ConditionsWindow::remember_grid (QString const& call, QString const& grid)
+{
+  double lat, lon;
+  if (call.isEmpty () || !grid_to_latlon (grid, lat, lon)) return;
+  auto const g = grid.trimmed ().toUpper ();
+  auto const old = known_grids_.value (call);
+  if (old.size () > g.size () && old.startsWith (g.left (4))) return;
+  known_grids_[call] = g;
+  if (map_->stations.contains (call))
+    {
+      auto& st = map_->stations[call];
+      st.lat = lat;
+      st.lon = lon;
+      st.approx = false;
+      if (isVisible ()) map_->update ();
+    }
 }
 
 void ConditionsWindow::clear_stations ()
