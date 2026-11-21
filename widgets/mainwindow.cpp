@@ -18366,6 +18366,8 @@ void MainWindow::setup_extras ()
       }
     ui->menuHelp->insertMenu (ui->download_samples_action, guides);
   }
+  // WSJT-X's sample recordings download doesn't work from here: drop it
+  ui->download_samples_action->setVisible (false);
   {
     auto * report = new QAction {tr ("Report a problem or request a feature..."), this};
     report->setToolTip (tr ("Opens KF\u00D8KYL Digi's Issues page on GitHub"));
