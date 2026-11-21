@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ccoo26/KF0KYL-Digi/releases/latest"><b>⬇ Download the latest release</b></a>
+  <b>Current version: 1.2.2</b> · <a href="https://github.com/ccoo26/KF0KYL-Digi/releases/latest"><b>⬇ Download KF0KYL Digi 1.2.2</b></a> · <a href="docs/release-notes/1.2.2.md">What's new in 1.2.2</a>
 </p>
 
 ![KF0KYL Digi in the Digi Green scheme](docs/images/main-digi-green.png)
@@ -126,7 +126,7 @@ No website, no separate program. KF0KYL Digi runs the VOACAP engine itself.
 
 ---
 
-### 🟣 Worked stations, worked grids and who heard you *(new in 1.2.1)*
+### 🟣 Worked stations, worked grids and who heard you
 
 ![Worked grids and Heard me on the map](docs/images/heard-me.png)
 
@@ -135,7 +135,8 @@ No website, no separate program. KF0KYL Digi runs the VOACAP engine itself.
 - **Worked grids:** shades every grid square you've logged on the band, or just today's.
 - **Heard me:** a line to every station that reported hearing you in the last 30 minutes,
   from PSK Reporter. Green is a strong signal, yellow fair, orange weak; a key on the map
-  explains it, and pointing at a station shows its call, dB and distance.
+  explains it, and pointing at a station shows its call, dB and distance. In 1.2.2 the
+  reports arrive live, for this band or all bands.
 
 ## 📈 A better waterfall
 
@@ -170,7 +171,7 @@ sizes scroll instead of pushing controls off the edge.
   photo appear under the decodes, with a button to open their QRZ page. US calls are filled
   in from FCC data even without a QRZ login.
 
-## 🛑 Max tries on every message *(new)*
+## 🛑 Max tries on every message
 
 Ever left a CQ running into a dead band, or kept calling a station that faded out ten
 minutes ago? Each Tx message now has a **Max** box right on the main screen, beside
@@ -187,9 +188,10 @@ Tx1–Tx4 and Tx6.
   yourself calling into nothing again.
 - The count starts over as soon as the message changes (the other station answered
   and Auto Seq moved on) or when you turn Enable Tx back on.
-- Your limits are remembered between sessions.
+- Your limits are remembered between sessions, and they're hard stops: the program
+  never adds an extra call.
 
-## 🔎 Filters for what you want *(new in 1.2.1)*
+## 🔎 Filters for what you want
 
 At the top of the **Filters** menu:
 
@@ -197,9 +199,10 @@ At the top of the **Filters** menu:
   you've already got on the band, the way GridTracker does.
 - **Hide signals weaker than** a level you pick, from −20 to 0 dB.
 
-Anything sent to you always shows, whatever the filters say.
+Filtered stations are hidden in Band Activity, Rx Frequency, on the map and on the
+waterfall. Anything sent to you always shows, whatever the filters say.
 
-## 🔔 A sound when you log, and updates that find you *(new in 1.2.1)*
+## 🔔 A sound when you log, and updates that find you
 
 - **Tools → Sound when a QSO is logged…** plays a .wav file of your choice through your
   computer's speakers each time a contact goes in the log.
@@ -218,7 +221,7 @@ there's nothing to set up again.
 
 ## Download and install
 
-Get the files from the **[Releases page](https://github.com/ccoo26/KF0KYL-Digi/releases/latest)**.
+Get the **1.2.2** files from the **[Releases page](https://github.com/ccoo26/KF0KYL-Digi/releases/latest)**.
 
 | You have | Download |
 |---|---|
