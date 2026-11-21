@@ -1959,6 +1959,7 @@ install (FILES
   THANKS
   NEWS
   BUGS
+  docs/KF0KYL_Digi_User_Guide.html
   DESTINATION ${CMAKE_INSTALL_DOCDIR}
   #COMPONENT runtime
   )

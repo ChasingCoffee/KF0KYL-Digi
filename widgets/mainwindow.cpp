@@ -4702,7 +4702,7 @@ void MainWindow::on_pbBandHopping_clicked()
 
 void MainWindow::on_actionRelease_Notes_triggered ()
 {
-  QDesktopServices::openUrl (QUrl {"https://wsjt.sourceforge.io/Release_Notes.txt"});
+  QDesktopServices::openUrl (QUrl {"https://github.com/ccoo26/KF0KYL-Digi/releases"});
 }
 
 void MainWindow::on_actionFT8_DXpedition_Mode_User_Guide_triggered()
@@ -4745,7 +4745,7 @@ void MainWindow::on_actionRecommended_Audio_Settings_triggered()
                            "3. Set the Pwr slider to the minimum and click on the 'Tune' button.\n\n"
                            "4. Observe the actual transmission power of your rig as well as ALC.\n\n"
                            "5. Carefully increase the Pwr slider until you have reached the\n"
-                           "     maximum transmit powe of your transceiver.\n\n"
+                           "     maximum transmit power of your transceiver.\n\n"
                            "6. VERY IMPORTANT: Now reduce the Pwr slider until you reach approx. \n"
                            "     90% of your max. Tx power. ALC should be close to zero.\n\n"
                            "7. This is the maximum audio level permitted with your setup.\n"
@@ -4758,15 +4758,16 @@ void MainWindow::on_actionRecommended_Audio_Settings_triggered()
 
 void MainWindow::on_actionOnline_User_Guide_triggered()      //Display manual
 {
-  QDesktopServices::openUrl (QUrl {"https://wsjt.sourceforge.io/wsjtx-main_en.html"});
+  QDesktopServices::openUrl (QUrl {"https://github.com/ccoo26/KF0KYL-Digi/blob/master/docs/USER_GUIDE.md"});
 }
 
 //Display local copy of manual
 void MainWindow::on_actionLocal_User_Guide_triggered()
 {
-#if defined (CMAKE_BUILD)
-  m_manual.display_html_file (m_config.doc_dir (), PROJECT_MANUAL);
-#endif
+  // the KF0KYL Digi guide installed with the program; online if it's missing
+  auto const guide = m_config.doc_dir ().absoluteFilePath ("KF0KYL_Digi_User_Guide.html");
+  if (QFileInfo::exists (guide)) QDesktopServices::openUrl (QUrl::fromLocalFile (guide));
+  else on_actionOnline_User_Guide_triggered ();
 }
 
 void MainWindow::on_actionWide_Waterfall_triggered()      //Display Waterfalls
@@ -5342,7 +5343,11 @@ void MainWindow::on_actionSolve_FreqCal_triggered()
 
 void MainWindow::on_actionCopyright_Notice_triggered()
 {
-  auto const& message = tr("If you make fair use of any part of WSJT-X under terms of the GNU "
+  auto const& message = tr("KF\u00D8KYL Digi is Copyright (C) 2026 Carson Coordes, KF\u00D8KYL. "
+                           "It is a modified version of WSJT-X and, like WSJT-X, is free software "
+                           "under the GNU General Public License, version 3. Its source code is at "
+                           "github.com/ccoo26/KF0KYL-Digi.\n\n"
+                           "If you make fair use of any part of WSJT-X under terms of the GNU "
                            "General Public License, you must display the following copyright "
                            "notice prominently in your derivative work:\n\n"
                            "\"The algorithms, source code, look-and-feel of WSJT-X and related "
@@ -5795,8 +5800,8 @@ void MainWindow::on_actionKeyboard_shortcuts_triggered()
       m_shortcuts.reset (new HelpTextWindow {tr ("Keyboard Shortcuts"),
                                                //: Keyboard shortcuts help window contents
                                                tr (R"(<table cellspacing=1>
-  <tr><td><b>Esc      </b></td><td>Stop Tx, abort QSO, clear next-call queue</td></tr>
-  <tr><td><b>F1       </b></td><td>Online User's Guide (Alt: transmit Tx6)</td></tr>
+  <tr><td><b>Esc      </b></td><td>Stop Tx, abort QSO</td></tr>
+  <tr><td><b>F1       </b></td><td>KFØKYL Digi User Guide (Alt: transmit Tx6)</td></tr>
   <tr><td><b>Shift+F1  </b></td><td>Copyright Notice</td></tr>
   <tr><td><b>Ctrl+F1  </b></td><td>About KF0KYL Digi</td></tr>
   <tr><td><b>F2       </b></td><td>Open settings window (Alt: transmit Tx2)</td></tr>
@@ -5829,7 +5834,7 @@ void MainWindow::on_actionKeyboard_shortcuts_triggered()
   <tr><td><b>Alt+G    </b></td><td>Generate standard messages</td></tr>
   <tr><td><b>Alt+H    </b></td><td>Halt Tx</td></tr>
   <tr><td><b>Ctrl+I   </b></td><td>Add Dx Call to the Ignore List</td></tr>
-  <tr><td><b>Ctrl+L   </b></td><td>Lookup callsign in database, generate standard messages</td></tr>
+  <tr><td><b>Ctrl+L   </b></td><td>Look up DX Call's grid in the call database, generate standard messages</td></tr>
   <tr><td><b>Alt+M    </b></td><td>Monitor</td></tr>
   <tr><td><b>Alt+N    </b></td><td>Toggle "Enable Tx"</td></tr>
   <tr><td><b>Ctrl+O   </b></td><td>Open a .wav file</td></tr>
@@ -5865,7 +5870,28 @@ void MainWindow::on_actionSpecial_mouse_commands_triggered()
     <td align="right">Waterfall:</td>
     <td><b>Click</b> to set Rx frequency.<br/>
         <b>Right-click</b> to set Tx frequency.<br/>
-        <b>Double-right-click</b> to set Rx and Tx frequencies.
+        <b>Double-right-click</b> to set Rx and Tx frequencies.<br/>
+        <b>Double-click a call</b> shown on a signal to answer that station.
+    </td>
+  </tr>
+  <tr>
+    <td align="right">Colour key:</td>
+    <td><b>Double-click a colour</b> beside Band Activity to change its highlight and text colour.<br/>
+        <b>Right-click</b> for its menu, or to hide it.
+    </td>
+  </tr>
+  <tr>
+    <td align="right">Conditions map:</td>
+    <td><b>Double-click a station</b> to call it.<br/>
+        <b>Drag</b> to move the map, <b>turn the mouse wheel</b> to zoom; <b>Fit</b> shows the whole world.<br/>
+        <b>Double-click a colour</b> in the map's key to change it.
+    </td>
+  </tr>
+  <tr>
+    <td align="right">Conditions boxes:</td>
+    <td><b>Double-click the Sun</b> to choose its picture, the movie or the gray line tool.<br/>
+        <b>Double-click the station picture</b> to choose your own.<br/>
+        <b>Click a headline</b> in the news to read it.
     </td>
   </tr>
   <tr>
@@ -5940,12 +5966,6 @@ void MainWindow::on_actionSpecial_mouse_commands_triggered()
     <td align="right">DX Call Button:</td>
     <td><b>Click</b> to toggle Wait & Call On/Off.<br/>
         <b>Right-click</b> to clear the Dx Call, Dx Grid and Std Msgs.
-    </td>
-  </tr>
-  <tr>
-    <td align="right">Lookup Button:</td>
-    <td><b>Click</b> to search for callsign in database.<br/>
-        <b>Right-click</b> to search for Dx Call on qrz.com.
     </td>
   </tr>
   <tr>
@@ -18325,6 +18345,35 @@ void MainWindow::setup_extras ()
   ui->menuHelp->insertAction (ui->menuHelp->actions ().value (0), check);
   ui->menuHelp->insertSeparator (ui->menuHelp->actions ().value (1));
   connect (check, &QAction::triggered, m_updates, &UpdateChecker::check_now);
+
+  // Help: KF0KYL Digi's own guide first; WSJT-X's mode guides in a submenu
+  ui->actionRelease_Notes->setText (tr ("Release Notes"));
+  ui->actionOnline_User_Guide->setText (tr ("User Guide (online)"));
+  ui->actionLocal_User_Guide->setText (tr ("User Guide (on this computer)"));
+  {
+    auto * guides = new QMenu {tr ("WSJT-X mode guides"), ui->menuHelp};
+    auto * wsjtx = new QAction {tr ("WSJT-X User Guide"), guides};
+    connect (wsjtx, &QAction::triggered, this, [] {
+        QDesktopServices::openUrl (QUrl {"https://wsjt.sourceforge.io/wsjtx-main_en.html"});
+      });
+    guides->addAction (wsjtx);
+    guides->addSeparator ();
+    for (auto * a : {ui->actionFT8_DXpedition_Mode_User_Guide, ui->actionSuperFox_User_Guide, ui->actionQSG_FST4,
+                     ui->actionQSG_Q65, ui->actionQSG_X250_M3, ui->actionQuick_Start_Guide_to_WSJT_X_2_7_and_QMAP})
+      {
+        ui->menuHelp->removeAction (a);
+        guides->addAction (a);
+      }
+    ui->menuHelp->insertMenu (ui->download_samples_action, guides);
+  }
+  {
+    auto * report = new QAction {tr ("Report a problem or request a feature..."), this};
+    report->setToolTip (tr ("Opens KF\u00D8KYL Digi's Issues page on GitHub"));
+    connect (report, &QAction::triggered, this, [] {
+        QDesktopServices::openUrl (QUrl {"https://github.com/ccoo26/KF0KYL-Digi/issues"});
+      });
+    ui->menuHelp->insertAction (ui->actionAbout, report);
+  }
   m_updates->check_at_start ();
 }
 

@@ -1,13 +1,14 @@
 #ifndef HELP_TEXT_WINDOW_HPP__
 #define HELP_TEXT_WINDOW_HPP__
 
-#include <QLabel>
+#include <QWidget>
 #include <QFont>
 
 class QString;
 
+// a window of help text that scrolls when it's taller than the screen
 class HelpTextWindow final
-  : public QLabel
+  : public QWidget
 {
   Q_OBJECT
 
