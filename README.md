@@ -33,7 +33,7 @@ rebuilt to be easier on the eyes and to put more of your station in front of you
 | FT8, FT4, JT65, Q65, MSK144, WSPR and the rest | ✅ | ✅ same decoders |
 | Works with JTAlert, GridTracker, Log4OM, N1MM+ | ✅ | ✅ |
 | Modern look with dark mode and 7 colour schemes | | ✅ |
-| Waterfall built into the main window, with SDR and 3D styles | | ✅ |
+| Waterfall built into the main window, with 3D and other views and calls on signals | | ✅ |
 | Layouts you can drag and resize | | ✅ |
 | Live space weather, solar images and NCDXF beacons | | ✅ |
 | World map of everyone you're hearing, with gray line and aurora | | ✅ |
@@ -85,18 +85,23 @@ Turn each box on or off from the **Boxes** menu, and the rest grow to fill the s
 
 - **Station:** your call, big UTC clock and local time, with your logo or picture beside
   it. Double-click it to pick the KF0KYL Digi logo, your own picture, or none.
-- **Space weather:** solar flux, sunspots, K and A index, X-ray, solar wind and Bz from
-  NOAA, plus a 24-hour X-ray graph.
-- **The Sun:** live NASA SDO images in visible light and several ultraviolet channels.
 - **NCDXF beacons:** which of the 18 beacons is sending on each band this second.
-- **DE and DX:** grid, local time, sunrise and sunset for you and the station you're
-  working, with distance and beam heading on short and long path.
+- **X-ray:** the Sun's X-ray level over the last 24 hours.
+- **Space weather** *(new look in 1.2.2)*: solar flux, sunspots, K and A index, X-ray,
+  solar wind and Bz from NOAA, each with a word on what it means.
+- **The Sun** *(sharper in 1.2.2)*: NASA SDO's 1024-pixel pictures with flares round the
+  edge, the Sun's Az/El from you, and a two-day movie. Double-click it to choose.
+- **DX:** QRZ name, place and photo of the station you're working, with grid, local time,
+  and distance and heading on short and long path.
 
 ### The map
 
 - **Styles:** Day/Night satellite, Satellite, Countries and Terrain. Zoom in and it loads
   sharp NASA imagery and crisp coastlines and borders.
-- **Flat or Centred on you** (azimuthal, so straight lines are beam headings).
+- **Flat, Azimuthal (centred on you) or Robinson** projections.
+- **Band conditions** *(new in 1.2.2)*: colour the map by MUF (live from prop.kc2g.com)
+  or D-region absorption (NOAA), and add CQ zones, ITU zones or beam headings.
+- **News** *(new in 1.2.2)*: ARRL, AMSAT and DX-World headlines scroll under the map.
 - **Zoom and pan** with the mouse or the + / − / Fit buttons.
 - **Overlays:** gray line, NOAA aurora forecast, rain and snow from NASA satellites,
   NCDXF beacons, city names, and Maidenhead or lat/long grids.
@@ -134,9 +139,14 @@ No website, no separate program. KF0KYL Digi runs the VOACAP engine itself.
 
 ## 📈 A better waterfall
 
+![3D waterfall with calls on signals](docs/images/waterfall-3d.png)
+
 - **Built into the main window**, so there's one window to manage. Prefer it on a second
   monitor? Untick **View → Waterfall in Main Window**.
-- **Three styles:** Classic, **SDR** (big spectrum with grid and peak hold) and **3D**.
+- **Views** *(new in 1.2.2)*: Classic, Waterfall, **3D** and Both, all from one toolbar
+  that hides with a single button.
+- **Calls on signals** *(new in 1.2.2)*: each decoded call sits on its signal. Double-click
+  one to answer that station.
 - **New palettes:** Ocean, Inferno, Aurora, NightVision, Mono and Violet.
 - **Fit** squeezes the whole band into the space you give it, at any width.
 
@@ -267,6 +277,11 @@ PSK Reporter spots are identified as KF0KYL Digi.
 
 ---
 
+## User Guide
+
+The **[KF0KYL Digi User Guide](docs/USER_GUIDE.md)** covers every screen and setting.
+It's also installed with the program: **Help → User Guide (on this computer)**.
+
 ## Questions
 
 **Is it safe to run alongside WSJT-X?** Yes on Windows: separate install folder, settings
@@ -295,7 +310,9 @@ copy them by hand, close KF0KYL Digi, then copy `%LOCALAPPDATA%\WSJT-X\WSJT-X.in
 
 KF0KYL Digi stands on the work of the WSJT Development Team (WSJT-X), the VOACAP authors
 and the voacapl project, NOAA's Space Weather Prediction Center, NASA (SDO, Blue Marble,
-Black Marble and GIBS) and Natural Earth. Thank you.
+Black Marble and GIBS), Natural Earth, PSK Reporter (Philip Gladstone, N1DQ),
+prop.kc2g.com (Andrew Rodland, KC2G), HB9HIL's CQ and ITU zone outlines, and the news from
+ARRL, AMSAT and DX-World. Thank you.
 
 ## ☕ Buy me a coffee
 
