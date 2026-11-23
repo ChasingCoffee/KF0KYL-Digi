@@ -21,6 +21,17 @@
 #include <QListIterator>
 #include <QRegularExpression>
 #include <QScrollBar>
+#include <QKeyEvent>
+#include <QFocusEvent>
+#include <QPainter>
+#include <QPainterPath>
+#include <QFrame>
+#include <QLabel>
+#include <QToolButton>
+#include <QHBoxLayout>
+#include <QResizeEvent>
+#include <QApplication>
+#include <QAbstractTextDocumentLayout>
 
 #include "Configuration.hpp"
 #include "Decoder/decodedtext.h"
@@ -72,10 +83,53 @@ DisplayText::DisplayText(QWidget *parent)
       delete menu;
     });
   connect (erase_action_, &QAction::triggered, this, &DisplayText::erase);
+
+  // keyboard hint shown under the text while a line is selected; its x hides it for good
+  hint_ = new QFrame {this};
+  hint_->setObjectName ("selectHint");
+  hint_->setStyleSheet ("#selectHint{background:rgba(46,125,50,30);border-top:1px solid #2e7d32;}"
+                        "#selectHint QLabel{background:transparent;font-size:8pt;}"
+                        "#selectHint QToolButton{border:none;background:transparent;font-size:10pt;padding:0 4px;}");
+  auto * hl = new QHBoxLayout {hint_};
+  hl->setContentsMargins (6, 1, 2, 1);
+  hl->addWidget (new QLabel {tr ("Enter = call this station    \u2191 \u2193 = move    Esc = halt Tx")}, 1);
+  auto * close = new QToolButton {hint_};
+  close->setText (QString {QChar {0x00d7}});
+  close->setToolTip (tr ("Hide this hint (the keys are listed in Help \u2192 Keyboard shortcuts)"));
+  close->setCursor (Qt::PointingHandCursor);
+  hl->addWidget (close);
+  connect (close, &QToolButton::clicked, [this] {
+      hint_enabled_ = false;
+      update_hint ();
+      Q_EMIT hint_closed ();
+    });
+  hint_->hide ();
+}
+
+void DisplayText::update_hint ()
+{
+  bool const show = hint_enabled_ && has_selection ();
+  int const h = show ? hint_->sizeHint ().height () : 0;
+  setViewportMargins (0, 0, 0, h);
+  if (show)
+    {
+      auto const r = contentsRect ();
+      int const sb = verticalScrollBar ()->isVisible () ? verticalScrollBar ()->width () : 0;
+      hint_->setGeometry (r.left (), r.bottom () - h + 1, r.width () - sb, h);
+      hint_->raise ();
+    }
+  hint_->setVisible (show);
+}
+
+void DisplayText::resizeEvent (QResizeEvent * e)
+{
+  QTextEdit::resizeEvent (e);
+  if (hint_ && hint_->isVisible ()) update_hint ();
 }
 
 void DisplayText::erase ()
 {
+  clear_selection ();
   clear ();
   Q_EMIT erased ();
 }
@@ -107,6 +161,148 @@ void DisplayText::setContentFont(QFont const& font)
 void DisplayText::mouseDoubleClickEvent(QMouseEvent *e)
 {
   Q_EMIT selectCallsign(e->modifiers ());
+}
+
+// ---- KF0KYL Digi: click a line to select it, Enter to call ----
+
+bool DisplayText::has_selection () const
+{
+  return !sel_.isNull () && sel_.block ().isValid () && !sel_.block ().text ().trimmed ().isEmpty ();
+}
+
+void DisplayText::clear_selection ()
+{
+  if (!sel_.isNull ())
+    {
+      sel_ = QTextCursor {};
+      viewport ()->update ();
+      update_hint ();
+    }
+}
+
+void DisplayText::select_block (QTextBlock const& block)
+{
+  if (!block.isValid () || block.text ().trimmed ().isEmpty ()) return;
+  sel_ = QTextCursor {document ()};
+  sel_.setPosition (block.position ());
+  // put the text cursor on the line too, so Enter acts exactly like a double-click
+  auto c = textCursor ();
+  c.setPosition (block.position ());
+  setTextCursor (c);
+  update_hint ();
+  ensureCursorVisible ();
+  viewport ()->update ();
+  Q_EMIT line_selected ();
+}
+
+void DisplayText::mousePressEvent (QMouseEvent * e)
+{
+  press_pos_ = e->pos ();
+  QTextEdit::mousePressEvent (e);
+}
+
+void DisplayText::mouseReleaseEvent (QMouseEvent * e)
+{
+  QTextEdit::mouseReleaseEvent (e);
+  if (e->button () == Qt::LeftButton
+      && (e->pos () - press_pos_).manhattanLength () < QApplication::startDragDistance ())
+    {
+      auto const block = cursorForPosition (e->pos ()).block ();
+      setFocus (Qt::MouseFocusReason);
+      if (block.isValid () && !block.text ().trimmed ().isEmpty ()) select_block (block);
+      else clear_selection ();
+    }
+}
+
+void DisplayText::focusOutEvent (QFocusEvent * e)
+{
+  // clicking somewhere else clears the selection, switching windows or
+  // opening a menu does not
+  if (e->reason () == Qt::MouseFocusReason || e->reason () == Qt::TabFocusReason
+      || e->reason () == Qt::BacktabFocusReason)
+    {
+      clear_selection ();
+    }
+  QTextEdit::focusOutEvent (e);
+}
+
+void DisplayText::keyPressEvent (QKeyEvent * e)
+{
+  if (has_selection () && !(e->modifiers () & (Qt::ControlModifier | Qt::AltModifier)))
+    {
+      auto block = sel_.block ();
+      int steps = 0;
+      int const page = qMax (1, viewport ()->height () / qMax (1, fontMetrics ().lineSpacing ()) - 1);
+      switch (e->key ())
+        {
+        case Qt::Key_Return:
+        case Qt::Key_Enter:
+          {
+            auto c = textCursor ();
+            c.setPosition (block.position ());
+            setTextCursor (c);
+            Q_EMIT selectCallsign (e->modifiers () & Qt::ShiftModifier);
+            e->accept ();
+            return;
+          }
+        case Qt::Key_Up: steps = -1; break;
+        case Qt::Key_Down: steps = 1; break;
+        case Qt::Key_PageUp: steps = -page; break;
+        case Qt::Key_PageDown: steps = page; break;
+        default: break;
+        }
+      if (steps)
+        {
+          auto target = block;
+          int const dir = steps < 0 ? -1 : 1;
+          for (int n = qAbs (steps); n > 0; )
+            {
+              auto next = dir < 0 ? target.previous () : target.next ();
+              if (!next.isValid ()) break;
+              target = next;
+              if (!target.text ().trimmed ().isEmpty ()) --n;
+            }
+          while (target.isValid () && target.text ().trimmed ().isEmpty ())
+            {
+              target = dir < 0 ? target.next () : target.previous ();
+            }
+          if (target.isValid ()) select_block (target);
+          e->accept ();
+          return;
+        }
+    }
+  QTextEdit::keyPressEvent (e);
+}
+
+void DisplayText::paintEvent (QPaintEvent * e)
+{
+  QTextEdit::paintEvent (e);
+  if (!has_selection ()) return;
+  auto const block = sel_.block ();
+  QRectF r = document ()->documentLayout ()->blockBoundingRect (block);
+  r.translate (-horizontalScrollBar ()->value (), -verticalScrollBar ()->value ());
+  bool const dark = palette ().color (QPalette::Base).lightness () < 128;
+  QColor const edge = dark ? QColor {0xa6, 0xff, 0x00} : QColor {0x2e, 0x7d, 0x32};
+  QPainter p {viewport ()};
+  p.setRenderHint (QPainter::Antialiasing);
+  QRectF box {1.5, r.top () + 0.5, viewport ()->width () - 3.0, r.height () - 1.0};
+  if (box.bottom () >= 0 && box.top () <= viewport ()->height ())
+    {
+      p.setPen (QPen {edge, 2});
+      p.setBrush (Qt::NoBrush);
+      p.drawRoundedRect (box, 3, 3);
+      // small arrow at the left edge
+      qreal const cy = box.center ().y ();
+      qreal const a = qMin<qreal> (4.0, box.height () / 3.0);
+      QPainterPath arrow;
+      arrow.moveTo (box.left () + 1, cy - a);
+      arrow.lineTo (box.left () + 1 + a, cy);
+      arrow.lineTo (box.left () + 1, cy + a);
+      arrow.closeSubpath ();
+      p.setPen (Qt::NoPen);
+      p.setBrush (edge);
+      p.drawPath (arrow);
+    }
 }
 
 void DisplayText::insertLineSpacer(QString const& line)

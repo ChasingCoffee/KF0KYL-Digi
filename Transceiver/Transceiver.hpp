@@ -105,6 +105,7 @@ public:
       , txvolume_(0)
       , level_ {0}
       , power_ {0}
+      , power_setting_ {0}
       , swr_ {0}
       , jtmode_ {"FT8"}  //w3sz tci
       , fastmode_ {false}  //w3sz tci
@@ -136,6 +137,7 @@ public:
     qreal txvolume () const {return txvolume_;}
     int level () const {return level_;}
     unsigned int power () const {return power_;}
+    unsigned int power_setting () const {return power_setting_;}   // mW, 0 = unknown
     unsigned int swr () const {return swr_;}
     QString jtmode () const {return jtmode_;}  //w3sz tci
     bool fastmode () const {return fastmode_;}  //w3sz tci
@@ -165,6 +167,7 @@ public:
     void txvolume (qreal txvolume) {txvolume_ = txvolume;}
     void level (int strength) {level_ = strength;}
     void power (unsigned int mwpower) {power_ = mwpower;}
+    void power_setting (unsigned int mwpower) {power_setting_ = mwpower;}
     void swr (unsigned int mswr) {swr_ = mswr;}
     void jtmode(QString jtmode) {jtmode_ = jtmode;}  //w3sz tci
     void fastmode(bool fastmode) {fastmode_ = fastmode;}  //w3sz tci
@@ -195,6 +198,7 @@ public:
     qreal txvolume_;
     int level_;
     unsigned int power_;
+    unsigned int power_setting_;
     unsigned int swr_;
     QString jtmode_;  //w3sz tci
     bool fastmode_;  //w3sz tci

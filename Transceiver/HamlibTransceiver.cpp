@@ -654,6 +654,7 @@ int HamlibTransceiver::do_start ()
   m_->set_vfo_works_ = true;
   do_pwr_ &= (!m_->is_dummy_ && rig_get_function_ptr (m_->model_, RIG_FUNCTION_GET_LEVEL) && (rig_get_caps_int (m_->model_, RIG_CAPS_HAS_GET_LEVEL) & RIG_LEVEL_RFPOWER_METER_WATTS) == RIG_LEVEL_RFPOWER_METER_WATTS);
   do_pwr2_ &= (!m_->is_dummy_ && rig_get_function_ptr (m_->model_, RIG_FUNCTION_GET_LEVEL) && (rig_get_caps_int (m_->model_, RIG_CAPS_HAS_GET_LEVEL) & RIG_LEVEL_RFPOWER) == RIG_LEVEL_RFPOWER);
+  do_pwr_setting_ &= (!m_->is_dummy_ && rig_get_function_ptr (m_->model_, RIG_FUNCTION_GET_LEVEL) && (rig_get_caps_int (m_->model_, RIG_CAPS_HAS_GET_LEVEL) & RIG_LEVEL_RFPOWER) == RIG_LEVEL_RFPOWER);
   do_swr_ &= (!m_->is_dummy_ && rig_get_function_ptr (m_->model_, RIG_FUNCTION_GET_LEVEL) && (rig_get_caps_int (m_->model_, RIG_CAPS_HAS_GET_LEVEL) & RIG_LEVEL_SWR) == RIG_LEVEL_SWR);
 
   // the Net rigctl back end promises all functions work but we must
@@ -1117,8 +1118,8 @@ void HamlibTransceiver::do_mode (MODE mode)
 
 void HamlibTransceiver::do_poll ()
 {
-  freq_t f;
-  rmode_t m;
+  freq_t f {0};
+  rmode_t m {RIG_MODE_USB};
   pbwidth_t w;
   split_t s;
 
@@ -1276,6 +1277,19 @@ void HamlibTransceiver::do_poll ()
   } else {
     update_power (0);
     update_swr (0);
+    // between overs, the radio's power setting, so the Max power limit can
+    // stop a transmission before it starts
+    if (do_pwr_setting_) {
+      value_t setting;
+      if (RIG_OK == rig_get_level (m_->rig_.data (), RIG_VFO_CURR, RIG_LEVEL_RFPOWER, &setting)) {
+        unsigned int mw {0};
+        if (RIG_OK == rig_power2mW (m_->rig_.data (), &mw, setting.f, f, m)) update_power_setting (mw);
+        else update_power_setting (0);
+      } else {
+        CAT_TRACE ("rig_get_level RFPOWER (setting) failed, ignoring");
+        update_power_setting (0);
+      }
+    }
   }
 }
 

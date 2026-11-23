@@ -341,6 +341,12 @@ void TransceiverBase::update_power (unsigned int p)
   actual_.power (p);
 }
 
+void TransceiverBase::update_power_setting (unsigned int p)
+{
+  CAT_TRACE ("power setting: " << p);
+  actual_.power_setting (p);
+}
+
 void TransceiverBase::update_swr (unsigned int p)
 {
   CAT_TRACE ("swr: " << p);

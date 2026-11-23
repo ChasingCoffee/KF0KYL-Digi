@@ -137,6 +137,7 @@ protected:
   void update_PTT (bool = true);
   void update_level (int = 0);
   void update_power (unsigned int = 0);
+  void update_power_setting (unsigned int = 0);
   void update_swr (unsigned int = 0);
 
   // Calling this eventually triggers the Transceiver::update(State) signal.

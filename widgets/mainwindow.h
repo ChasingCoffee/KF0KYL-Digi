@@ -21,6 +21,7 @@
 #include <QAbstractSocket>
 #include <QHostAddress>
 #include <QPointer>
+class QMessageBox;
 #include <QSet>
 #include <QVector>
 #include <QScrollBar>
@@ -396,6 +397,8 @@ private slots:
   void monitor (bool);
   void end_tuning ();
   void stop_tuning ();
+  bool power_over_limit () const;
+  void warn_power_over_limit ();
   void stopTuneATU();
   void auto_tx_mode(bool);
   void on_actionMessage_averaging_triggered();
@@ -1044,6 +1047,8 @@ private:
   void double_click_message (DecodedText const&, Qt::KeyboardModifiers);
   QString m_repeatKey;
   int m_repeatCount {0};
+  int m_maxPowerW {0};                  // Max transmit power, 0 = no limit
+  QPointer<QMessageBox> m_powerWarning;
   QString tx_repeat_key () const;   // dial frequency and clock colours from Settings > Colors
 
   // callsign info strip: who is the current DX station

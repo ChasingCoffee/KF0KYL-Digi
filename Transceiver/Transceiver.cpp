@@ -93,6 +93,7 @@ bool operator != (Transceiver::TransceiverState const& lhs, Transceiver::Transce
     || lhs.txvolume_ != rhs.txvolume_
     || lhs.level_ != rhs.level_
     || lhs.power_ != rhs.power_
+    || lhs.power_setting_ != rhs.power_setting_
     || lhs.swr_ != rhs.swr_;
 }
 

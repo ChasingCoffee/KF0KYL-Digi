@@ -73,6 +73,10 @@ Filtered stations are hidden from Band Activity, Rx Frequency, the map and the w
 
 **Double-click a decode** to call that station, as in WSJT-X. Hold **Alt** to set it up without enabling Tx.
 
+**Click, then Enter.** A single click on a line in Band Activity or Rx Frequency selects it with a green border. Press **Enter** to call that station (the same as a double-click), or use **↑ ↓**, **Page Up** and **Page Down** to move the selection first. Only one line is selected at a time, and the selection stays on its line as new decodes arrive. **Esc** still halts Tx. A small bar under the window lists these keys; click its **×** to hide it for good.
+
+**Max transmit power.** Under **Tools → Max transmit power...** set the most watts you ever want to send on digital modes. Before each transmission KFØKYL Digi reads the radio's power setting over CAT; if it's above your maximum, nothing is transmitted, Tx is turned off and you're told to turn the power down. **0** means no limit. Radios that can't report their power setting (or no CAT control) are never blocked.
+
 **Max tries.** The **Max** boxes beside Tx1–Tx4 and Tx6 set how many times each message is sent in a row with no reply before KFØKYL Digi stops. For example, 3 beside Tx6 stops calling CQ after three unanswered calls. **0** means no limit. These are hard stops: to try again, click **Enable Tx** yourself.
 
 KFØKYL Digi never transmits on its own: there's no automatic answering of stations you didn't call.

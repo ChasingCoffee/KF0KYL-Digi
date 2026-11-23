@@ -8,8 +8,11 @@
 #include <QPair>
 #include <QString>
 #include <QTimer>
+#include <QTextCursor>
+#include <QPoint>
 
 class QAction;
+class QFrame;
 class Configuration;
 class LogBook;
 class DecodedText;
@@ -45,6 +48,12 @@ public:
 
   Q_SIGNAL void selectCallsign (Qt::KeyboardModifiers);
   Q_SIGNAL void erased ();
+  // KF0KYL Digi: single-click line selection
+  Q_SIGNAL void line_selected ();      // a line was selected in this window
+  Q_SIGNAL void hint_closed ();        // the keyboard hint's x was clicked
+  void clear_selection ();
+  void set_hint_enabled (bool enabled) {hint_enabled_ = enabled; update_hint ();}
+  bool has_selection () const;
 
   Q_SLOT void insertText (QString const& text, QColor bg = QColor {}, QColor fg = QColor {}
                           , QString const& call1 = QString {}, QString const& call2 = QString {}, QTextCursor::MoveOperation location=QTextCursor::End);
@@ -59,6 +68,18 @@ private:
   QTimer alertsTimer;
   QString leftJustifyAppendage (QString message, QString const& appendage) const;
   void mouseDoubleClickEvent (QMouseEvent *) override;
+  void mousePressEvent (QMouseEvent *) override;
+  void mouseReleaseEvent (QMouseEvent *) override;
+  void keyPressEvent (QKeyEvent *) override;
+  void paintEvent (QPaintEvent *) override;
+  void focusOutEvent (QFocusEvent *) override;
+  void select_block (QTextBlock const&);
+  void update_hint ();
+  void resizeEvent (QResizeEvent *) override;
+  QFrame * hint_ {nullptr};
+  QTextCursor sel_;
+  QPoint press_pos_;
+  bool hint_enabled_ {true};
 
   void extend_vertical_scrollbar (int min, int max);
 

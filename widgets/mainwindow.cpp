@@ -61,6 +61,7 @@
 #include <QUdpSocket>
 #include <QAbstractItemView>
 #include <QInputDialog>
+#include <QMessageBox>
 #include <QSound> // TCI
 #include <QtMath> // TCI
 #if QT_VERSION >= QT_VERSION_CHECK (5, 15, 0)
@@ -871,6 +872,18 @@ MainWindow::MainWindow(QDir const& temp_directory, bool multiple,
   connect(txMsgButtonGroup,SIGNAL(buttonClicked(int)),SLOT(set_ntx(int)));
   connect (ui->decodedTextBrowser, &DisplayText::selectCallsign, this, &MainWindow::doubleClickOnCall2);
   connect (ui->decodedTextBrowser2, &DisplayText::selectCallsign, this, &MainWindow::doubleClickOnCall);
+  // KF0KYL Digi: only one selected line across Band Activity and Rx Frequency
+  connect (ui->decodedTextBrowser, &DisplayText::line_selected, ui->decodedTextBrowser2, &DisplayText::clear_selection);
+  connect (ui->decodedTextBrowser2, &DisplayText::line_selected, ui->decodedTextBrowser, &DisplayText::clear_selection);
+  {
+    auto hide_hint = [this] () {
+      ui->decodedTextBrowser->set_hint_enabled (false);
+      ui->decodedTextBrowser2->set_hint_enabled (false);
+      m_settings->setValue ("Common/SelectHintClosed", true);
+    };
+    connect (ui->decodedTextBrowser, &DisplayText::hint_closed, this, hide_hint);
+    connect (ui->decodedTextBrowser2, &DisplayText::hint_closed, this, hide_hint);
+  }
   connect (ui->houndQueueTextBrowser, &DisplayText::selectCallsign, this, &MainWindow::doubleClickOnFoxQueue);
   connect (ui->foxTxListTextBrowser, &DisplayText::selectCallsign, this, &MainWindow::doubleClickOnFoxInProgress);
   connect (ui->decodedTextBrowser, &DisplayText::erased, this, &MainWindow::band_activity_cleared);
@@ -1635,6 +1648,7 @@ void MainWindow::writeSettings()
   save_layout_sizes ();
   m_settings->setValue("PanelLayout",static_cast<int> (m_panelLayout));
   for (int n : {1, 2, 3, 4, 6}) m_settings->setValue (QString {"TxRepeatLimit%1"}.arg (n), m_txLimit[n]->value ());
+  m_settings->setValue ("MaxPowerW", m_maxPowerW);
   m_settings->setValue("WaterfallEmbedded",m_embedWaterfallAction->isChecked());
   m_settings->setValue("CallsignInfoVisible",m_callInfoAction->isChecked());
   m_settings->setValue("Blanker",ui->sbNB->value());
@@ -2083,6 +2097,12 @@ void MainWindow::readSettings()
       m_embedWaterfallAction->setChecked (embed);
     }
     for (int n : {1, 2, 3, 4, 6}) m_txLimit[n]->setValue (m_settings->value (QString {"TxRepeatLimit%1"}.arg (n), 0).toInt ());
+    m_maxPowerW = m_settings->value ("MaxPowerW", 0).toInt ();
+  {
+    bool const hint = !m_settings->value ("SelectHintClosed", false).toBool ();
+    ui->decodedTextBrowser->set_hint_enabled (hint);
+    ui->decodedTextBrowser2->set_hint_enabled (hint);
+  }
     // new installs start in Big Band Activity; upgrades keep what they had
     int const first_layout = m_settings->contains ("DarkStyle") ? 0 : static_cast<int> (PanelLayout::BigBand);
     int const layout = qBound (0, m_settings->value ("PanelLayout", first_layout).toInt (), 2);
@@ -5793,6 +5813,9 @@ void MainWindow::on_actionKeyboard_shortcuts_triggered()
                                                //: Keyboard shortcuts help window contents
                                                tr (R"(<table cellspacing=1>
   <tr><td><b>Esc      </b></td><td>Stop Tx, abort QSO</td></tr>
+  <tr><td><b>Click a line </b></td><td>Select it in Band Activity or Rx Frequency</td></tr>
+  <tr><td><b>Enter    </b></td><td>Call the selected station (same as double-click)</td></tr>
+  <tr><td><b>&uarr; &darr; PgUp PgDn </b></td><td>Move the selected line</td></tr>
   <tr><td><b>F1       </b></td><td>KFØKYL Digi User Guide (Alt: transmit Tx6)</td></tr>
   <tr><td><b>Shift+F1  </b></td><td>Copyright Notice</td></tr>
   <tr><td><b>Ctrl+F1  </b></td><td>About KF0KYL Digi</td></tr>
@@ -8512,6 +8535,15 @@ void MainWindow::guiUpdate()
             statusBar ()->showMessage (what, 60000);
             QApplication::alert (this);
           }
+      }
+
+    // Max power: never key a radio that's set above the limit
+    if (g_iptt == 0 && (m_bTxTime || m_tune) && power_over_limit ())
+      {
+        if (m_tune) stop_tuning ();
+        m_bTxTime = false;
+        auto_tx_mode (false);
+        warn_power_over_limit ();
       }
 
     if(g_iptt==0 and ((m_bTxTime and (fTR < 0.75) and (msgLength>0)) or m_tune)) {
@@ -13025,6 +13057,30 @@ void MainWindow::end_tuning ()
     ui->outAttenuation->setValue(m_pwrBandTxMemory[curBand].toInt()); // set to Tx pwr
     m_PwrBandSetOK = true;
   }
+}
+
+// Max power: true when the radio reports a power setting above the limit.
+// A radio that can't report its setting is never blocked.
+bool MainWindow::power_over_limit () const
+{
+  if (m_maxPowerW <= 0) return false;
+  auto const mw = m_rigState.power_setting ();
+  return mw > 0 && mw > static_cast<unsigned> (m_maxPowerW) * 1000u + 500u;
+}
+
+void MainWindow::warn_power_over_limit ()
+{
+  auto const set = qRound (m_rigState.power_setting () / 1000.);
+  auto const text = tr ("Your radio is set to %1 W. Your maximum is %2 W.\n\n"
+                        "Nothing was transmitted. Turn the power down, then enable Tx again.")
+    .arg (set).arg (m_maxPowerW);
+  statusBar ()->showMessage (tr ("Not transmitting: radio set to %1 W, over your %2 W maximum").arg (set).arg (m_maxPowerW), 30000);
+  QApplication::alert (this);
+  if (m_powerWarning) {m_powerWarning->setText (text); m_powerWarning->raise (); return;}
+  m_powerWarning = new QMessageBox {QMessageBox::Warning, tr ("Power is over your maximum"), text, QMessageBox::Ok, this};
+  m_powerWarning->setAttribute (Qt::WA_DeleteOnClose);
+  m_powerWarning->setModal (false);
+  m_powerWarning->show ();
 }
 
 void MainWindow::stop_tuning ()
@@ -18337,6 +18393,28 @@ void MainWindow::setup_extras ()
   ui->menuHelp->insertAction (ui->menuHelp->actions ().value (0), check);
   ui->menuHelp->insertSeparator (ui->menuHelp->actions ().value (1));
   connect (check, &QAction::triggered, m_updates, &UpdateChecker::check_now);
+
+  // Tools > Max transmit power: stops a transmission before it starts when
+  // the radio is set higher (say, left at 100 W after SSB)
+  {
+    auto * power = new QAction {tr ("Max transmit power..."), this};
+    connect (power, &QAction::triggered, this, [this] {
+        auto const now = m_rigState.power_setting ();
+        QString const radio = now ? tr ("Your radio is set to %1 W now.").arg (qRound (now / 1000.))
+                                  : tr ("Your radio's power setting can't be read right now (radio off, or it doesn't report it), "
+                                        "and a radio that can't report it is never blocked.");
+        bool ok = false;
+        int const w = QInputDialog::getInt (this, tr ("Max transmit power"),
+                                            tr ("Don't transmit when the radio is set above this many watts (0 = no limit).\n%1").arg (radio),
+                                            m_maxPowerW, 0, 2000, 1, &ok);
+        if (!ok) return;
+        m_maxPowerW = w;
+        m_settings->setValue ("Common/MaxPowerW", m_maxPowerW);
+        statusBar ()->showMessage (w ? tr ("Max transmit power: %1 W").arg (w) : tr ("Max transmit power: no limit"), 10000);
+      });
+    ui->menuTools->insertAction (ui->menuTools->actions ().value (0), power);
+    ui->menuTools->insertSeparator (ui->menuTools->actions ().value (1));
+  }
 
   // Help: KF0KYL Digi's own guide first; WSJT-X's mode guides in a submenu
   ui->actionRelease_Notes->setText (tr ("Release Notes"));
