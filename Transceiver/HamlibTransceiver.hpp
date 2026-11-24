@@ -39,7 +39,7 @@ private:
   bool do_pwr_;
   bool do_pwr2_;
   bool do_swr_;
-  bool do_pwr_setting_ {true};   // read the power setting between overs (Max power)
+  bool do_pwr_setting_ {false};   // read the power setting between overs (Max power)
 
   class impl;
   pimpl<impl> m_;

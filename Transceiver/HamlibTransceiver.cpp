@@ -474,6 +474,7 @@ HamlibTransceiver::HamlibTransceiver (logger_type * logger,
     {
       // printf("Hamlib open params: power_on=%d power_off=%d ptt_share=%d\n",(params.poll_interval & rig__power) == rig__power,(params.poll_interval & rig__power_off) == rig__power_off,(params.poll_interval & ptt__share) == ptt__share);
       if (params.poll_interval & do__pwr) { do_pwr_ = true; do_pwr2_ = true; do_swr_ = true;}
+      if (params.poll_interval & do__pwrset) do_pwr_setting_ = true;
 
       switch (rig_get_caps_int (m_->model_, RIG_CAPS_PORT_TYPE))
         {

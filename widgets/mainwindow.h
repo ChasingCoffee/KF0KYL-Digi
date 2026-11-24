@@ -1047,7 +1047,6 @@ private:
   void double_click_message (DecodedText const&, Qt::KeyboardModifiers);
   QString m_repeatKey;
   int m_repeatCount {0};
-  int m_maxPowerW {0};                  // Max transmit power, 0 = no limit
   QPointer<QMessageBox> m_powerWarning;
   QString tx_repeat_key () const;   // dial frequency and clock colours from Settings > Colors
 

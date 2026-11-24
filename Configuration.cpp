@@ -912,6 +912,8 @@ private:
   qint32 cloudLogStationID_;
   bool PWR_and_SWR_;
   bool check_SWR_;
+  bool limit_power_ {false};
+  int max_power_w_ {20};
   double degrade_;
   double txDelay_;
   bool tci_audio_;
@@ -1179,6 +1181,8 @@ bool Configuration::filters_for_word2() const {return m_->filters_for_word2_;}
 bool Configuration::twoDays() const {return m_->twoDays_;}
 bool Configuration::PWR_and_SWR () const {return m_->PWR_and_SWR_;}
 bool Configuration::check_SWR () const {return m_->check_SWR_;}
+bool Configuration::limit_power () const {return m_->limit_power_;}
+int Configuration::max_power_w () const {return m_->max_power_w_;}
 bool Configuration::x2ToneSpacing() const {return m_->x2ToneSpacing_;}
 bool Configuration::x4ToneSpacing() const {return m_->x4ToneSpacing_;}
 bool Configuration::split_mode () const {return m_->split_mode ();}
@@ -1886,6 +1890,7 @@ Configuration::impl::impl (Configuration * self, QNetworkAccessManager * network
   , default_audio_output_device_selected_ {false}
 {
   ui_->setupUi (this);
+  connect (ui_->limit_power_check_box, &QCheckBox::toggled, ui_->max_power_spin_box, &QWidget::setEnabled);
   setup_display_colors ();
   setup_text_sizes ();
   {
@@ -2254,6 +2259,9 @@ void Configuration::impl::initialize_models ()
   ui_->PWR_and_SWR_check_box->setChecked (PWR_and_SWR_);
   ui_->check_SWR_check_box->setChecked (check_SWR_);
   if (!ui_->PWR_and_SWR_check_box->isChecked()) ui_->check_SWR_check_box->setEnabled (false);
+  ui_->limit_power_check_box->setChecked (limit_power_);
+  ui_->max_power_spin_box->setValue (max_power_w_);
+  ui_->max_power_spin_box->setEnabled (limit_power_);
   ui_->save_path_display_label->setText (save_directory_.absolutePath ());
   ui_->azel_path_display_label->setText (azel_directory_.absolutePath ());
   ui_->CW_id_after_73_check_box->setChecked (id_after_73_);
@@ -2562,6 +2570,18 @@ void Configuration::impl::read_settings ()
   ui_->highlight_blue_callsigns->setText(highlight_blue_callsigns_);
   PWR_and_SWR_ = settings_->value ("PWRandSWR", false).toBool ();
   check_SWR_ = settings_->value ("CheckSWR", false).toBool ();
+  {
+    // Max transmit power: off unless the user turned it on (the 1.2.3 beta
+    // kept it under Tools as Common/MaxPowerW, carry that over once)
+    int legacy {0};
+    if (!settings_->contains ("LimitTxPower"))
+      {
+        QSettings old {settings_->fileName (), settings_->format ()};
+        legacy = old.value ("Common/MaxPowerW", 0).toInt ();
+      }
+    limit_power_ = settings_->value ("LimitTxPower", legacy > 0).toBool ();
+    max_power_w_ = qBound (1, settings_->value ("MaxTxPowerW", legacy > 0 ? legacy : 20).toInt (), 2000);
+  }
 
   OTPinterval_ = settings_->value ("OTPinterval", 1).toUInt ();
   OTPUrl_ = settings_->value ("OTPUrl", FoxVerifier::default_url()).toString ();
@@ -2935,6 +2955,8 @@ void Configuration::impl::write_settings ()
   settings_->setValue ("HighlightBlueCallsigns", highlight_blue_callsigns_);
   settings_->setValue ("PWRandSWR", PWR_and_SWR_);
   settings_->setValue ("CheckSWR", check_SWR_);
+  settings_->setValue ("LimitTxPower", limit_power_);
+  settings_->setValue ("MaxTxPowerW", max_power_w_);
 
   settings_->setValue ("Font", font_.toString ());
   settings_->setValue ("DecodedTextFont", decoded_text_font_.toString ());
@@ -3414,6 +3436,7 @@ TransceiverFactory::ParameterPack Configuration::impl::gather_rig_data ()
   result.rts_high = ui_->force_RTS_combo_box->isEnabled () && 1 == ui_->force_RTS_combo_box->currentIndex ();
   result.poll_interval = ui_->CAT_poll_interval_spin_box->value ();
   if (ui_->PWR_and_SWR_check_box->isChecked ()) result.poll_interval |= do__pwr;
+  if (ui_->limit_power_check_box->isChecked ()) result.poll_interval |= do__pwrset;
   if (is_tci_ && ui_->tci_audio_check_box->isChecked ()) result.poll_interval |= tci__audio;
   result.ptt_type = static_cast<TransceiverFactory::PTTMethod> (ui_->PTT_method_button_group->checkedId ());
   result.ptt_port = ui_->PTT_port_combo_box->currentText ();
@@ -3579,6 +3602,8 @@ void Configuration::impl::accept ()
   highlight_blue_callsigns_= ui_-> highlight_blue_callsigns->text ().toUpper ();
   PWR_and_SWR_ = ui_->PWR_and_SWR_check_box->isChecked ();
   check_SWR_ = ui_->check_SWR_check_box->isChecked ();
+  limit_power_ = ui_->limit_power_check_box->isChecked ();
+  max_power_w_ = ui_->max_power_spin_box->value ();
 
   read_voicesPath();
 
@@ -5539,6 +5564,12 @@ void Configuration::impl::handle_transceiver_update (TransceiverState const& sta
   cached_rig_state_.frequency (state.frequency ());
   if(!is_tci_) cached_rig_state_.mode (state.mode ());  //was not present in jtdx
   cached_rig_state_.split (state.split ());
+  {
+    auto const mw = state.power_setting ();
+    ui_->power_setting_label->setText (mw
+        ? tr ("Your radio is set to %1 W now. Radios that can't report their power setting are never blocked.").arg ((mw + 500) / 1000)
+        : tr ("Radios that can't report their power setting are never blocked."));
+  }
 
   if (state.online ())
     {

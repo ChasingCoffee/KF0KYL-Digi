@@ -154,6 +154,8 @@ public:
   QString voicesPath() const;
   bool PWR_and_SWR() const;
   bool check_SWR() const;
+  bool limit_power () const;        // KF0KYL Digi: Max transmit power on
+  int max_power_w () const;         // watts
 
   void setEU_VHF_Contest();
   QFont text_font () const;

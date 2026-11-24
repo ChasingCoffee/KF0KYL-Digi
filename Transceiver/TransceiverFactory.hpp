@@ -86,6 +86,7 @@ public:
   #define tci__audio 0x100000
   #define tci__agcc 0x200000
   #define ptt__share 0x400000
+  #define do__pwrset 0x800000   // read the power setting between overs (Max power)
 
   TransceiverFactory ();
   ~TransceiverFactory ();

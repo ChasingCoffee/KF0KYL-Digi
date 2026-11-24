@@ -1648,7 +1648,6 @@ void MainWindow::writeSettings()
   save_layout_sizes ();
   m_settings->setValue("PanelLayout",static_cast<int> (m_panelLayout));
   for (int n : {1, 2, 3, 4, 6}) m_settings->setValue (QString {"TxRepeatLimit%1"}.arg (n), m_txLimit[n]->value ());
-  m_settings->setValue ("MaxPowerW", m_maxPowerW);
   m_settings->setValue("WaterfallEmbedded",m_embedWaterfallAction->isChecked());
   m_settings->setValue("CallsignInfoVisible",m_callInfoAction->isChecked());
   m_settings->setValue("Blanker",ui->sbNB->value());
@@ -2097,7 +2096,6 @@ void MainWindow::readSettings()
       m_embedWaterfallAction->setChecked (embed);
     }
     for (int n : {1, 2, 3, 4, 6}) m_txLimit[n]->setValue (m_settings->value (QString {"TxRepeatLimit%1"}.arg (n), 0).toInt ());
-    m_maxPowerW = m_settings->value ("MaxPowerW", 0).toInt ();
   {
     bool const hint = !m_settings->value ("SelectHintClosed", false).toBool ();
     ui->decodedTextBrowser->set_hint_enabled (hint);
@@ -13063,9 +13061,9 @@ void MainWindow::end_tuning ()
 // A radio that can't report its setting is never blocked.
 bool MainWindow::power_over_limit () const
 {
-  if (m_maxPowerW <= 0) return false;
+  if (!m_config.limit_power ()) return false;
   auto const mw = m_rigState.power_setting ();
-  return mw > 0 && mw > static_cast<unsigned> (m_maxPowerW) * 1000u + 500u;
+  return mw > 0 && mw > static_cast<unsigned> (m_config.max_power_w ()) * 1000u + 500u;
 }
 
 void MainWindow::warn_power_over_limit ()
@@ -13073,8 +13071,8 @@ void MainWindow::warn_power_over_limit ()
   auto const set = qRound (m_rigState.power_setting () / 1000.);
   auto const text = tr ("Your radio is set to %1 W. Your maximum is %2 W.\n\n"
                         "Nothing was transmitted. Turn the power down, then enable Tx again.")
-    .arg (set).arg (m_maxPowerW);
-  statusBar ()->showMessage (tr ("Not transmitting: radio set to %1 W, over your %2 W maximum").arg (set).arg (m_maxPowerW), 30000);
+    .arg (set).arg (m_config.max_power_w ());
+  statusBar ()->showMessage (tr ("Not transmitting: radio set to %1 W, over your %2 W maximum").arg (set).arg (m_config.max_power_w ()), 30000);
   QApplication::alert (this);
   if (m_powerWarning) {m_powerWarning->setText (text); m_powerWarning->raise (); return;}
   m_powerWarning = new QMessageBox {QMessageBox::Warning, tr ("Power is over your maximum"), text, QMessageBox::Ok, this};
@@ -18393,28 +18391,6 @@ void MainWindow::setup_extras ()
   ui->menuHelp->insertAction (ui->menuHelp->actions ().value (0), check);
   ui->menuHelp->insertSeparator (ui->menuHelp->actions ().value (1));
   connect (check, &QAction::triggered, m_updates, &UpdateChecker::check_now);
-
-  // Tools > Max transmit power: stops a transmission before it starts when
-  // the radio is set higher (say, left at 100 W after SSB)
-  {
-    auto * power = new QAction {tr ("Max transmit power..."), this};
-    connect (power, &QAction::triggered, this, [this] {
-        auto const now = m_rigState.power_setting ();
-        QString const radio = now ? tr ("Your radio is set to %1 W now.").arg (qRound (now / 1000.))
-                                  : tr ("Your radio's power setting can't be read right now (radio off, or it doesn't report it), "
-                                        "and a radio that can't report it is never blocked.");
-        bool ok = false;
-        int const w = QInputDialog::getInt (this, tr ("Max transmit power"),
-                                            tr ("Don't transmit when the radio is set above this many watts (0 = no limit).\n%1").arg (radio),
-                                            m_maxPowerW, 0, 2000, 1, &ok);
-        if (!ok) return;
-        m_maxPowerW = w;
-        m_settings->setValue ("Common/MaxPowerW", m_maxPowerW);
-        statusBar ()->showMessage (w ? tr ("Max transmit power: %1 W").arg (w) : tr ("Max transmit power: no limit"), 10000);
-      });
-    ui->menuTools->insertAction (ui->menuTools->actions ().value (0), power);
-    ui->menuTools->insertSeparator (ui->menuTools->actions ().value (1));
-  }
 
   // Help: KF0KYL Digi's own guide first; WSJT-X's mode guides in a submenu
   ui->actionRelease_Notes->setText (tr ("Release Notes"));
