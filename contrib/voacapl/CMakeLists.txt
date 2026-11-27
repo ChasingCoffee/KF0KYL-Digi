@@ -13,12 +13,20 @@ set (CMAKE_Fortran_FLAGS_MINSIZEREL "-Os")
 set (voacapl_flags -w -fno-backslash -ffixed-line-length-none -fno-sign-zero)
 set (voacapl_mod_dir ${CMAKE_CURRENT_BINARY_DIR}/mod)
 
+# All Fortran, so Qt's automoc (on for the rest of the program) has nothing
+# to do here; left on, it adds a stub C++ file to each library. The flags
+# below are also given to Fortran files only: GCC's C++ compiler lets -cpp
+# and -fno-backslash through, but Apple's clang rejects them.
+set (CMAKE_AUTOMOC OFF)
+set (CMAKE_AUTOUIC OFF)
+set (CMAKE_AUTORCC OFF)
+
 add_library (voacapl_modules STATIC
   modules/voacapl_defs.for
   modules/crun_directory.f95
   modules/cversn.f95
   )
-target_compile_options (voacapl_modules PRIVATE -cpp -w "-DVERSION=\"0.7.6\"")
+target_compile_options (voacapl_modules PRIVATE "$<$<COMPILE_LANGUAGE:Fortran>:-cpp;-w;-DVERSION=\"0.7.6\">")
 set_target_properties (voacapl_modules PROPERTIES Fortran_MODULE_DIRECTORY ${voacapl_mod_dir})
 
 add_library (voacapl_voalib STATIC
@@ -200,12 +208,12 @@ add_executable (voacapl
   voacapw/zones.for
   )
 foreach (target voacapl_voalib voacapl_hfmufesw voacapl_wp10dwin voacapl)
-  target_compile_options (${target} PRIVATE ${voacapl_flags})
+  target_compile_options (${target} PRIVATE "$<$<COMPILE_LANGUAGE:Fortran>:${voacapl_flags}>")
   target_include_directories (${target} PRIVATE ${voacapl_mod_dir} ${CMAKE_CURRENT_SOURCE_DIR}/voacapw)
   set_target_properties (${target} PROPERTIES Fortran_MODULE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/mod_${target})
   add_dependencies (${target} voacapl_modules)
 endforeach ()
-target_compile_options (voacapl PRIVATE -cpp)
+target_compile_options (voacapl PRIVATE "$<$<COMPILE_LANGUAGE:Fortran>:-cpp>")
 target_link_libraries (voacapl voacapl_hfmufesw voacapl_voalib voacapl_wp10dwin voacapl_modules)
 
 install (TARGETS voacapl
