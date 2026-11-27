@@ -16,7 +16,11 @@ if (APPLE OR WIN32)
     )
 
   # if a system Qt is used (e.g. installed in /usr/lib/), it will not be included in the installation
-  set (fixup_exe "\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/${CMAKE_PROJECT_NAME}${CMAKE_EXECUTABLE_SUFFIX}")
+  if (APPLE)
+    set (fixup_exe "\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/${WSJT_MACOS_BUNDLE_NAME}")
+  else ()
+    set (fixup_exe "\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/${CMAKE_PROJECT_NAME}${CMAKE_EXECUTABLE_SUFFIX}")
+  endif ()
   set (fixup_exes "${fixup_exe}")
   if (NOT WSJT_SKIP_MAP65)
     list (APPEND fixup_exes "\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/map65${CMAKE_EXECUTABLE_SUFFIX}")

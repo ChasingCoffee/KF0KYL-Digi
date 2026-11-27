@@ -123,6 +123,9 @@ set (wsjtx_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_
 # project information
 #
 set (PROJECT_BUNDLE_NAME "KF0KYL Digi")
+# The Mac app is KF0KYL-Digi.app (with Contents/MacOS/KF0KYL-Digi), so it
+# never replaces the official wsjtx.app in /Applications.
+set (WSJT_MACOS_BUNDLE_NAME "KF0KYL-Digi")
 set (PROJECT_VENDOR "Carson Coordes, KF0KYL")
 set (PROJECT_CONTACT "joe@princetion.edu")
 set (PROJECT_COPYRIGHT "Copyright (C) 2001-2026 by Joe Taylor, K1JT and the WSJT Development Team; modifications Copyright (C) 2026 Carson Coordes, KF0KYL")
@@ -197,8 +200,8 @@ attach a debugger which will then receive the console output inside its console.
 #
 
 if (APPLE)
-  set (CMAKE_INSTALL_BINDIR ${CMAKE_PROJECT_NAME}.app/Contents/MacOS)
-  set (CMAKE_INSTALL_DATAROOTDIR ${CMAKE_PROJECT_NAME}.app/Contents/Resources)
+  set (CMAKE_INSTALL_BINDIR ${WSJT_MACOS_BUNDLE_NAME}.app/Contents/MacOS)
+  set (CMAKE_INSTALL_DATAROOTDIR ${WSJT_MACOS_BUNDLE_NAME}.app/Contents/Resources)
 endif ()
 
 include (GNUInstallDirs)
@@ -1774,8 +1777,11 @@ set_target_properties (wsjtx PROPERTIES
   MACOSX_BUNDLE_BUNDLE_NAME "${PROJECT_BUNDLE_NAME}"
   MACOSX_BUNDLE_BUNDLE_EXECUTABLE_NAME "${PROJECT_NAME}"
   MACOSX_BUNDLE_COPYRIGHT "${PROJECT_COPYRIGHT}"
-  MACOSX_BUNDLE_GUI_IDENTIFIER "org.k1jt.wsjtx"
+  MACOSX_BUNDLE_GUI_IDENTIFIER "info.softwareartisans.kfdigi"
   )
+if (APPLE)
+  set_target_properties (wsjtx PROPERTIES OUTPUT_NAME ${WSJT_MACOS_BUNDLE_NAME})
+endif ()
 
 target_include_directories (wsjtx PRIVATE ${FFTW3_INCLUDE_DIRS})
 if ((NOT ${OPENMP_FOUND}) OR APPLE)
